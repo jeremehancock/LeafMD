@@ -2,3 +2,5 @@
 /vendor
 /flatpak-build
 /.flatpak-builder
+# Personal Claude Code settings (the shared OpenSpec commands in .claude/ are kept)
+/.claude/settings.local.json

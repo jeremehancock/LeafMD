@@ -4,6 +4,8 @@ What's planned for LeafMD, in the order it will probably be done. LeafMD aims to
 
 Items are ticked off as they're finished. The order can change.
 
+Each feature is planned in detail with [OpenSpec](https://github.com/Fission-AI/OpenSpec) before it's built: the plan goes in `openspec/changes/`, and once it's finished, how the feature behaves is recorded in `openspec/specs/`.
+
 ## 1. Loose ends
 
 - [ ] Check that clicking a link to a file that's already open brings its window to the front

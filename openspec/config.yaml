@@ -1,0 +1,23 @@
+schema: spec-driven
+
+# Constraints for every proposal, spec, design and task list in this project.
+context: |
+  LeafMD is a GNOME desktop app (Rust, GTK4, libadwaita), shipped as a Flatpak.
+  It aims to stay a simple, dependable markdown viewer and editor: every
+  feature should feel obvious without needing a setting.
+  The owner reads every artifact. Write in plain, conversational English, and
+  explain any technical term in a few words. Never use em dashes; use a
+  period, comma, colon or parentheses instead.
+  Specs describe what the user sees and does (keys, buttons, messages), not
+  how the code is built.
+
+rules:
+  proposal:
+    - Say what is out of scope.
+    - Name any new keyboard shortcut, menu item or setting, since each one adds to the app.
+  specs:
+    - Use LeafMD as the subject, for example "LeafMD SHALL ...".
+    - Give scenarios concrete examples (real text, real keys), not placeholders.
+  tasks:
+    - "Include updating every place users read about the change, where it applies: Help, Keyboard Shortcuts, README, the app store description in data/*.metainfo.xml, and ticking the item in ROADMAP.md."
+    - End with rebuilding and installing the Flatpak (./build-aux/flatpak-install.sh) so the owner can try the change.
