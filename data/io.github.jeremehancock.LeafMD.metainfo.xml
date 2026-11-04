@@ -68,6 +68,10 @@
     <release version="0.1.0" date="2026-11-03" type="development">
       <description>
         <p>First release.</p>
+        <ul>
+          <li>Lists continue when you press Enter: the next bullet, number or unticked checkbox is added for you, and Enter on an empty item ends the list</li>
+          <li>Select some text and paste a web address over it to turn it into a link</li>
+        </ul>
       </description>
     </release>
   </releases>
