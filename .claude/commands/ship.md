@@ -28,7 +28,11 @@ those commands.
 ## How LeafMD is released
 
 - **`dev`** is where work happens. **`main`** only changes through a pull
-  request from `dev` that the owner merges on GitHub.
+  request from `dev` that the owner merges on GitHub. GitHub enforces this:
+  `main` is protected (pushes straight to it are refused, for the owner too,
+  and a pull request can't be merged until the `Check · Build Flatpak` job has
+  passed), and "Create a merge commit" is the only way to merge, so `dev` can
+  always catch up with `main` afterwards.
 - **The owner tests locally before anything is pushed:** `./build-aux/flatpak-install.sh`
   builds the working folder and installs it over their LeafMD.
 - **The version** is in `Cargo.toml`, and the newest `<release>` in
@@ -194,9 +198,6 @@ GitHub's build), and **what merging does**:
 
 End the body with the attribution lines from the session's system reminder.
 
-Remind the owner to merge with **"Create a merge commit"**, not squash or
-rebase, so `dev` can catch up with `main` cleanly afterwards.
-
 ## After a merge
 
 **Check the release** (only if this merge should have published one):
@@ -217,7 +218,9 @@ git fetch origin main:main    # refresh the local main without switching to it
 
 Merge `origin/main`, not `main`: the local `main` is out of date because this
 workflow never switches to it. If `--ff-only` refuses, `dev` has commits `main`
-doesn't (often a squash merge). Don't force anything; say what you found.
+doesn't, such as work committed to `dev` after the pull request was merged
+(GitHub only allows merge commits, so a squash merge isn't the cause). Don't
+force anything; say what you found.
 
 ## Guardrails
 
