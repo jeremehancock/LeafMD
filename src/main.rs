@@ -16,6 +16,10 @@ pub const APP_ID: &str = "io.github.jeremehancock.LeafMD";
 type CurrentWindow = Rc<RefCell<Option<Rc<Window>>>>;
 
 fn main() -> glib::ExitCode {
+    // The view icons built into the program (see build.rs). GTK finds icons
+    // under the app's resource path automatically.
+    gio::resources_register_include!("leafmd.gresource").expect("LeafMD's built-in icons load");
+
     let app = adw::Application::builder()
         .application_id(APP_ID)
         // Lets LeafMD be started with a file, e.g. `leafmd notes.md` or a double-click

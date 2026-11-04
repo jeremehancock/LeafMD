@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Files built into the LeafMD program itself. GTK automatically looks for
+     icons under /io/github/jeremehancock/LeafMD/icons. -->
+<gresources>
+  <gresource prefix="/io/github/jeremehancock/LeafMD">
+    <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-view-formatted-symbolic.svg</file>
+    <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-view-raw-symbolic.svg</file>
+    <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-view-split-symbolic.svg</file>
+  </gresource>
+</gresources>

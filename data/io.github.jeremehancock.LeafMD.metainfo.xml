@@ -12,8 +12,14 @@
 
   <description>
     <p>
-      LeafMD is a markdown viewer that lets you choose how you see a document:
-      nicely formatted, as raw text, or both side by side.
+      LeafMD is a markdown viewer and editor that keeps things simple. Read a
+      document cleanly formatted, work directly in the raw text, or see both side
+      by side and watch your changes appear as you type.
+    </p>
+    <p>
+      Rather than trying to do everything, LeafMD focuses on doing the essentials
+      well. There are no plugins to manage, panels to arrange or settings to tune,
+      just a fast, dependable app that feels obvious from the moment you open it.
     </p>
     <ul>
       <li>Switch between formatted, raw and split views with one click or Ctrl+1, 2 and 3</li>

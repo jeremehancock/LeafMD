@@ -1,6 +1,6 @@
 # LeafMD
 
-A markdown viewer and editor for Linux with three views, including a formatted-only view for pure reading.
+A markdown viewer and editor for Linux with three views, including a formatted-only view for pure reading. Switch views with the icons in the toolbar or Ctrl+1, 2 and 3.
 
 - **Formatted:** the rendered document, full window. Just for reading.
 - **Raw:** the markdown text, full window. Type here to edit.
@@ -83,6 +83,8 @@ The script copies the Rust libraries into `./vendor` (Flatpak builds can't downl
 | `data/*.desktop` | The app menu entry: name, icon, and the file types LeafMD opens |
 | `data/*.metainfo.xml` | The description, license and release notes shown in software centers |
 | `build-aux/` | The Flatpak recipe and the script that builds and installs it |
+| `data/resources/` | Files built into the program: the three view icons (so they look the same with any icon theme) |
+| `build.rs` | Packs `data/resources` into the program when it's compiled |
 | `data/icons/` | The app icon, plus a one-colour version GNOME uses in some places |
 
 ### Safety in the formatted view

@@ -30,6 +30,13 @@ const RENDER_DELAY: Duration = Duration::from_millis(150);
 /// side are ignored for this long, so the two sides don't keep nudging each other.
 const SYNC_QUIET: Duration = Duration::from_millis(250);
 
+/// The description in the About window.
+const ABOUT_TEXT: &str = "LeafMD is a markdown viewer and editor that keeps things simple.
+
+Read a document cleanly formatted, work directly in the raw text, or see both side by side and watch your changes appear as you type.
+
+Rather than trying to do everything, LeafMD focuses on doing the essentials well. There are no plugins to manage, panels to arrange or settings to tune. It is just a fast, dependable app that feels obvious from the moment you open it, so you can spend your time on your writing instead of your tools.";
+
 /// Actions that only make sense while a document is open.
 const DOCUMENT_ACTIONS: [&str; 3] = ["save", "save-as", "view"];
 
@@ -39,6 +46,7 @@ pub struct Window {
     toasts: adw::ToastOverlay,
     stack: gtk::Stack,
     paned: gtk::Paned,
+    view_switcher: adw::ToggleGroup,
     source_scroll: gtk::ScrolledWindow,
     source_view: sourceview5::View,
     buffer: sourceview5::Buffer,
@@ -121,24 +129,24 @@ impl Window {
                 .tooltip_text("Main Menu")
                 .build(),
         );
-        // Three buttons tied to one "view" action, so exactly one is pressed at a time
-        let view_buttons = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        view_buttons.add_css_class("linked");
-        for (mode, label, tooltip) in [
-            (ViewMode::Preview, "Formatted", "Formatted view (Ctrl+1)"),
-            (ViewMode::Source, "Raw", "Raw text (Ctrl+2)"),
-            (ViewMode::Split, "Split", "Split view (Ctrl+3)"),
+        // GNOME's rounded switcher with LeafMD's own icons. Each toggle is named
+        // after its view ("preview", "source", "split"); hovering shows the name.
+        let view_switcher = adw::ToggleGroup::new();
+        for (mode, icon, tooltip) in [
+            (ViewMode::Preview, "leafmd-view-formatted-symbolic", "Formatted view (Ctrl+1)"),
+            (ViewMode::Source, "leafmd-view-raw-symbolic", "Raw text (Ctrl+2)"),
+            (ViewMode::Split, "leafmd-view-split-symbolic", "Split view (Ctrl+3)"),
         ] {
-            view_buttons.append(
-                &gtk::ToggleButton::builder()
-                    .label(label)
-                    .tooltip_text(tooltip)
-                    .action_name("win.view")
-                    .action_target(&mode.as_str().to_variant())
+            view_switcher.add(
+                adw::Toggle::builder()
+                    .name(mode.as_str())
+                    .icon_name(icon)
+                    .tooltip(tooltip)
                     .build(),
             );
         }
-        header.pack_end(&view_buttons);
+        view_switcher.set_active_name(Some(saved.view.as_str()));
+        header.pack_end(&view_switcher);
 
         // ---- Raw editor ----
         let buffer = sourceview5::Buffer::new(None);
@@ -222,6 +230,7 @@ impl Window {
             toasts,
             stack,
             paned,
+            view_switcher,
             source_scroll,
             source_view,
             buffer,
@@ -293,8 +302,23 @@ impl Window {
             };
             action.set_state(&mode.as_str().to_variant());
             win.apply_view(mode);
+            // Keep the switcher in step when the view changes by keyboard shortcut
+            if win.view_switcher.active_name().as_deref() != Some(mode.as_str()) {
+                win.view_switcher.set_active_name(Some(mode.as_str()));
+            }
         });
         self.window.add_action(&view);
+
+        // Clicking the switcher changes the view through the same "view" action
+        let weak = Rc::downgrade(self);
+        self.view_switcher.connect_active_name_notify(move |switcher| {
+            let (Some(win), Some(name)) = (weak.upgrade(), switcher.active_name()) else {
+                return;
+            };
+            if Some(win.view_mode.get()) != ViewMode::parse(&name) {
+                win.action("view").activate(Some(&name.to_variant()));
+            }
+        });
     }
 
     fn setup_signals(self: &Rc<Self>) {
@@ -443,6 +467,7 @@ impl Window {
         for name in DOCUMENT_ACTIONS {
             self.action(name).set_enabled(enabled);
         }
+        self.view_switcher.set_sensitive(enabled);
     }
 
     fn show_document(&self) {
@@ -709,11 +734,21 @@ impl Window {
         // and a file dropped onto the formatted view is opened in LeafMD.
         decision.ignore();
         if action.navigation_type() == webkit6::NavigationType::LinkClicked {
-            gtk::UriLauncher::new(&uri).launch(
-                Some(&self.window),
-                gio::Cancellable::NONE,
-                |_| {},
-            );
+            // Opens the link in your default browser. Inside Flatpak, GIO asks the
+            // desktop to do it through a "portal". (GTK's UriLauncher was tried first,
+            // but its requests failed with "The application launch failed", while
+            // this route works.)
+            // If it fails, say so instead of doing nothing.
+            let context = WidgetExt::display(&self.window).app_launch_context();
+            let weak = Rc::downgrade(self);
+            glib::spawn_future_local(async move {
+                if let Err(err) = gio::AppInfo::launch_default_for_uri_future(&uri, Some(&context)).await
+                    && let Some(win) = weak.upgrade()
+                {
+                    eprintln!("LeafMD: could not open link: {err}");
+                    win.toast(&format!("Couldn't open the link: {}", err.message()));
+                }
+            });
         } else if uri.starts_with("file://") {
             self.ask_open_file(gio::File::for_uri(&uri));
         }
@@ -1074,7 +1109,7 @@ impl Window {
             .application_name("LeafMD")
             .application_icon(crate::APP_ID)
             .version(env!("CARGO_PKG_VERSION"))
-            .comments(env!("CARGO_PKG_DESCRIPTION"))
+            .comments(ABOUT_TEXT)
             .developer_name("Jereme Hancock")
             // "Name URL" makes the name a link on the Credits page
             .developers(["Jereme Hancock https://jeremehancock.com"])

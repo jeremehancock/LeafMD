@@ -21,6 +21,10 @@ ammonia = "4"
 # Safely wraps the HTML in a JavaScript string when updating the preview
 serde_json = "1"
 
+[build-dependencies]
+# Builds the icons in data/resources into the program
+glib-build-tools = "0.22"
+
 [profile.release]
 lto = true
 strip = true

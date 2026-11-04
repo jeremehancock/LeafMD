@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <!-- Two panes side by side: raw lines on the left, a rendered page on the right -->
+  <path d="M2.5 2h11A1.5 1.5 0 0 1 15 3.5v9a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9A1.5 1.5 0 0 1 2.5 2zm0 1.5v9h4.75v-9zm6.25 0v9h4.75v-9z" fill="#2e3436" fill-rule="evenodd"/>
+  <rect x="3.5" y="5" width="2.5" height="1" rx=".5" fill="#2e3436"/>
+  <rect x="3.5" y="7" width="2.5" height="1" rx=".5" fill="#2e3436"/>
+  <rect x="3.5" y="9" width="2.5" height="1" rx=".5" fill="#2e3436"/>
+  <rect x="10" y="5" width="2.5" height="1.6" rx=".8" fill="#2e3436"/>
+  <rect x="10" y="7.8" width="2.5" height="1" rx=".5" fill="#2e3436"/>
+  <rect x="10" y="9.8" width="2.5" height="1" rx=".5" fill="#2e3436"/>
+</svg>
