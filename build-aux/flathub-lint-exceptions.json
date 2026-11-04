@@ -1,5 +1,6 @@
 {
     "io.github.jeremehancock.LeafMD": [
-        "appstream-screenshots-not-mirrored-in-ostree"
+        "appstream-screenshots-not-mirrored-in-ostree",
+        "appstream-external-screenshot-url"
     ]
 }

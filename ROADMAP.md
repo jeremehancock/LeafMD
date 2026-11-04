@@ -60,3 +60,4 @@ These might fit LeafMD, or might add more than they're worth. Each one needs a d
 - Coloured syntax highlighting inside code blocks in the formatted view
 - Remembering where you were scrolled to in each file
 - Dropping an image onto the raw text inserts a markdown image link
+- A Snap package, so Ubuntu users can install LeafMD from Ubuntu's own App Center without setting up Flatpak. It would be a second package format to build and test for every release

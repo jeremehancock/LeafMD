@@ -121,7 +121,10 @@ h3 { font-size: 1.1rem; font-weight: 700; }
 
 /* The screenshots already include the window's own shadow and rounded
    corners, on a see-through background, so they're shown as they are */
+/* Wide enough for the screenshot's real 1050 pixels plus the side padding,
+   so wide windows show it unresized and its text stays sharp */
 .showcase { margin: 32px auto 0; text-align: center; }
+.showcase.wrap { max-width: calc(1050px + 64px); }
 .showcase img { display: block; margin: 0 auto; width: 100%; max-width: 1050px; }
 
 /* Sections */
@@ -204,6 +207,60 @@ h3 { font-size: 1.1rem; font-weight: 700; }
 }
 .copy:hover { filter: brightness(0.96); }
 code { font-family: var(--mono); font-size: 0.92em; }
+/* The "Setting up Flatpak on Ubuntu" box: a card that opens and closes,
+   with its title and a round arrow in the header, like GNOME's expander rows */
+.setup { margin-top: 16px; padding: 0; }
+.setup summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 20px 22px; cursor: pointer; list-style: none; border-radius: var(--radius);
+}
+.setup summary::-webkit-details-marker { display: none; }
+.setup-title { display: flex; flex-direction: column; gap: 4px; }
+.setup-sub { color: var(--muted); font-size: 0.95rem; text-wrap: pretty; }
+.setup-arrow {
+  flex: none; width: 36px; height: 36px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface-2); color: var(--fg); transition: transform 0.2s;
+}
+.setup-arrow svg { fill: currentColor; }
+.setup summary:hover .setup-arrow { filter: brightness(0.94); }
+.setup[open] .setup-arrow { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .setup-arrow { transition: none; } }
+
+/* Numbered steps, each number in a small accent-coloured circle */
+.setup-steps {
+  list-style: none; counter-reset: step; margin: 0; padding: 4px 22px 0;
+  border-top: 1px solid var(--border);
+}
+.setup-steps li { counter-increment: step; position: relative; padding: 18px 0 0 44px; }
+.setup-steps li::before {
+  content: counter(step); position: absolute; left: 0; top: 16px;
+  width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent-bg); color: var(--accent-fg); font-weight: 700; font-size: 0.9rem;
+}
+.setup-steps p { margin: 0 !important; text-wrap: pretty; }
+.setup-steps .command { margin-top: 10px; }
+/* Commands stay on one line on wider screens. On a phone they wrap, but
+   only between words (and after a / in the address), never mid-word */
+/* Hyphenated words in commands stay whole, so a line never ends in a - */
+.nowrap { white-space: nowrap; }
+.setup-steps .command code { overflow-wrap: break-word; word-break: normal; user-select: all; }
+@media (max-width: 699px) {
+  /* The Copy button goes under the command, so the command has the width */
+  .setup-steps .command { flex-direction: column; align-items: stretch; gap: 10px; }
+  .setup-steps .command .copy { align-self: flex-end; }
+  .setup-steps .command code { align-self: stretch; font-size: 0.8rem; }
+  .setup summary { padding: 18px 16px; }
+  .setup-steps { padding: 4px 16px 0; }
+  .setup-steps li { padding-left: 38px; }
+  .setup-more { padding: 18px 16px 20px 54px; }
+}
+@media (min-width: 700px) {
+  .setup-steps .command code { white-space: nowrap; overflow-x: auto; scrollbar-width: thin; }
+}
+.setup-more { padding: 18px 22px 22px 66px; margin: 0 !important; font-size: 0.95rem; }
+
 .note { color: var(--muted); font-size: 0.92rem; max-width: 760px; margin: 24px auto 0; text-align: center; }
 
 /* Footer */
