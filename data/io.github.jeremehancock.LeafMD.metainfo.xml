@@ -26,6 +26,7 @@
       <li>A formatted-only view for pure, distraction-free reading</li>
       <li>Edit the raw text with the formatted view updating as you type</li>
       <li>A formatting bar adds bold, links, lists, headings, tables and more for you</li>
+      <li>Lists continue themselves when you press Enter, and pasting a web address over text makes a link</li>
       <li>A built-in markdown cheatsheet shows the common syntax at a glance</li>
       <li>Find and replace, in the raw text or the formatted document</li>
       <li>In split view, both sides scroll together</li>

@@ -12,6 +12,8 @@ The raw text can always be edited in Raw and Split view, and changes are only wr
 
 - **Formatting bar:** in Raw and Split view, a row of buttons above the text adds the markdown for you: bold, italic, strikethrough, inline code, links, headings, bulleted, numbered and check lists, quotes, code blocks and tables. Select some text and press a button, or press it with nothing selected to format the word or line the cursor is on. Press it again to take the formatting off.
 - **Markdown cheatsheet** (Shift+F1, or the Cheatsheet button) shows the most common markdown next to what it looks like.
+- **Lists continue as you type:** press Enter in a list and the next bullet, number or unticked checkbox is added for you. Enter on an empty item ends the list, and Shift+Enter starts a plain line instead.
+- **Paste a link over text:** select some text and paste a web address to turn it into `[text](address)`.
 
 - In split view, **scrolling either side** scrolls the other to the same spot.
 - In split view, **double-click** a word on the formatted side to select that same word in the raw text. Its line lights up briefly so you can spot it.
@@ -36,6 +38,7 @@ Built with Rust, GTK4 and libadwaita. The app itself uses no npm or Node.js (onl
 | Ctrl+Shift+X | Strikethrough |
 | Ctrl+E | Inline code |
 | Ctrl+K | Link |
+| Shift+Enter (in the raw text) | New line without a list marker |
 | Ctrl+F | Find |
 | Ctrl+H | Find and replace |
 | Enter / Shift+Enter, or F3 / Shift+F3 | Next / previous match |
@@ -121,6 +124,7 @@ With Claude Code, `/ship` walks a change through all of this: the checks, trying
 | `src/window.rs` | The window: toolbar, formatting bar, raw editor, formatted view, find and replace, Help, cheatsheet and About, opening and saving |
 | `src/find.rs` | The find and replace bar's buttons and boxes |
 | `src/format.rs` | What each formatting button does to the text (bold, lists, headings, tables and so on), with tests |
+| `src/typing.rs` | Help while typing: what Enter does in a list, spotting code blocks, and spotting a pasted web address, with tests |
 | `src/render.rs` | Turns markdown into HTML (comrak), then removes anything unsafe (ammonia) |
 | `src/preview.html` | The page the formatted view is drawn into, including its light and dark styles |
 | `src/preview.js` | Double-click to jump, synced scrolling and find in the formatted view, run in a private script area the document can't reach |

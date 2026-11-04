@@ -20,9 +20,9 @@ Each feature is planned in detail with [OpenSpec](https://github.com/Fission-AI/
 
 ## 3. Smarter typing
 
-- [ ] **Lists continue on Enter:** pressing Enter at the end of a list item starts the next one (`- `, `2. `, `- [ ] `), keeping the same indent
-- [ ] **Lists end on an empty item:** pressing Enter on an empty item removes its marker and ends the list
-- [ ] **Paste a link over text:** pasting a web address while text is selected turns the text into `[text](address)`
+- [x] **Lists continue on Enter:** pressing Enter at the end of a list item starts the next one (`- `, `2. `, `- [ ] `), keeping the same indent
+- [x] **Lists end on an empty item:** pressing Enter on an empty item removes its marker and ends the list
+- [x] **Paste a link over text:** pasting a web address while text is selected turns the text into `[text](address)`
 
 ## 4. Reading and writing comfort
 
