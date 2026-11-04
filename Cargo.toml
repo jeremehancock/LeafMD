@@ -4,12 +4,12 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/jeremehancock/LeafMD"
-description = "A markdown viewer that switches between formatted, raw and split views, with editing when you want it"
+description = "A markdown viewer and editor with formatted, raw and split views"
 
 [dependencies]
 # GTK4 and libadwaita: the window, buttons and dialogs (GNOME's toolkit)
 gtk = { package = "gtk4", version = "0.11", features = ["v4_12"] }
-adw = { package = "libadwaita", version = "0.9", features = ["v1_6"] }
+adw = { package = "libadwaita", version = "0.9", features = ["v1_8"] }
 # GtkSourceView: the raw text editor (syntax colouring, line numbers, undo)
 sourceview5 = "0.11"
 # WebKitGTK: shows the formatted view

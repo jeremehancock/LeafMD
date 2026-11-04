@@ -31,7 +31,7 @@ const RENDER_DELAY: Duration = Duration::from_millis(150);
 const SYNC_QUIET: Duration = Duration::from_millis(250);
 
 /// Actions that only make sense while a document is open.
-const DOCUMENT_ACTIONS: [&str; 4] = ["save", "save-as", "edit", "view"];
+const DOCUMENT_ACTIONS: [&str; 3] = ["save", "save-as", "view"];
 
 pub struct Window {
     pub window: adw::ApplicationWindow,
@@ -39,12 +39,7 @@ pub struct Window {
     toasts: adw::ToastOverlay,
     stack: gtk::Stack,
     paned: gtk::Paned,
-    /// The raw editor plus the coloured bar shown above it while editing
-    source_pane: gtk::Box,
     source_scroll: gtk::ScrolledWindow,
-    edit_bar: gtk::Box,
-    edit_button: gtk::ToggleButton,
-    edit_button_content: adw::ButtonContent,
     source_view: sourceview5::View,
     buffer: sourceview5::Buffer,
     webview: webkit6::WebView,
@@ -59,10 +54,10 @@ pub struct Window {
     render_scheduled: Cell<bool>,
     /// Set after the user has answered "discard" or "save" when closing.
     close_confirmed: Cell<bool>,
-    /// The "turn on editing" hint, so typing doesn't stack up several of them
-    read_only_toast: RefCell<Option<adw::Toast>>,
     ignore_editor_scroll_until: Cell<Instant>,
     ignore_preview_scroll_until: Cell<Instant>,
+    /// Briefly highlights the line you jumped to
+    flash_tag: gtk::TextTag,
 }
 
 impl Window {
@@ -87,9 +82,10 @@ impl Window {
         header.set_title_widget(Some(&title));
 
         header.pack_start(
+            // A word instead of an icon: folder icons vary a lot between icon themes
             &gtk::Button::builder()
-                .icon_name("document-open-symbolic")
-                .tooltip_text("Open (Ctrl+O)")
+                .label("Open")
+                .tooltip_text("Open a file (Ctrl+O)")
                 .action_name("win.open")
                 .build(),
         );
@@ -101,11 +97,22 @@ impl Window {
                 .build(),
         );
 
-        // pack_end fills from the right edge inwards: menu, then Edit, then the view buttons
+        // pack_end fills from the right edge inwards: the menu, then the view buttons.
+        // The menu is grouped into sections (shown with dividers); shortcuts appear automatically.
+        let file_section = gio::Menu::new();
+        file_section.append(Some("New"), Some("win.new"));
+        file_section.append(Some("Open…"), Some("win.open"));
+        let save_section = gio::Menu::new();
+        save_section.append(Some("Save"), Some("win.save"));
+        save_section.append(Some("Save As…"), Some("win.save-as"));
+        let app_section = gio::Menu::new();
+        app_section.append(Some("Help"), Some("win.help"));
+        app_section.append(Some("Keyboard Shortcuts"), Some("win.shortcuts"));
+        app_section.append(Some("About LeafMD"), Some("win.about"));
         let menu = gio::Menu::new();
-        menu.append(Some("New"), Some("win.new"));
-        menu.append(Some("Save As…"), Some("win.save-as"));
-        menu.append(Some("About LeafMD"), Some("win.about"));
+        menu.append_section(None, &file_section);
+        menu.append_section(None, &save_section);
+        menu.append_section(None, &app_section);
         header.pack_end(
             &gtk::MenuButton::builder()
                 .icon_name("open-menu-symbolic")
@@ -114,18 +121,6 @@ impl Window {
                 .tooltip_text("Main Menu")
                 .build(),
         );
-        // Shows "Edit" normally, and turns blue and says "Editing" while editing is on
-        let edit_button_content = adw::ButtonContent::builder()
-            .icon_name("document-edit-symbolic")
-            .label("Edit")
-            .build();
-        let edit_button = gtk::ToggleButton::builder()
-            .child(&edit_button_content)
-            .tooltip_text("Turn editing on or off (Ctrl+E)")
-            .action_name("win.edit")
-            .build();
-        header.pack_end(&edit_button);
-
         // Three buttons tied to one "view" action, so exactly one is pressed at a time
         let view_buttons = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         view_buttons.add_css_class("linked");
@@ -151,6 +146,8 @@ impl Window {
             buffer.set_language(Some(&language));
         }
         buffer.set_highlight_syntax(true);
+        let flash_tag = gtk::TextTag::new(Some("leafmd-flash"));
+        buffer.tag_table().add(&flash_tag);
 
         let source_view = sourceview5::View::with_buffer(&buffer);
         source_view.set_show_line_numbers(true);
@@ -162,23 +159,13 @@ impl Window {
         source_view.set_bottom_margin(12);
         source_view.set_left_margin(8);
         source_view.set_right_margin(12);
-        // Read-only until Edit is turned on
-        source_view.set_editable(false);
-        source_view.set_cursor_visible(false);
+        source_view.set_highlight_current_line(true);
 
         let source_scroll = gtk::ScrolledWindow::builder()
             .child(&source_view)
             .hexpand(true)
             .vexpand(true)
             .build();
-
-        // A thin bar in the accent colour across the top of the editor while editing
-        let edit_bar = gtk::Box::builder().visible(false).build();
-        edit_bar.add_css_class("leafmd-edit-bar");
-
-        let source_pane = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        source_pane.append(&edit_bar);
-        source_pane.append(&source_scroll);
 
         // ---- Formatted view ----
         let webview = webkit6::WebView::new();
@@ -197,7 +184,7 @@ impl Window {
         // ---- Layout ----
         let paned = gtk::Paned::builder()
             .orientation(gtk::Orientation::Horizontal)
-            .start_child(&source_pane)
+            .start_child(&source_scroll)
             .end_child(&webview)
             .shrink_start_child(false)
             .shrink_end_child(false)
@@ -235,11 +222,7 @@ impl Window {
             toasts,
             stack,
             paned,
-            source_pane,
             source_scroll,
-            edit_bar,
-            edit_button,
-            edit_button_content,
             source_view,
             buffer,
             webview,
@@ -249,9 +232,9 @@ impl Window {
             preview_loading: Cell::new(false),
             render_scheduled: Cell::new(false),
             close_confirmed: Cell::new(false),
-            read_only_toast: RefCell::new(None),
             ignore_editor_scroll_until: Cell::new(Instant::now()),
             ignore_preview_scroll_until: Cell::new(Instant::now()),
+            flash_tag,
         });
 
         win.setup_actions(saved.view);
@@ -292,6 +275,8 @@ impl Window {
                 win.save_as().await;
             });
         });
+        add("help", |win| win.show_help());
+        add("shortcuts", |win| win.show_shortcuts());
         add("about", |win| win.show_about());
 
         // "view" remembers which of the three views is active
@@ -310,16 +295,6 @@ impl Window {
             win.apply_view(mode);
         });
         self.window.add_action(&view);
-
-        // "edit" is on or off
-        let edit = gio::SimpleAction::new_stateful("edit", None, &false.to_variant());
-        let weak = Rc::downgrade(self);
-        edit.connect_activate(move |action, _| {
-            let Some(win) = weak.upgrade() else { return };
-            let on = action.state().and_then(|s| s.get::<bool>()).unwrap_or(false);
-            win.set_editing(!on);
-        });
-        self.window.add_action(&edit);
     }
 
     fn setup_signals(self: &Rc<Self>) {
@@ -347,6 +322,7 @@ impl Window {
             {
                 win.preview_ready.set(true);
                 win.run_js(PREVIEW_SCRIPT);
+                win.tell_preview_view_mode();
                 win.update_style();
                 win.render_now();
             }
@@ -369,23 +345,6 @@ impl Window {
                 win.sync_preview_to_editor();
             }
         });
-
-        // Typing while editing is off shows a hint with a button to turn it on
-        let keys = gtk::EventControllerKey::new();
-        let weak = Rc::downgrade(self);
-        keys.connect_key_pressed(move |_, key, _, modifiers| {
-            let typed_text = key.to_unicode().is_some_and(|c| !c.is_control())
-                && !modifiers.intersects(gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::ALT_MASK);
-            let is_delete = matches!(key, gdk::Key::BackSpace | gdk::Key::Delete | gdk::Key::Return);
-            if let Some(win) = weak.upgrade()
-                && !win.source_view.is_editable()
-                && (typed_text || is_delete)
-            {
-                win.show_read_only_hint();
-            }
-            glib::Propagation::Proceed
-        });
-        self.source_view.add_controller(keys);
 
         // Stop the formatted view from ever leaving LeafMD's own page
         let weak = Rc::downgrade(self);
@@ -446,7 +405,7 @@ impl Window {
             ViewMode::Source => (true, false),
             ViewMode::Split => (true, true),
         };
-        self.source_pane.set_visible(show_source);
+        self.source_scroll.set_visible(show_source);
         self.webview.set_visible(show_preview);
 
         if mode == ViewMode::Split {
@@ -462,39 +421,22 @@ impl Window {
             // The preview isn't updated while hidden, so catch it up now
             self.render_now();
         }
+        self.tell_preview_view_mode();
+    }
+
+    /// Double-click on the formatted side only jumps to the raw text in split view.
+    fn tell_preview_view_mode(&self) {
+        if self.preview_ready.get() {
+            let split = self.view_mode.get() == ViewMode::Split;
+            self.run_js(&format!(
+                "window.leafmd && window.leafmd.setSplitView({split});"
+            ));
+        }
     }
 
     fn set_view(&self, mode: ViewMode) {
         WidgetExt::activate_action(&self.window, "win.view", Some(&mode.as_str().to_variant()))
             .ok();
-    }
-
-    fn set_editing(&self, on: bool) {
-        self.action("edit").set_state(&on.to_variant());
-        self.source_view.set_editable(on);
-        self.source_view.set_cursor_visible(on);
-        self.source_view.set_highlight_current_line(on);
-
-        // Make it obvious: blue "Editing" button and a bar across the top of the editor
-        self.edit_button_content
-            .set_label(if on { "Editing" } else { "Edit" });
-        if on {
-            self.edit_button.add_css_class("suggested-action");
-        } else {
-            self.edit_button.remove_css_class("suggested-action");
-        }
-        self.edit_bar.set_visible(on);
-
-        if on {
-            if let Some(toast) = self.read_only_toast.take() {
-                toast.dismiss();
-            }
-            // You can only type in the raw text, so switch to split if it is hidden
-            if self.view_mode.get() == ViewMode::Preview {
-                self.set_view(ViewMode::Split);
-            }
-            self.source_view.grab_focus();
-        }
     }
 
     fn set_document_actions_enabled(&self, enabled: bool) {
@@ -579,8 +521,13 @@ impl Window {
         };
         match message["kind"].as_str() {
             Some("jump") => {
-                if let Some(line) = message["line"].as_i64() {
-                    self.jump_to_line(line as i32);
+                if let (Some(start), Some(end)) = (message["start"].as_i64(), message["end"].as_i64()) {
+                    self.jump_to(
+                        start as i32,
+                        end as i32,
+                        message["word"].as_str().unwrap_or(""),
+                        message["occurrence"].as_u64().unwrap_or(0) as usize,
+                    );
                 }
             }
             Some("scroll") => {
@@ -603,18 +550,78 @@ impl Window {
         }
     }
 
-    /// Double-clicking the formatted view: turn on editing with the cursor on that line.
-    fn jump_to_line(&self, line: i32) {
-        self.set_editing(true);
-        let Some(iter) = self.buffer.iter_at_line((line - 1).max(0)) else {
+    /// Double-clicking a word on the formatted side of split view: select that same
+    /// word in the raw text and briefly highlight its line. In the formatted-only
+    /// view, double-click just selects the word like in any reader.
+    ///
+    /// `start` and `end` are the source lines of the block that was clicked, and
+    /// `occurrence` says which copy of the word it was (0 = first) within that block.
+    fn jump_to(&self, start: i32, end: i32, word: &str, occurrence: usize) {
+        if self.view_mode.get() != ViewMode::Split {
+            return;
+        }
+        self.source_view.grab_focus();
+        let Some(block_start) = self.buffer.iter_at_line((start - 1).max(0)) else {
             return;
         };
-        self.buffer.place_cursor(&iter);
-        // Wait until the split view has been laid out, then bring the line into view
+        let block_end = self
+            .buffer
+            .iter_at_line(end)
+            .unwrap_or_else(|| self.buffer.end_iter());
+
+        // Find the same copy of the word within the block's lines
+        let mut found = None;
+        if !word.is_empty() {
+            let mut from = block_start;
+            for _ in 0..=occurrence {
+                match from.forward_search(word, gtk::TextSearchFlags::TEXT_ONLY, Some(&block_end)) {
+                    Some((match_start, match_end)) => {
+                        from = match_end;
+                        found = Some((match_start, match_end));
+                    }
+                    None => break,
+                }
+            }
+        }
+        let cursor = match found {
+            Some((match_start, match_end)) => {
+                self.buffer.select_range(&match_start, &match_end);
+                match_start
+            }
+            None => {
+                self.buffer.place_cursor(&block_start);
+                block_start
+            }
+        };
+        self.flash_line(&cursor);
+
+        // Wait until the split view has been laid out, then bring the spot into view
         let view = self.source_view.clone();
         let mark = self.buffer.get_insert();
         glib::idle_add_local_once(move || {
             view.scroll_to_mark(&mark, 0.0, true, 0.0, 0.3);
+        });
+    }
+
+    /// Highlights a line in the accent colour for a moment.
+    fn flash_line(&self, iter: &gtk::TextIter) {
+        let mut color = adw::StyleManager::default().accent_color_rgba();
+        color.set_alpha(0.25);
+        self.flash_tag.set_paragraph_background_rgba(Some(&color));
+
+        let (all_start, all_end) = self.buffer.bounds();
+        self.buffer.remove_tag(&self.flash_tag, &all_start, &all_end);
+        let mut line_start = *iter;
+        line_start.set_line_offset(0);
+        let mut line_end = line_start;
+        line_end.forward_to_line_end();
+        self.buffer.apply_tag(&self.flash_tag, &line_start, &line_end);
+
+        let buffer = self.buffer.clone();
+        let tag = self.flash_tag.clone();
+        glib::timeout_add_local_once(Duration::from_millis(1200), move || {
+            let (start, end) = buffer.bounds();
+            buffer.remove_tag(&tag, &start, &end);
         });
     }
 
@@ -658,28 +665,6 @@ impl Window {
         self.run_js(&format!(
             "window.leafmd && window.leafmd.scrollToLine({line}, {at_bottom});"
         ));
-    }
-
-    /// Typing while editing is off: explain why nothing happens and offer to turn it on.
-    fn show_read_only_hint(self: &Rc<Self>) {
-        if self.read_only_toast.borrow().is_some() {
-            return;
-        }
-        let toast = adw::Toast::builder()
-            .title("Editing is off")
-            .button_label("Turn On Editing")
-            .action_name("win.edit")
-            .timeout(4)
-            .build();
-        // Forget it once it's gone, so the hint can show again next time
-        let weak = Rc::downgrade(self);
-        toast.connect_dismissed(move |_| {
-            if let Some(win) = weak.upgrade() {
-                win.read_only_toast.borrow_mut().take();
-            }
-        });
-        *self.read_only_toast.borrow_mut() = Some(toast.clone());
-        self.toasts.add_toast(toast);
     }
 
     /// Decides what happens when something tries to change the page in the formatted view.
@@ -744,7 +729,11 @@ impl Window {
             win.set_text("");
             win.set_file(None);
             win.show_document();
-            win.set_editing(true);
+            // A new document needs somewhere to type, so show the raw text
+            if win.view_mode.get() == ViewMode::Preview {
+                win.set_view(ViewMode::Split);
+            }
+            win.source_view.grab_focus();
         });
     }
 
@@ -788,8 +777,6 @@ impl Window {
         self.set_text(&text);
         self.set_file(Some(file));
         self.show_document();
-        // Files always open read-only
-        self.set_editing(false);
     }
 
     /// Saves to the current file, or asks where to save a new document.
@@ -988,8 +975,102 @@ impl Window {
         );
     }
 
+    /// A short guide to how LeafMD works.
+    fn show_help(&self) {
+        let page = adw::PreferencesPage::new();
+        let sections: [(&str, &[(&str, &str)]); 3] = [
+            (
+                "The Three Views",
+                &[
+                    ("Formatted", "The document as it looks when rendered. Just for reading, with nothing to edit by accident."),
+                    ("Raw", "The markdown text itself. Type here to make changes."),
+                    ("Split", "Raw text on the left, formatted on the right. The formatted side updates as you type, and both sides scroll together."),
+                ],
+            ),
+            (
+                "Editing",
+                &[
+                    ("Editing the raw text", "The raw text can always be edited in Raw or Split view. Changes are only written to the file when you save."),
+                    ("Unsaved changes", "A dot (•) before the file name means there are unsaved changes. LeafMD asks before closing or opening another file."),
+                    ("Jump to a word", "In Split view, double-click a word on the formatted side to select it in the raw text."),
+                ],
+            ),
+            (
+                "Files and Links",
+                &[
+                    ("Opening files", "Use Open, drop a file onto the window, or double-click a markdown file in your file manager."),
+                    ("Links", "Links open in your web browser. Links to headings in the same document scroll to them."),
+                    ("Images", "Images next to the file and images online are shown in the formatted view."),
+                ],
+            ),
+        ];
+        for (title, rows) in sections {
+            let group = adw::PreferencesGroup::builder().title(title).build();
+            for (row_title, row_text) in rows {
+                group.add(
+                    &adw::ActionRow::builder()
+                        .title(*row_title)
+                        .subtitle(*row_text)
+                        .build(),
+                );
+            }
+            page.add(&group);
+        }
+
+        let content = adw::ToolbarView::new();
+        content.add_top_bar(&adw::HeaderBar::new());
+        content.set_content(Some(&page));
+        adw::Dialog::builder()
+            .title("Help")
+            .content_width(520)
+            .content_height(640)
+            .child(&content)
+            .build()
+            .present(Some(&self.window));
+    }
+
+    /// Lists every keyboard shortcut.
+    fn show_shortcuts(&self) {
+        let dialog = adw::ShortcutsDialog::new();
+        let sections: [(&str, &[(&str, &str)]); 3] = [
+            (
+                "Views",
+                &[
+                    ("Formatted view", "<Control>1"),
+                    ("Raw text", "<Control>2"),
+                    ("Split view", "<Control>3"),
+                ],
+            ),
+            (
+                "Files",
+                &[
+                    ("New document", "<Control>n"),
+                    ("Open", "<Control>o"),
+                    ("Save", "<Control>s"),
+                    ("Save as", "<Control><Shift>s"),
+                    ("Close", "<Control>w"),
+                ],
+            ),
+            (
+                "Help",
+                &[
+                    ("Help", "F1"),
+                    ("Keyboard shortcuts", "<Control>question"),
+                ],
+            ),
+        ];
+        for (title, items) in sections {
+            let section = adw::ShortcutsSection::new(Some(title));
+            for (name, keys) in items {
+                section.add(adw::ShortcutsItem::new(name, keys));
+            }
+            dialog.add(section);
+        }
+        dialog.present(Some(&self.window));
+    }
+
     fn show_about(&self) {
-        adw::AboutDialog::builder()
+        let about = adw::AboutDialog::builder()
             .application_name("LeafMD")
             .application_icon(crate::APP_ID)
             .version(env!("CARGO_PKG_VERSION"))
@@ -999,10 +1080,15 @@ impl Window {
             .developers(["Jereme Hancock https://jeremehancock.com"])
             .copyright("© 2026 Jereme Hancock")
             .license_type(gtk::License::Gpl30)
-            .website(env!("CARGO_PKG_REPOSITORY"))
             .issue_url(concat!(env!("CARGO_PKG_REPOSITORY"), "/issues"))
-            .build()
-            .present(Some(&self.window));
+            .build();
+        // A custom link instead of the built-in "Website" row, so it can be called GitHub
+        about.add_link("GitHub", env!("CARGO_PKG_REPOSITORY"));
+        about.add_credit_section(
+            Some("AI Disclosure"),
+            &["This project was created with the help of AI."],
+        );
+        about.present(Some(&self.window));
     }
 
     fn save_state(&self) {

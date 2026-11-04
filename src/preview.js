@@ -79,14 +79,40 @@
     });
   });
 
-  // Double-click a block to edit it in the raw text
+  // True in split view, where a double-click jumps to the raw text
+  let jumpOnDoubleClick = false;
+
+  // Double-click a word to find it in the raw text (split view only). Sends the
+  // source lines of the clicked element, the word, and which copy of the word it
+  // was in that element, so the editor can select the exact same spot.
+  // In the formatted-only view, double-click just selects the word as usual.
   document.addEventListener("dblclick", (event) => {
+    if (!jumpOnDoubleClick) return;
     const target = event.target instanceof Element ? event.target : event.target.parentElement;
-    const block = target && target.closest("[data-sourcepos]");
-    if (!block) return;
-    const line = startLine(block);
-    if (Number.isFinite(line)) post({ kind: "jump", line });
+    const element = target && target.closest("[data-sourcepos]");
+    if (!element) return;
+    const lines = /^(\d+):\d+-(\d+):\d+/.exec(element.dataset.sourcepos);
+    if (!lines) return;
+
+    const selection = window.getSelection();
+    const word = selection ? selection.toString().trim() : "";
+    let occurrence = 0;
+    if (word && selection.rangeCount) {
+      const before = document.createRange();
+      before.setStart(element, 0);
+      const picked = selection.getRangeAt(0);
+      before.setEnd(picked.startContainer, picked.startOffset);
+      occurrence = before.toString().split(word).length - 1;
+    }
+    // Only one selection can be active on Linux (it's what middle-click pastes),
+    // so clear this one to let the raw text keep its selection.
+    if (selection) selection.removeAllRanges();
+
+    post({ kind: "jump", start: Number(lines[1]), end: Number(lines[2]), word, occurrence });
   });
 
-  window.leafmd = { scrollToLine };
+  window.leafmd = {
+    scrollToLine,
+    setSplitView(on) { jumpOnDoubleClick = on; },
+  };
 })();

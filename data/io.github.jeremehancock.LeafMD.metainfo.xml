@@ -17,8 +17,9 @@
     </p>
     <ul>
       <li>Switch between formatted, raw and split views with one click or Ctrl+1, 2 and 3</li>
-      <li>Files open read-only, so nothing changes by accident</li>
-      <li>Turn on editing when you want it, with the formatted view updating as you type</li>
+      <li>A formatted-only view for pure, distraction-free reading</li>
+      <li>Edit the raw text with the formatted view updating as you type</li>
+      <li>In split view, both sides scroll together</li>
       <li>Supports tables, task lists, footnotes and other GitHub-style markdown</li>
       <li>Follows your system's light or dark style</li>
     </ul>

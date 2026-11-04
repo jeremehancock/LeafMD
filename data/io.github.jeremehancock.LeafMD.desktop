@@ -2,7 +2,7 @@
 Type=Application
 Name=LeafMD
 GenericName=Markdown Viewer
-Comment=View markdown as formatted text, raw text or side by side, and edit when you want to
+Comment=Read markdown formatted, as raw text or side by side, and edit the raw text
 Icon=io.github.jeremehancock.LeafMD
 Exec=leafmd %U
 Terminal=false

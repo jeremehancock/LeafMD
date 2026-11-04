@@ -1,16 +1,16 @@
 # LeafMD
 
-A markdown viewer for Linux that switches between three views, with editing when you want it.
+A markdown viewer and editor for Linux with three views, including a formatted-only view for pure reading.
 
-- **Formatted:** the rendered document, full window
-- **Raw:** the markdown text, full window
-- **Split:** raw text on the left, formatted on the right
+- **Formatted:** the rendered document, full window. Just for reading.
+- **Raw:** the markdown text, full window. Type here to edit.
+- **Split:** raw text on the left, formatted on the right. The formatted side updates as you type.
 
-Files open read-only. Turn on **Edit** to type in the raw text. While editing is on, the Edit button turns into a filled **Editing** button and a bar appears across the top of the raw text, both in your system's accent colour. If you're in the formatted view when you turn editing on, LeafMD switches to split view so you can see both.
+The raw text can always be edited in Raw and Split view, and changes are only written to the file when you save.
 
-- **Double-click** anything in the formatted view to turn on editing with the cursor on that line in the raw text.
 - In split view, **scrolling either side** scrolls the other to the same spot.
-- Typing while editing is off shows a reminder with a button to turn it on.
+- In split view, **double-click** a word on the formatted side to select that same word in the raw text. Its line lights up briefly so you can spot it.
+- **Help** (F1) explains all of this inside the app, and **Keyboard Shortcuts** (Ctrl+?) lists every shortcut.
 
 Built with Rust, GTK4 and libadwaita. No npm.
 
@@ -19,12 +19,13 @@ Built with Rust, GTK4 and libadwaita. No npm.
 | Keys | Action |
 |---|---|
 | Ctrl+1 / Ctrl+2 / Ctrl+3 | Formatted / Raw / Split view |
-| Ctrl+E | Turn editing on or off |
 | Ctrl+N | New document |
 | Ctrl+O | Open |
 | Ctrl+S | Save |
 | Ctrl+Shift+S | Save as |
 | Ctrl+W or Ctrl+Q | Close (asks first if there are unsaved changes) |
+| F1 | Help |
+| Ctrl+? | Keyboard shortcuts |
 
 You can also open a file by dropping it on the window, or with `leafmd file.md`.
 
