@@ -1,5 +1,7 @@
 # LeafMD
 
+> **Early days:** LeafMD is a very new app and is in active, early development. It works, but expect rough edges, missing features and changes from one version to the next. Bug reports and ideas are welcome in [Issues](https://github.com/jeremehancock/LeafMD/issues), and [ROADMAP.md](ROADMAP.md) shows what's coming.
+
 A markdown viewer and editor for Linux with three views, including a formatted-only view for pure reading. Switch views with the icons in the toolbar or Ctrl+1, 2 and 3.
 
 - **Formatted:** the rendered document, full window. Just for reading.
@@ -105,6 +107,10 @@ Markdown files can contain raw HTML, including scripts. LeafMD protects against 
 1. Everything unsafe (scripts, event handlers, iframes) is stripped from the HTML before it's shown.
 2. Scripts inside the page are switched off in the web view as well.
 3. The formatted view can never leave LeafMD's own page. Clicking a link opens it in your browser instead, and links to headings in the same document just scroll.
+
+## Roadmap
+
+See [ROADMAP.md](ROADMAP.md) for what's planned next.
 
 ## App ID
 
