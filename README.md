@@ -40,6 +40,31 @@ cargo run -- path/to/file.md
 
 `cargo test` runs the tests for the markdown conversion and the safety filter.
 
+## Installing as a Flatpak
+
+Needs `flatpak-builder` and the GNOME 51 runtime, SDK and Rust extension:
+
+```
+sudo pacman -S flatpak-builder
+flatpak install flathub org.gnome.Platform//51 org.gnome.Sdk//51 org.freedesktop.Sdk.Extension.rust-stable//26.08
+```
+
+Then build and install for your user:
+
+```
+./build-aux/flatpak-install.sh
+```
+
+The script copies the Rust libraries into `./vendor` (Flatpak builds can't download anything), builds the app, and installs it. LeafMD then appears in your app grid.
+
+### Permissions
+
+| Permission | Why |
+|---|---|
+| Your home folder | So images and links next to a markdown file show up in the formatted view |
+| Network | So images hosted online (like README badges) load |
+| Graphics (dri) | The formatted view draws faster with the graphics card |
+
 ## How it's put together
 
 | File | What it does |
@@ -51,6 +76,7 @@ cargo run -- path/to/file.md
 | `src/state.rs` | Remembers the last view and window size in `~/.config/leafmd/state.ini` |
 | `data/*.desktop` | The app menu entry: name, icon, and the file types LeafMD opens |
 | `data/*.metainfo.xml` | The description, license and release notes shown in software centers |
+| `build-aux/` | The Flatpak recipe and the script that builds and installs it |
 | `data/icons/` | The app icon, plus a one-colour version GNOME uses in some places |
 
 ### Safety in the formatted view
@@ -67,10 +93,13 @@ Markdown files can contain raw HTML, including scripts. LeafMD protects against 
 
 ## Planned
 
-- Flatpak packaging
 - Click a paragraph in the formatted view to jump to that line in the raw text
 - Synced scrolling in split view
 
 ## License
 
 GPL-3.0-or-later. See [LICENSE](LICENSE).
+
+## AI Disclosure
+
+This project was created with the help of AI.

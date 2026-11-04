@@ -1,0 +1,50 @@
+{
+    "id": "io.github.jeremehancock.LeafMD",
+    "runtime": "org.gnome.Platform",
+    "runtime-version": "51",
+    "sdk": "org.gnome.Sdk",
+    "sdk-extensions": [
+        "org.freedesktop.Sdk.Extension.rust-stable"
+    ],
+    "command": "leafmd",
+    "finish-args": [
+        "--share=ipc",
+        "--socket=wayland",
+        "--socket=fallback-x11",
+        "--device=dri",
+        "--share=network",
+        "--filesystem=home"
+    ],
+    "build-options": {
+        "append-path": "/usr/lib/sdk/rust-stable/bin",
+        "env": {
+            "CARGO_HOME": "/run/build/leafmd/cargo"
+        }
+    },
+    "modules": [
+        {
+            "name": "leafmd",
+            "buildsystem": "simple",
+            "build-commands": [
+                "cargo --offline --config 'source.crates-io.replace-with=\"vendored-sources\"' --config 'source.vendored-sources.directory=\"vendor\"' build --release --locked",
+                "install -Dm755 target/release/leafmd /app/bin/leafmd",
+                "install -Dm644 data/io.github.jeremehancock.LeafMD.desktop /app/share/applications/io.github.jeremehancock.LeafMD.desktop",
+                "install -Dm644 data/io.github.jeremehancock.LeafMD.metainfo.xml /app/share/metainfo/io.github.jeremehancock.LeafMD.metainfo.xml",
+                "install -Dm644 data/icons/hicolor/scalable/apps/io.github.jeremehancock.LeafMD.svg /app/share/icons/hicolor/scalable/apps/io.github.jeremehancock.LeafMD.svg",
+                "install -Dm644 data/icons/hicolor/symbolic/apps/io.github.jeremehancock.LeafMD-symbolic.svg /app/share/icons/hicolor/symbolic/apps/io.github.jeremehancock.LeafMD-symbolic.svg"
+            ],
+            "sources": [
+                {
+                    "type": "dir",
+                    "path": "..",
+                    "skip": [
+                        "target",
+                        ".flatpak-builder",
+                        "flatpak-build",
+                        ".git"
+                    ]
+                }
+            ]
+        }
+    ]
+}
