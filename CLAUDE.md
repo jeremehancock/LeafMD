@@ -1,8 +1,9 @@
 # LeafMD
 
 A GNOME markdown viewer and editor in Rust (GTK4, libadwaita, GtkSourceView,
-WebKitGTK), shipped as a Flatpak. README.md has the feature list and a table
-of what each source file does.
+WebKitGTK), shipped as a Flatpak. README.md is for people using LeafMD (install,
+features, shortcuts). docs/DEVELOPMENT.md has the table of what each source
+file does, and docs/PUBLISHING.md covers releases and leafmd.app.
 
 ## How changes are planned: OpenSpec
 
@@ -57,6 +58,10 @@ Rules that hold even outside `/ship`:
   `build-aux/leafmd-signing-key.gpg`). Never print, copy or move that
   private key. `./build-aux/flatpak-repo-preview.sh` builds the same thing
   locally with a throwaway key, for trying before a release.
+- Between releases, leafmd.app can be republished (`gh workflow run ci.yml
+  --ref main -f republish=true`): `site/` from `main`, with the newest
+  release's version, screenshots and repository, unchanged. Work that only
+  touches the site or docs needs no new version. See docs/PUBLISHING.md.
 - LeafMD isn't on Flathub, but it keeps to Flathub's rules:
   `build-aux/flathub-lint.sh` must pass. Don't add exceptions to
   `build-aux/flathub-lint-exceptions.json` without asking.
@@ -76,7 +81,8 @@ GNOME SDK.
 ## Every user-visible change also updates
 
 - Help (`show_help` in src/window.rs) and Keyboard Shortcuts (`show_shortcuts`)
-- README.md (features, shortcuts table, file table)
+- README.md (features, shortcuts table) and, for new or renamed files, the
+  file table in docs/DEVELOPMENT.md
 - The app store description in `data/io.github.jeremehancock.LeafMD.metainfo.xml`
 - The storefront at leafmd.app (`site/index.html`)
 - The screenshots (`data/screenshots/`), if it changes how a window looks.

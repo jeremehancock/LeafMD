@@ -47,7 +47,7 @@ those commands.
   the build with LeafMD's key, and publishes leafmd.app (the storefront and
   the Flatpak repository installed copies update from) on GitHub Pages
   (`.github/workflows/ci.yml`). Before the first release, the owner's one-time
-  "Publishing setup" in the README must be done (signing key secret, Pages,
+  "Publishing setup" in docs/PUBLISHING.md must be done (signing key secret, Pages,
   the leafmd.app DNS); check `gh secret list` shows `LEAFMD_GPG_PRIVATE_KEY`
   and `gh api repos/jeremehancock/LeafMD/pages` works before opening a
   release PR.
@@ -121,8 +121,8 @@ git diff --stat origin/main..HEAD; git diff --stat
 | Anything a user sees or does | Help (`show_help` in `src/window.rs`), README features, the metainfo `<description>`, the storefront's text (`site/index.html`: the feature cards, hero and install cards), the matching spec in `openspec/specs/` |
 | How a window looks (the header bar, formatting bar, views, menus, dialogs or styles) | The screenshots in `data/screenshots/`. They can't be retaken without the owner, so say in the report that they're now out of date. The release check below asks about them. |
 | A keyboard shortcut | Keyboard Shortcuts (`show_shortcuts`), Help, README shortcuts table |
-| A new or renamed source file | README's file table |
-| `.github/workflows/`, `build-aux/`, this file, or how work is released | CLAUDE.md ("How work gets released"), README's development section, this file |
+| A new or renamed source file | The file table in docs/DEVELOPMENT.md |
+| `.github/workflows/`, `build-aux/`, this file, or how work is released | CLAUDE.md ("How work gets released"), docs/DEVELOPMENT.md or docs/PUBLISHING.md, this file |
 | A rule an agent must follow | CLAUDE.md, since it's loaded into every session |
 
 - If something is out of date, fix it now with a small, accurate edit.
@@ -182,6 +182,13 @@ To retake, follow `data/screenshots/README.md` with the owner: give them its
 steps, then check each new picture against its "Checking them" list (look at
 it) before copying it over the old one under the same name.
 
+**If the work doesn't change the app at all** (only `site/`, `docs/`, README,
+`openspec/`, `.claude/`, CLAUDE.md, the workflow, or `build-aux/` scripts the
+app's build doesn't use), it needs no version: skip this step and say so.
+Merging it publishes nothing on its own. If `site/` changed, offer to
+republish leafmd.app after the merge (see "After a merge"). If you're unsure
+whether something affects the app, ask.
+
 **If the newest `<release>` is already released** (its tag exists), this work
 needs a new version. Ask patch, minor or major (recommend one: a fix is a
 patch, a new feature is a minor; before 1.0, nothing is a major), then ask
@@ -230,6 +237,19 @@ GitHub's build), and **what merging does**:
 End the body with the attribution lines from the session's system reminder.
 
 ## After a merge
+
+**Republish leafmd.app** (only if the merge changed `site/` without making a
+release, and the owner agrees):
+
+```bash
+gh workflow run ci.yml --ref main -f republish=true
+gh run list --branch main --limit 1 --json databaseId,status,conclusion,url
+curl -fsS https://leafmd.app/ | grep -o 'Version [0-9.]*' | head -1
+```
+
+Wait for the run, then check the site shows the change and still names the
+newest release's version. A republish never changes what installed copies
+receive.
 
 **Check the release** (only if this merge should have published one):
 

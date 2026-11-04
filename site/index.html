@@ -25,6 +25,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <script src="copy.js" defer></script>
 <script src="lightbox.js" defer></script>
+<script src="install-help.js" defer></script>
 </head>
 <body>
 
@@ -60,6 +61,8 @@
         <a class="button" href="#install">Other ways to install</a>
       </div>
       <p class="hint">Install downloads a small file. Open it, and your app store installs LeafMD.</p>
+      <!-- install-help.js changes this line for visitors whose browser says it's on Ubuntu -->
+      <p class="hint" id="ubuntu-hint">On Ubuntu? <a href="#ubuntu">Set up Flatpak first</a>.</p>
       <p class="facts"><span>Free and open source <span aria-hidden="true">·</span></span> <span><a href="https://github.com/jeremehancock/LeafMD/releases/tag/v{{version}}" title="What's new in {{version}}">Version {{version}}</a> <span aria-hidden="true">·</span></span> <span>For Linux, with Flatpak</span></p>
     </div>
 
@@ -169,7 +172,41 @@
           <a class="button" href="https://github.com/jeremehancock/LeafMD/releases/latest">Download from GitHub</a>
         </article>
       </div>
-      <p class="note">Install works with app stores that support Flatpak, like GNOME Software and KDE Discover. If nothing opens the file, use the terminal command. LeafMD needs a Linux computer with <a href="https://flatpak.org/setup/">Flatpak</a> set up, on a 64-bit Intel or AMD processor (x86_64). The GNOME parts it needs come from Flathub, which is added for you if it isn't already. Everything LeafMD installs is signed, so updates can only come from its developer.</p>
+      <!-- Ubuntu doesn't come with Flatpak, so its users need this once. Starts
+           closed; install-help.js opens it on Ubuntu, or when the hero link
+           is clicked. Without scripts, clicking its title opens it. -->
+      <details class="card setup" id="ubuntu">
+        <summary>
+          <span class="setup-title">
+            <h3>Setting up Flatpak on Ubuntu</h3>
+            <span class="setup-sub">Ubuntu doesn't include Flatpak, so it needs setting up once.</span>
+          </span>
+          <span class="setup-arrow" aria-hidden="true">
+            <svg viewBox="0 0 16 16" width="16" height="16"><path d="M2.6 5.3 4 3.9l4 4 4-4 1.4 1.4L8 10.7z"/></svg>
+          </span>
+        </summary>
+        <ol class="setup-steps">
+          <li>
+            <p>Install Flatpak, and the Software app that opens LeafMD's install file:</p>
+            <div class="command">
+              <code id="ubuntu-step-1">sudo apt install flatpak <span class="nowrap">gnome-software-plugin-flatpak</span></code>
+              <button type="button" class="copy" data-copy="ubuntu-step-1" hidden>Copy</button>
+            </div>
+          </li>
+          <li>
+            <p>Add Flathub, where the parts LeafMD needs come from:</p>
+            <div class="command">
+              <code id="ubuntu-step-2">flatpak <span class="nowrap">remote-add</span> <span class="nowrap">--if-not-exists</span> flathub https://dl.flathub.org/<wbr>repo/<wbr>flathub.flatpakrepo</code>
+              <button type="button" class="copy" data-copy="ubuntu-step-2" hidden>Copy</button>
+            </div>
+          </li>
+          <li>
+            <p>Restart your computer. After that, the Install button works.</p>
+          </li>
+        </ol>
+        <p class="setup-more"><a href="https://flatpak.org/setup/Ubuntu">More about Flatpak on Ubuntu</a></p>
+      </details>
+      <p class="note">If the file opens in a text editor, Flatpak isn't set up yet: on Ubuntu, see the steps above, and for other systems, see <a href="https://flatpak.org/setup/">flatpak.org/setup</a>. Install works with app stores that support Flatpak, like GNOME Software and KDE Discover. LeafMD needs a Linux computer with Flatpak set up, on a 64-bit Intel or AMD processor (x86_64). The GNOME parts it needs come from Flathub, which is added for you if it isn't already. Everything LeafMD installs is signed, so updates can only come from its developer.</p>
     </div>
   </section>
 
