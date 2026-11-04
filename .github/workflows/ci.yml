@@ -36,6 +36,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # The checkout belongs to GitHub's runner account, but this container
+      # runs as root, and the Flatpak sandbox gives up root's power to write
+      # to other people's folders. Owning the checkout lets the checks create
+      # ./vendor and ./target in it.
+      - name: Take ownership of the checkout
+        run: chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE"
+
       - name: Read the version
         id: info
         run: build-aux/release-info.py | tee -a "$GITHUB_OUTPUT"
