@@ -11,10 +11,10 @@ Items are ticked off as they're finished. The order can change.
 
 ## 2. Find and replace
 
-- [ ] **Find** (Ctrl+F): a search bar that highlights every match in the raw text, with next and previous (Enter and Shift+Enter, or F3 and Shift+F3), and a count like "3 of 12"
-- [ ] **Find in the formatted view:** the same search bar works when only the formatted view is showing
-- [ ] **Replace** (Ctrl+H): replace one match or all of them, undone in one step with Ctrl+Z
-- [ ] Options kept to a minimum: match case, and whole words only
+- [x] **Find** (Ctrl+F): a search bar that highlights every match in the raw text, with next and previous (Enter and Shift+Enter, or F3 and Shift+F3), and a count like "3 of 12"
+- [x] **Find in the formatted view:** the same search bar works when only the formatted view is showing
+- [x] **Replace** (Ctrl+H): replace one match or all of them, undone in one step with Ctrl+Z
+- [x] Options kept to a minimum: match case, and whole words only
 
 ## 3. Smarter typing
 

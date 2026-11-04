@@ -16,6 +16,7 @@ The raw text can always be edited in Raw and Split view, and changes are only wr
 - In split view, **scrolling either side** scrolls the other to the same spot.
 - In split view, **double-click** a word on the formatted side to select that same word in the raw text. Its line lights up briefly so you can spot it.
 - **Links** to websites open in your browser. Links to other markdown or text files (like `LICENSE`) open them in a new LeafMD window, scrolled to the heading if the link names one.
+- **Find and replace** (Ctrl+F, Ctrl+H, the magnifying glass button, or the main menu): highlights every match with a count like "3 of 12". It searches the raw text in Raw and Split view, and the formatted text in Formatted view. Replace one match or all of them, and undo Replace All with one Ctrl+Z. Options: match case, and whole words only.
 - **Recent files:** the arrow next to **Open** lists the files you opened recently, and LeafMD reopens your last file when you start it.
 - **Help** (F1) explains all of this inside the app, and **Keyboard Shortcuts** (Ctrl+?) lists every shortcut.
 
@@ -35,6 +36,9 @@ Built with Rust, GTK4 and libadwaita. No npm.
 | Ctrl+Shift+X | Strikethrough |
 | Ctrl+E | Inline code |
 | Ctrl+K | Link |
+| Ctrl+F | Find |
+| Ctrl+H | Find and replace |
+| Enter / Shift+Enter, or F3 / Shift+F3 | Next / previous match |
 | F1 | Help |
 | Shift+F1 | Markdown cheatsheet |
 | Ctrl+? | Keyboard shortcuts |
@@ -87,11 +91,12 @@ The script copies the Rust libraries into `./vendor` (Flatpak builds can't downl
 | File | What it does |
 |---|---|
 | `src/main.rs` | Starts the app, sets up keyboard shortcuts, opens files passed on the command line |
-| `src/window.rs` | The window: toolbar, formatting bar, raw editor, formatted view, Help, cheatsheet and About, opening and saving |
+| `src/window.rs` | The window: toolbar, formatting bar, raw editor, formatted view, find and replace, Help, cheatsheet and About, opening and saving |
+| `src/find.rs` | The find and replace bar's buttons and boxes |
 | `src/format.rs` | What each formatting button does to the text (bold, lists, headings, tables and so on), with tests |
 | `src/render.rs` | Turns markdown into HTML (comrak), then removes anything unsafe (ammonia) |
 | `src/preview.html` | The page the formatted view is drawn into, including its light and dark styles |
-| `src/preview.js` | Double-click to jump and synced scrolling, run in a private script area the document can't reach |
+| `src/preview.js` | Double-click to jump, synced scrolling and find in the formatted view, run in a private script area the document can't reach |
 | `src/state.rs` | Remembers the last view and window size in `~/.config/leafmd/state.ini` |
 | `data/*.desktop` | The app menu entry: name, icon, and the file types LeafMD opens |
 | `data/*.metainfo.xml` | The description, license and release notes shown in software centers |

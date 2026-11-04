@@ -10,6 +10,7 @@ use gtk::{gdk, gio, glib};
 use sourceview5::prelude::*;
 use webkit6::prelude::*;
 
+use crate::find::FindBar;
 use crate::format::{self, Inline, LineStyle};
 use crate::render;
 use crate::state::{self, SavedState, ViewMode};
@@ -45,7 +46,15 @@ Rather than trying to do everything, LeafMD focuses on doing the essentials well
 LeafMD was created with the help of AI.";
 
 /// Actions that only make sense while a document is open.
-const DOCUMENT_ACTIONS: [&str; 3] = ["save", "save-as", "view"];
+const DOCUMENT_ACTIONS: [&str; 7] = [
+    "save",
+    "save-as",
+    "view",
+    "find",
+    "find-replace",
+    "find-next",
+    "find-previous",
+];
 
 pub struct Window {
     pub window: adw::ApplicationWindow,
@@ -56,6 +65,10 @@ pub struct Window {
     view_switcher: adw::ToggleGroup,
     /// The row of formatting buttons above the raw text (Raw and Split view only)
     format_bar: gtk::ScrolledWindow,
+    /// The find and replace bar (Ctrl+F, Ctrl+H)
+    find: FindBar,
+    /// The magnifying glass in the header bar that opens the find bar
+    find_button: gtk::ToggleButton,
     /// The list under the arrow next to Open
     recent_menu: gio::Menu,
     /// Recently opened files as file:// addresses, newest first
@@ -135,6 +148,9 @@ impl Window {
         let save_section = gio::Menu::new();
         save_section.append(Some("Save"), Some("win.save"));
         save_section.append(Some("Save As…"), Some("win.save-as"));
+        let find_section = gio::Menu::new();
+        find_section.append(Some("Find…"), Some("win.find"));
+        find_section.append(Some("Find and Replace…"), Some("win.find-replace"));
         let app_section = gio::Menu::new();
         app_section.append(Some("Help"), Some("win.help"));
         app_section.append(Some("Markdown Cheatsheet"), Some("win.cheatsheet"));
@@ -143,6 +159,7 @@ impl Window {
         let menu = gio::Menu::new();
         menu.append_section(None, &file_section);
         menu.append_section(None, &save_section);
+        menu.append_section(None, &find_section);
         menu.append_section(None, &app_section);
         header.pack_end(
             &gtk::MenuButton::builder()
@@ -169,6 +186,13 @@ impl Window {
             );
         }
         view_switcher.set_active_name(Some(saved.view.as_str()));
+        // A magnifying glass between the views and the menu opens the find bar.
+        // It stays pressed in while the bar is open.
+        let find_button = gtk::ToggleButton::builder()
+            .icon_name("edit-find-symbolic")
+            .tooltip_text("Find (Ctrl+F)")
+            .build();
+        header.pack_end(&find_button);
         header.pack_end(&view_switcher);
 
         // ---- Raw editor ----
@@ -215,6 +239,9 @@ impl Window {
         // ---- Formatting bar ----
         let format_bar = build_format_bar();
 
+        // ---- Find and replace ----
+        let find = FindBar::new(&buffer);
+
         // ---- Layout ----
         let paned = gtk::Paned::builder()
             .orientation(gtk::Orientation::Horizontal)
@@ -254,6 +281,7 @@ impl Window {
         let toolbar_view = adw::ToolbarView::new();
         toolbar_view.add_top_bar(&header);
         toolbar_view.add_top_bar(&format_bar);
+        toolbar_view.add_top_bar(&find.bar);
         toolbar_view.set_content(Some(&toasts));
         window.set_content(Some(&toolbar_view));
 
@@ -265,6 +293,8 @@ impl Window {
             paned,
             view_switcher,
             format_bar,
+            find,
+            find_button,
             recent_menu,
             recent: RefCell::new(state::load_recent()),
             source_scroll,
@@ -349,6 +379,27 @@ impl Window {
         add("shortcuts", |win| win.show_shortcuts());
         add("about", |win| win.show_about());
 
+        // Find and replace
+        add("find", |win| win.open_find(false));
+        add("find-replace", |win| win.open_find(true));
+        add("find-next", |win| win.find_step(1));
+        add("find-previous", |win| win.find_step(-1));
+        add("replace", |win| win.replace_one());
+        add("replace-all", |win| win.replace_all());
+        // The two search options: tick boxes in the find bar's menu
+        for name in ["find-match-case", "find-whole-words"] {
+            let option = gio::SimpleAction::new_stateful(name, None, &false.to_variant());
+            let weak = Rc::downgrade(self);
+            option.connect_activate(move |option, _| {
+                let on = !option.state().and_then(|s| s.get::<bool>()).unwrap_or(false);
+                option.set_state(&on.to_variant());
+                if let Some(win) = weak.upgrade() {
+                    win.find_options_changed();
+                }
+            });
+            self.window.add_action(&option);
+        }
+
         // "view" remembers which of the three views is active
         let view = gio::SimpleAction::new_stateful(
             "view",
@@ -410,6 +461,10 @@ impl Window {
                 win.tell_preview_view_mode();
                 win.update_style();
                 win.render_now();
+                // A new file opened while the find bar is open: search it too
+                if win.find.bar.is_search_mode() {
+                    win.refresh_find();
+                }
                 // Opened from a link like other.md#part-two: scroll to that heading
                 if let Some(heading) = win.pending_heading.take() {
                     win.scroll_to_heading(&heading);
@@ -493,6 +548,8 @@ impl Window {
             }
         });
 
+        self.setup_find_signals();
+
         // Ask before closing with unsaved changes
         let weak = Rc::downgrade(self);
         self.window.connect_close_request(move |_| {
@@ -546,6 +603,10 @@ impl Window {
         }
         self.tell_preview_view_mode();
         self.update_format_bar();
+        // An open find bar now searches whichever text is showing
+        if self.find.bar.is_search_mode() {
+            self.refresh_find();
+        }
     }
 
     /// The formatting bar (and its shortcuts) only work where the raw text can be edited.
@@ -554,6 +615,13 @@ impl Window {
             && self.view_mode.get() != ViewMode::Preview;
         self.format_bar.set_visible(editable);
         self.action("format").set_enabled(editable);
+        // Replacing changes the raw text, so it isn't offered in the formatted view
+        self.action("replace").set_enabled(editable);
+        self.action("replace-all").set_enabled(editable);
+        self.find.replace_toggle.set_visible(editable);
+        self.find
+            .replace_row
+            .set_visible(editable && self.find.replace_toggle.is_active());
     }
 
     /// Double-click on the formatted side only jumps to the raw text in split view.
@@ -576,7 +644,315 @@ impl Window {
             self.action(name).set_enabled(enabled);
         }
         self.view_switcher.set_sensitive(enabled);
+        self.find_button.set_sensitive(enabled);
         self.update_format_bar();
+    }
+
+    // =====================================================================
+    // Find and replace
+    // =====================================================================
+
+    fn setup_find_signals(self: &Rc<Self>) {
+        let find = &self.find;
+
+        // Typing in the find box: jump to the first match from where you are
+        let weak = Rc::downgrade(self);
+        find.entry.connect_search_changed(move |_| {
+            if let Some(win) = weak.upgrade() {
+                win.refresh_find();
+            }
+        });
+        // Enter goes to the next match. (Ctrl+G and Shift+Ctrl+G also work,
+        // because the find box has them built in.)
+        let step = |win: &Rc<Self>, step: i32| {
+            let weak = Rc::downgrade(win);
+            move |_: &gtk::SearchEntry| {
+                if let Some(win) = weak.upgrade() {
+                    win.find_step(step);
+                }
+            }
+        };
+        find.entry.connect_activate(step(self, 1));
+        find.entry.connect_next_match(step(self, 1));
+        find.entry.connect_previous_match(step(self, -1));
+        // Shift+Enter goes to the previous match
+        let keys = gtk::EventControllerKey::new();
+        keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+        let weak = Rc::downgrade(self);
+        keys.connect_key_pressed(move |_, key, _, modifiers| {
+            let enter = matches!(key, gdk::Key::Return | gdk::Key::KP_Enter);
+            if enter
+                && modifiers.contains(gdk::ModifierType::SHIFT_MASK)
+                && let Some(win) = weak.upgrade()
+            {
+                win.find_step(-1);
+                return glib::Propagation::Stop;
+            }
+            glib::Propagation::Proceed
+        });
+        find.entry.add_controller(keys);
+
+        // Enter in the replace box replaces the current match
+        let weak = Rc::downgrade(self);
+        find.replace_entry.connect_activate(move |_| {
+            if let Some(win) = weak.upgrade() {
+                win.replace_one();
+            }
+        });
+        // Escape in the replace box closes the bar, like it does in the find box
+        let keys = gtk::EventControllerKey::new();
+        let bar = find.bar.downgrade();
+        keys.connect_key_pressed(move |_, key, _, _| {
+            if key == gdk::Key::Escape
+                && let Some(bar) = bar.upgrade()
+            {
+                bar.set_search_mode(false);
+                return glib::Propagation::Stop;
+            }
+            glib::Propagation::Proceed
+        });
+        find.replace_entry.add_controller(keys);
+
+        // The header bar button shows whether the bar is open, and opens or closes it
+        find.bar
+            .bind_property("search-mode-enabled", &self.find_button, "active")
+            .sync_create()
+            .build();
+        let weak = Rc::downgrade(self);
+        self.find_button.connect_clicked(move |button| {
+            let Some(win) = weak.upgrade() else { return };
+            if button.is_active() {
+                win.open_find(false);
+            } else {
+                win.find.bar.set_search_mode(false);
+            }
+        });
+
+        // Closing the bar (Escape or its close button) removes the highlights
+        let weak = Rc::downgrade(self);
+        find.bar.connect_search_mode_enabled_notify(move |bar| {
+            if !bar.is_search_mode()
+                && let Some(win) = weak.upgrade()
+            {
+                win.close_find();
+            }
+        });
+
+        // The count ("3 of 12") follows the cursor and changes to the text
+        let weak = Rc::downgrade(self);
+        find.context.connect_occurrences_count_notify(move |_| {
+            if let Some(win) = weak.upgrade() {
+                win.update_raw_find_count();
+            }
+        });
+        let weak = Rc::downgrade(self);
+        self.buffer.connect_mark_set(move |buffer, _, mark| {
+            if *mark == buffer.get_insert()
+                && let Some(win) = weak.upgrade()
+            {
+                win.update_raw_find_count();
+            }
+        });
+    }
+
+    /// True when the formatted view is the only thing showing, so that's what
+    /// gets searched. In Raw and Split view the raw text is searched.
+    fn searching_preview(&self) -> bool {
+        self.view_mode.get() == ViewMode::Preview
+    }
+
+    /// Ctrl+F (or Ctrl+H with `replace`): shows the find bar and puts the
+    /// cursor in it, starting with the selected text if there is some.
+    fn open_find(self: &Rc<Self>, replace: bool) {
+        let find = &self.find;
+        if !self.searching_preview()
+            && let Some((start, end)) = self.buffer.selection_bounds()
+        {
+            let selected = self.buffer.text(&start, &end, false);
+            if !selected.contains('\n') && selected.chars().count() <= 200 {
+                find.entry.set_text(&selected);
+            }
+        }
+        if replace && !self.searching_preview() {
+            find.replace_toggle.set_active(true);
+        }
+        let was_open = find.bar.is_search_mode();
+        find.bar.set_search_mode(true);
+        if !was_open {
+            // Bring back the highlights for whatever is already in the find box
+            self.refresh_find();
+        }
+        if replace && find.replace_row.is_visible() && find.query().is_some() {
+            find.replace_entry.grab_focus();
+        } else {
+            find.entry.grab_focus();
+            find.entry.select_region(0, -1);
+        }
+    }
+
+    /// The find bar was closed: clear the highlights and go back to the text.
+    fn close_find(&self) {
+        self.find.settings.set_search_text(None);
+        self.run_js("window.leafmd && window.leafmd.clearFind();");
+        if self.searching_preview() {
+            self.webview.grab_focus();
+        } else {
+            self.source_view.grab_focus();
+        }
+    }
+
+    /// The search text, an option or the view changed: search again from the
+    /// current spot, so typing more letters keeps the same match where it can.
+    fn refresh_find(&self) {
+        let find = &self.find;
+        let query = find.query();
+        find.settings
+            .set_case_sensitive(self.find_option("find-match-case"));
+        find.settings
+            .set_at_word_boundaries(self.find_option("find-whole-words"));
+        find.settings.set_search_text(query.as_deref());
+
+        if self.searching_preview() {
+            self.preview_find(0);
+            return;
+        }
+        // Only one side shows highlights at a time
+        self.run_js("window.leafmd && window.leafmd.clearFind();");
+        if query.is_some() {
+            let from = match self.buffer.selection_bounds() {
+                Some((start, _)) => start,
+                None => self.buffer.iter_at_mark(&self.buffer.get_insert()),
+            };
+            self.raw_find_from(&from, false);
+        }
+        self.update_raw_find_count();
+    }
+
+    fn find_options_changed(&self) {
+        if self.find.bar.is_search_mode() {
+            self.refresh_find();
+        }
+    }
+
+    fn find_option(&self, name: &str) -> bool {
+        self.action(name)
+            .state()
+            .and_then(|state| state.get::<bool>())
+            .unwrap_or(false)
+    }
+
+    /// Goes to the next match (`step` 1) or the previous one (`step` -1).
+    /// Opens the find bar first if it's closed (F3 with nothing searched yet).
+    fn find_step(self: &Rc<Self>, step: i32) {
+        if !self.find.bar.is_search_mode() || self.find.query().is_none() {
+            self.open_find(false);
+            return;
+        }
+        if self.searching_preview() {
+            self.preview_find(step);
+            return;
+        }
+        let from = match self.buffer.selection_bounds() {
+            Some((start, end)) => {
+                if step > 0 {
+                    end
+                } else {
+                    start
+                }
+            }
+            None => self.buffer.iter_at_mark(&self.buffer.get_insert()),
+        };
+        self.raw_find_from(&from, step < 0);
+    }
+
+    /// Selects the first match after (or before) `from` in the raw text and
+    /// scrolls it into view. Wraps around at the end of the document.
+    fn raw_find_from(&self, from: &gtk::TextIter, backward: bool) {
+        let context = &self.find.context;
+        let found = if backward {
+            context.backward(from)
+        } else {
+            context.forward(from)
+        };
+        if let Some((start, end, _wrapped)) = found {
+            self.buffer.select_range(&start, &end);
+            // Leave some room above and below, rather than at the very edge
+            self.source_view
+                .scroll_to_mark(&self.buffer.get_insert(), 0.15, false, 0.0, 0.0);
+        }
+        self.update_raw_find_count();
+    }
+
+    /// Updates "3 of 12" for the raw text.
+    fn update_raw_find_count(&self) {
+        if !self.find.bar.is_search_mode() || self.searching_preview() {
+            return;
+        }
+        let context = &self.find.context;
+        let position = self
+            .buffer
+            .selection_bounds()
+            .map(|(start, end)| context.occurrence_position(&start, &end))
+            .unwrap_or(0);
+        self.find.show_count(position.max(0), context.occurrences_count());
+    }
+
+    /// Searches the formatted view. `step` 0 starts a new search, 1 and -1
+    /// move to the next or previous match. The page answers with a "find"
+    /// message carrying the count.
+    fn preview_find(&self, step: i32) {
+        let Some(query) = self.find.query() else {
+            self.run_js("window.leafmd && window.leafmd.clearFind();");
+            self.find.show_count(0, 0);
+            return;
+        };
+        let query = serde_json::to_string(&query).unwrap_or_default();
+        let match_case = self.find_option("find-match-case");
+        let whole_words = self.find_option("find-whole-words");
+        self.run_js(&format!(
+            "window.leafmd && window.leafmd.find({query}, {match_case}, {whole_words}, {step});"
+        ));
+    }
+
+    /// Replaces the selected match, then moves to the next one. If no match is
+    /// selected yet, it just goes to the next one, so you see what will change.
+    fn replace_one(self: &Rc<Self>) {
+        if self.searching_preview() || self.find.query().is_none() {
+            return;
+        }
+        let replacement = self.find.replace_entry.text();
+        if let Some((mut start, mut end)) = self.buffer.selection_bounds()
+            && self.find.context.occurrence_position(&start, &end) > 0
+        {
+            self.buffer.begin_user_action();
+            let replaced = self.find.context.replace(&mut start, &mut end, &replacement);
+            self.buffer.end_user_action();
+            if replaced.is_ok() {
+                // Carry on from just after the new text
+                self.raw_find_from(&end, false);
+                return;
+            }
+        }
+        self.find_step(1);
+    }
+
+    /// Replaces every match. One Ctrl+Z puts them all back.
+    fn replace_all(&self) {
+        if self.searching_preview() || self.find.query().is_none() {
+            return;
+        }
+        let count = self.find.context.occurrences_count();
+        let replacement = self.find.replace_entry.text();
+        self.buffer.begin_user_action();
+        let result = self.find.context.replace_all(&replacement);
+        self.buffer.end_user_action();
+        match result {
+            Ok(()) if count == 1 => self.toast("Replaced 1 match"),
+            Ok(()) if count > 1 => self.toast(&format!("Replaced {count} matches")),
+            Ok(()) => {}
+            Err(err) => self.toast(&format!("Couldn't replace: {}", err.message())),
+        }
+        self.update_raw_find_count();
     }
 
     // =====================================================================
@@ -732,8 +1108,10 @@ impl Window {
         }
         let html = render::markdown_to_safe_html(&self.text());
         let html_as_js_string = serde_json::to_string(&html).unwrap_or_default();
+        // The new content replaces any find highlights, so they're redrawn after
         self.run_js(&format!(
-            "document.getElementById('content').innerHTML = {html_as_js_string};"
+            "document.getElementById('content').innerHTML = {html_as_js_string};
+             window.leafmd && window.leafmd.findAgain();"
         ));
     }
 
@@ -781,6 +1159,13 @@ impl Window {
                 } else if let Some(line) = message["line"].as_f64() {
                     self.scroll_editor_to_line(line);
                 }
+            }
+            // The result of searching the formatted view
+            Some("find") if self.searching_preview() => {
+                self.find.show_count(
+                    message["position"].as_i64().unwrap_or(0) as i32,
+                    message["count"].as_i64().unwrap_or(0) as i32,
+                );
             }
             _ => {}
         }
@@ -1426,7 +1811,7 @@ impl Window {
     /// A short guide to how LeafMD works.
     fn show_help(&self) {
         let page = adw::PreferencesPage::new();
-        let sections: [(&str, &[(&str, &str)]); 4] = [
+        let sections: [(&str, &[(&str, &str)]); 5] = [
             (
                 "The Three Views",
                 &[
@@ -1450,6 +1835,14 @@ impl Window {
                     ("Nothing selected", "Bold, italic and the other text styles apply to the word the cursor is in. Lists, headings and quotes apply to the cursor's line."),
                     ("Undoing a format", "Press the same button again to take the formatting off, or press Ctrl+Z."),
                     ("Markdown cheatsheet", "Shows the most common markdown and what each one looks like. Open it from the main menu, the Cheatsheet button, or Shift+F1."),
+                ],
+            ),
+            (
+                "Find and Replace",
+                &[
+                    ("Find", "Press Ctrl+F, click the magnifying glass at the top of the window, or choose Find from the main menu, then type. Every match is highlighted, and Enter and Shift+Enter move between them. In Raw and Split view the raw text is searched; in Formatted view, the formatted text is."),
+                    ("Replace", "Press Ctrl+H, or the replace button in the find bar, to replace one match at a time or all of them at once. One Ctrl+Z undoes Replace All. Replacing works in Raw and Split view."),
+                    ("Options", "The menu at the end of the find bar has Match Case and Whole Words Only."),
                 ],
             ),
             (
@@ -1490,7 +1883,7 @@ impl Window {
     /// Lists every keyboard shortcut.
     fn show_shortcuts(&self) {
         let dialog = adw::ShortcutsDialog::new();
-        let sections: [(&str, &[(&str, &str)]); 4] = [
+        let sections: [(&str, &[(&str, &str)]); 5] = [
             (
                 "Views",
                 &[
@@ -1517,6 +1910,16 @@ impl Window {
                     ("Strikethrough", "<Control><Shift>x"),
                     ("Inline code", "<Control>e"),
                     ("Link", "<Control>k"),
+                ],
+            ),
+            (
+                "Find",
+                &[
+                    ("Find", "<Control>f"),
+                    ("Find and replace", "<Control>h"),
+                    ("Next match", "F3"),
+                    ("Previous match", "<Shift>F3"),
+                    ("Close the find bar", "Escape"),
                 ],
             ),
             (

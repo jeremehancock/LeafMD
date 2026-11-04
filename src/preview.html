@@ -46,6 +46,11 @@
   hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
   li > input[type="checkbox"] { margin: 0 0.4em 0 0; }
   .footnotes { font-size: 0.9em; color: var(--muted); }
+  /* Find: every match, and the selected one stronger */
+  ::highlight(leafmd-find) { background-color: #f8e45c; color: #1e1e1e; }
+  ::highlight(leafmd-find-current) { background-color: #ffa348; color: #1e1e1e; }
+  :root[data-theme="dark"] ::highlight(leafmd-find) { background-color: #9c6e03; color: #ffffff; }
+  :root[data-theme="dark"] ::highlight(leafmd-find-current) { background-color: #e66100; color: #ffffff; }
 </style>
 </head>
 <body>

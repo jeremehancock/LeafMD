@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <!-- Replace: two arrows pointing opposite ways, one above the other -->
+  <rect x="1.5" y="4.2" width="10" height="1.6" rx="0.8" fill="#2e3436"/>
+  <path d="M10.4 1.9L14.6 5 10.4 8.1Z" fill="#2e3436" stroke="none"/>
+  <rect x="4.5" y="10.2" width="10" height="1.6" rx="0.8" fill="#2e3436"/>
+  <path d="M5.6 7.9L1.4 11 5.6 14.1Z" fill="#2e3436" stroke="none"/>
+</svg>

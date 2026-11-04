@@ -1,3 +1,4 @@
+mod find;
 mod format;
 mod render;
 mod state;
@@ -134,6 +135,11 @@ fn set_shortcuts(app: &adw::Application) {
         ("win.format::strikethrough", &["<Control><Shift>x"]),
         ("win.format::code", &["<Control>e"]),
         ("win.format::link", &["<Control>k"]),
+        // Find and replace
+        ("win.find", &["<Control>f"]),
+        ("win.find-replace", &["<Control>h"]),
+        ("win.find-next", &["F3"]),
+        ("win.find-previous", &["<Shift>F3"]),
         // "window.close" is built into GTK and goes through the unsaved-changes check
         ("window.close", &["<Control>w", "<Control>q"]),
     ];

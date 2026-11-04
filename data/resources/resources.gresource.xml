@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Files built into the LeafMD program itself. GTK automatically looks for
      icons under /io/github/jeremehancock/LeafMD/icons.
-     The view icons and the formatting bar icons live here so they look the same
+     The view icons, the formatting bar icons and the replace icon live here so they look the same
      with any icon theme. -->
 <gresources>
   <gresource prefix="/io/github/jeremehancock/LeafMD">
@@ -20,5 +20,6 @@
     <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-format-strikethrough-symbolic.svg</file>
     <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-format-table-symbolic.svg</file>
     <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-format-task-list-symbolic.svg</file>
+    <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-replace-symbolic.svg</file>
   </gresource>
 </gresources>

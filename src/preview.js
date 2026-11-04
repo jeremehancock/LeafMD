@@ -111,8 +111,152 @@
     post({ kind: "jump", start: Number(lines[1]), end: Number(lines[2]), word, occurrence });
   });
 
+  // ---- Find, when only the formatted view is showing ----
+  //
+  // Matches are coloured with the browser's highlight feature (the
+  // ::highlight() styles in preview.html), which paints over the text without
+  // changing the page. Each match is a Range: a start and end point in the text.
+
+  let findQuery = null; // { text, matchCase, wholeWords } of the last search
+  let findRanges = [];
+  let findCurrent = -1; // which match is selected, or -1
+
+  // Elements whose text shouldn't run into the next one's when searching.
+  // "end of one paragraph" + "start of the next" isn't a match.
+  const FIND_BLOCKS = "p,h1,h2,h3,h4,h5,h6,li,pre,blockquote,td,th,dt,dd,div,figcaption,summary";
+
+  // All the visible text in one string, with a note of where each piece came from
+  function pageText() {
+    const content = document.getElementById("content");
+    const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+    let text = "";
+    const pieces = [];
+    let lastBlock;
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const block = node.parentElement.closest(FIND_BLOCKS);
+      if (pieces.length && block !== lastBlock) text += "\n";
+      lastBlock = block;
+      pieces.push({ node, start: text.length });
+      text += node.data;
+    }
+    return { text, pieces };
+  }
+
+  // Turns a position in pageText()'s string back into a spot in the page
+  function spotAt(pieces, offset, isEnd) {
+    let low = 0;
+    let high = pieces.length - 1;
+    while (low < high) {
+      const mid = (low + high + 1) >> 1;
+      const start = pieces[mid].start;
+      // The end of a match belongs to the piece it finishes in, not the next one
+      if (start < offset || (!isEnd && start === offset)) low = mid;
+      else high = mid - 1;
+    }
+    const piece = pieces[low];
+    return { node: piece.node, offset: offset - piece.start };
+  }
+
+  function findAll(query) {
+    const { text, pieces } = pageText();
+    const escaped = query.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // "Whole words": no letter, digit or underscore right before or after
+    const pattern = query.wholeWords
+      ? `(?<![\\p{L}\\p{N}_])${escaped}(?![\\p{L}\\p{N}_])`
+      : escaped;
+    const regex = new RegExp(pattern, query.matchCase ? "gu" : "giu");
+    const ranges = [];
+    for (const match of text.matchAll(regex)) {
+      const start = spotAt(pieces, match.index, false);
+      const end = spotAt(pieces, match.index + match[0].length, true);
+      const range = document.createRange();
+      range.setStart(start.node, start.offset);
+      range.setEnd(end.node, end.offset);
+      ranges.push(range);
+    }
+    return ranges;
+  }
+
+  function paintFind() {
+    if (!window.CSS || !CSS.highlights) return;
+    CSS.highlights.set("leafmd-find", new Highlight(...findRanges));
+    if (findCurrent >= 0) {
+      const current = new Highlight(findRanges[findCurrent]);
+      current.priority = 1; // drawn on top of the other matches
+      CSS.highlights.set("leafmd-find-current", current);
+    } else {
+      CSS.highlights.delete("leafmd-find-current");
+    }
+  }
+
+  // Scroll the selected match into view if it's off screen
+  function revealFind() {
+    if (findCurrent < 0) return;
+    const range = findRanges[findCurrent];
+    // Code blocks and tables can scroll sideways, so bring those round first
+    const holder = range.startContainer.parentElement?.closest("pre, table");
+    if (holder) {
+      const inner = range.getBoundingClientRect();
+      const outer = holder.getBoundingClientRect();
+      if (inner.left < outer.left || inner.right > outer.right) {
+        holder.scrollLeft += inner.left - outer.left - outer.width / 3;
+      }
+    }
+    const box = range.getBoundingClientRect();
+    if (box.top < 0 || box.bottom > window.innerHeight) {
+      window.scrollBy(0, box.top - window.innerHeight / 3);
+    }
+  }
+
+  function reportFind() {
+    post({ kind: "find", position: findCurrent + 1, count: findRanges.length });
+  }
+
+  // step 0: a new search, starting at the first match on screen.
+  // step 1 or -1: the next or previous match, wrapping round at the ends.
+  function find(text, matchCase, wholeWords, step) {
+    const query = { text, matchCase, wholeWords };
+    const same = findQuery && findQuery.text === text &&
+      findQuery.matchCase === matchCase && findQuery.wholeWords === wholeWords;
+    const count = findRanges.length;
+    if (same && step !== 0 && count) {
+      findCurrent = (findCurrent + step + count) % count;
+    } else {
+      findQuery = query;
+      findRanges = findAll(query);
+      findCurrent = findRanges.findIndex((range) => range.getBoundingClientRect().bottom > 0);
+      if (findCurrent < 0 && findRanges.length) findCurrent = 0;
+    }
+    paintFind();
+    revealFind();
+    reportFind();
+  }
+
+  // The page was redrawn: find the same text again, keeping the same match if it's still there
+  function findAgain() {
+    if (!findQuery) return;
+    findRanges = findAll(findQuery);
+    findCurrent = Math.min(findCurrent, findRanges.length - 1);
+    if (findCurrent < 0 && findRanges.length) findCurrent = 0;
+    paintFind();
+    reportFind();
+  }
+
+  function clearFind() {
+    findQuery = null;
+    findRanges = [];
+    findCurrent = -1;
+    if (window.CSS && CSS.highlights) {
+      CSS.highlights.delete("leafmd-find");
+      CSS.highlights.delete("leafmd-find-current");
+    }
+  }
+
   window.leafmd = {
     scrollToLine,
     setSplitView(on) { jumpOnDoubleClick = on; },
+    find,
+    findAgain,
+    clearFind,
   };
 })();
