@@ -71,7 +71,8 @@ jobs:
           if-no-files-found: error
 
   release:
-    name: Release v${{ needs.build.outputs.version }}
+    # A plain name: GitHub shows a skipped job's name without filling it in
+    name: Release
     needs: build
     if: github.ref == 'refs/heads/main' && needs.build.outputs.stable == 'true'
     runs-on: ubuntu-latest

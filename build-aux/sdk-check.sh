@@ -20,8 +20,18 @@ build-aux/release-info.py
 # The SDK version comes from the Flatpak recipe, so the two can't drift apart
 runtime=$(python3 -c 'import json; print(json.load(open("build-aux/io.github.jeremehancock.LeafMD.json"))["runtime-version"])')
 
+# The SDK can be installed for this user, for the whole system, or both (as on
+# GitHub's build image), and flatpak stops to ask which one if it isn't told.
+# Prefer the user copy: that's where the Flatpak build installs missing parts,
+# like the Rust extension, when run with --user.
+if flatpak info --user "org.gnome.Sdk//$runtime" > /dev/null 2>&1; then
+    installation=--user
+else
+    installation=--system
+fi
+
 # Everything Cargo writes goes under ./target, which git and the Flatpak build ignore
-flatpak run \
+flatpak run "$installation" \
     --share=network \
     --filesystem="$PWD" \
     --env=CARGO_HOME="$PWD/target/sdk-cargo-home" \
