@@ -1,0 +1,220 @@
+/* LeafMD's storefront. Styled after GNOME's own apps (libadwaita): rounded
+   cards, plenty of space, the system's font, and LeafMD's leaf green.
+   Light and dark follow the visitor's system setting. */
+
+:root {
+  --bg: #fafafb;
+  --surface: #ffffff;
+  --surface-2: #f1f1f3;
+  --fg: #1e1e22;
+  --muted: #5e5c64;
+  --border: rgb(0 0 6 / 0.1);
+  --accent: #157046;          /* links and small green text */
+  --accent-bg: #1a7f50;       /* the Install button */
+  --accent-fg: #ffffff;       /* text on the Install button */
+  --glow: rgb(87 227 137 / 0.28);
+  --shadow: 0 1px 2px rgb(0 0 6 / 0.06), 0 4px 16px rgb(0 0 6 / 0.06);
+  --radius: 14px;
+  --font: "Adwaita Sans", Cantarell, Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "Adwaita Mono", "Source Code Pro", ui-monospace, "DejaVu Sans Mono", monospace;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1d1d20;
+    --surface: #2a2a2e;
+    --surface-2: #34343a;
+    --fg: #ffffff;
+    --muted: #bdbbc2;
+    --border: rgb(255 255 255 / 0.1);
+    --accent: #6ae79a;
+    --accent-bg: #57e389;
+    --accent-fg: #0b2b1a;
+    --glow: rgb(87 227 137 / 0.16);
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 16px rgb(0 0 0 / 0.25);
+  }
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 17px/1.6 var(--font);
+  -webkit-font-smoothing: antialiased;
+  overflow-wrap: break-word;
+}
+
+img { max-width: 100%; height: auto; }
+a { color: var(--accent); text-underline-offset: 0.15em; }
+a:hover { text-decoration-thickness: 2px; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+
+h1, h2, h3 { line-height: 1.2; margin: 0; }
+/* Spreads short text evenly over its lines, so no line ends up with a single
+   word on it. Browsers that don't know it just wrap as usual. */
+h1, h2, h3, .tagline, .lede, .section-lede, .hint, .facts, .note,
+.gallery figcaption { text-wrap: balance; }
+h2 { font-size: clamp(1.6rem, 4vw, 2.1rem); font-weight: 800; letter-spacing: -0.01em; text-align: center; }
+h3 { font-size: 1.1rem; font-weight: 700; }
+
+.wrap { max-width: 1100px; margin: 0 auto; padding: 0 16px; }
+@media (min-width: 640px) { .wrap { padding: 0 32px; } }
+.narrow { max-width: 760px; }
+
+.skip {
+  position: absolute; left: 16px; top: -100px;
+  background: var(--surface); padding: 8px 14px; border-radius: 8px; z-index: 10;
+}
+.skip:focus { top: 12px; }
+
+/* Top bar */
+.topbar {
+  position: sticky; top: 0; z-index: 5;
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+.topbar-inner { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 60px; }
+.brand { display: flex; align-items: center; gap: 10px; color: var(--fg); text-decoration: none; font-weight: 800; font-size: 1.15rem; }
+.nav-links { display: flex; gap: 4px; list-style: none; margin: 0; padding: 0; }
+.nav-links a { color: var(--fg); text-decoration: none; padding: 6px 12px; border-radius: 8px; font-weight: 600; font-size: 0.95rem; }
+.nav-links a:hover { background: var(--surface-2); }
+@media (max-width: 420px) { .nav-links li:first-child { display: none; } }
+
+/* Hero */
+.hero {
+  padding: 56px 0 24px;
+  background: radial-gradient(60% 50% at 50% 0%, var(--glow), transparent 75%);
+}
+.hero-inner { text-align: center; }
+.hero-icon { display: block; margin: 0 auto 12px; filter: drop-shadow(0 8px 24px rgb(31 143 90 / 0.25)); }
+.hero h1 { font-size: clamp(2.6rem, 8vw, 4rem); font-weight: 800; letter-spacing: -0.02em; }
+.tagline { font-size: clamp(1.25rem, 3.5vw, 1.6rem); font-weight: 600; margin: 6px 0 12px; }
+.lede { max-width: 640px; margin: 0 auto; color: var(--muted); }
+.actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin: 28px 0 14px; }
+.hint { color: var(--muted); font-size: 0.9rem; margin: -2px 0 10px; }
+.facts { color: var(--muted); font-size: 0.9rem; margin: 0; }
+/* Each piece stays whole, with its dot, so lines only break after a dot */
+.facts > span { white-space: nowrap; }
+
+.button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; padding: 0 22px; border-radius: 999px;
+  background: var(--surface-2); color: var(--fg);
+  font-weight: 700; text-decoration: none;
+  border: 1px solid var(--border);
+  transition: filter 0.15s, transform 0.15s;
+}
+.button:hover { filter: brightness(0.96); }
+.button.primary { background: var(--accent-bg); color: var(--accent-fg); border-color: transparent; padding: 0 28px; }
+.button.primary:hover { filter: brightness(1.08); }
+.button svg { fill: currentColor; }
+@media (prefers-reduced-motion: no-preference) {
+  .button:active { transform: translateY(1px); }
+}
+
+/* The screenshots already include the window's own shadow and rounded
+   corners, on a see-through background, so they're shown as they are */
+.showcase { margin: 32px auto 0; text-align: center; }
+.showcase img { display: block; margin: 0 auto; width: 100%; max-width: 1050px; }
+
+/* Sections */
+.section { padding: 56px 0; }
+.section-lede { text-align: center; color: var(--muted); max-width: 620px; margin: 10px auto 32px; }
+
+.gallery { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.gallery figure { margin: 0; text-align: center; }
+.gallery img { display: block; width: 100%; }
+.gallery figcaption { color: var(--muted); font-size: 0.95rem; margin-top: 4px; }
+/* Each small screenshot opens full size (lightbox.js) */
+.zoom { display: block; cursor: zoom-in; border-radius: 12px; }
+.zoom img { transition: transform 0.2s; }
+@media (prefers-reduced-motion: no-preference) {
+  .zoom:hover img { transform: scale(1.02); }
+}
+
+/* The screenshot viewer: the picture as large as the window allows, up to
+   its real size, on a dark see-through backdrop */
+.lightbox {
+  width: 100vw; height: 100vh; max-width: none; max-height: none;
+  margin: 0; padding: 0; border: 0; background: transparent; color: #ffffff;
+}
+.lightbox::backdrop { background: rgb(0 0 0 / 0.82); }
+.lightbox-inner {
+  position: relative; width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center; padding: 24px 80px;
+}
+.lightbox figure { margin: 0; text-align: center; }
+.lightbox img {
+  display: block; margin: 0 auto;
+  max-width: min(1050px, 100%); max-height: calc(100vh - 110px); width: auto; height: auto;
+}
+.lightbox figcaption { margin-top: 10px; font-size: 1rem; }
+.lightbox-button {
+  position: absolute; width: 44px; height: 44px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  background: rgb(255 255 255 / 0.14); color: #ffffff; border: 0;
+}
+.lightbox-button:hover { background: rgb(255 255 255 / 0.26); }
+.lightbox-button svg { fill: currentColor; }
+.lightbox-close { top: 20px; right: 20px; }
+.lightbox-prev { left: 20px; top: 50%; transform: translateY(-50%); }
+.lightbox-next { right: 20px; top: 50%; transform: translateY(-50%); }
+.lightbox :focus-visible { outline-color: #ffffff; }
+
+.features {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+.features li, .card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 22px;
+}
+.features svg {
+  width: 40px; height: 40px; padding: 8px; margin-bottom: 12px;
+  fill: var(--accent); background: var(--surface-2); border-radius: 10px;
+}
+.features p, .card p { margin: 8px 0 0; color: var(--muted); }
+
+/* Install */
+.install { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.install .card { display: flex; flex-direction: column; }
+.install .card .button { margin-top: auto; align-self: flex-start; }
+.install .card p { margin-bottom: 18px; }
+.command {
+  margin-top: auto;
+  display: flex; align-items: stretch; gap: 8px;
+  background: var(--surface-2); border-radius: 10px; padding: 10px 10px 10px 14px;
+}
+.command code { flex: 1; min-width: 0; font: 0.88rem/1.5 var(--mono); user-select: all; overflow-wrap: anywhere; align-self: center; }
+.copy {
+  flex: none; align-self: center;
+  font: 600 0.85rem var(--font); color: var(--fg);
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  padding: 6px 12px; cursor: pointer;
+}
+.copy:hover { filter: brightness(0.96); }
+code { font-family: var(--mono); font-size: 0.92em; }
+.note { color: var(--muted); font-size: 0.92rem; max-width: 760px; margin: 24px auto 0; text-align: center; }
+
+/* Footer */
+.footer { border-top: 1px solid var(--border); padding: 32px 0 40px; font-size: 0.92rem; color: var(--muted); }
+.footer-inner { display: grid; gap: 16px; }
+.footer-brand { display: flex; gap: 14px; align-items: center; }
+.footer-brand p { margin: 0; }
+.footer-brand strong { color: var(--fg); }
+.footer-links { display: flex; flex-wrap: wrap; gap: 8px 20px; list-style: none; margin: 0; padding: 0; }
+.privacy { margin: 0; }
+@media (min-width: 800px) {
+  .footer-inner { grid-template-columns: 1fr auto; align-items: center; }
+  .privacy { grid-column: 1 / -1; }
+}

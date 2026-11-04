@@ -1,0 +1,7 @@
+[Flatpak Repo]
+Title=LeafMD
+Comment=LeafMD, a markdown viewer and editor, and its updates
+Url={{base_url}}repo/
+Homepage={{base_url}}
+Icon={{base_url}}icon.svg
+GPGKey={{gpg_key}}

@@ -3,13 +3,18 @@ name: Build
 # Every push to any branch is checked and built as a Flatpak, in the same
 # GNOME 51 environment the app is built in on the owner's laptop.
 #
-#   push to any branch -> checks, then a test .flatpak kept for 7 days
-#                         (Actions tab -> the run -> Artifacts)
+#   push to any branch -> checks (including Flathub's), then a test .flatpak
+#                         kept for 7 days (Actions tab -> the run -> Artifacts)
 #   push to main       -> the same, and if the version is a finished release
 #                         (its <release> in the metainfo file isn't marked
 #                         type="development") and has no v<version> tag yet,
-#                         also a v<version> tag and a GitHub Release with the
-#                         .flatpak attached and the metainfo release notes.
+#                         it's a release:
+#                           - the build is signed with LeafMD's key
+#                           - a v<version> tag and a GitHub Release, with the
+#                             .flatpak attached and the metainfo release notes
+#                           - leafmd.app is published: the storefront, the
+#                             install files and the signed Flatpak repository
+#                             that installed copies get their updates from
 #
 # Changes reach main only through a pull request from dev, so a release
 # happens when the owner merges one. See .claude/commands/ship.md.
@@ -32,7 +37,7 @@ jobs:
       options: --privileged
     outputs:
       version: ${{ steps.info.outputs.version }}
-      stable: ${{ steps.info.outputs.stable }}
+      release: ${{ steps.release.outputs.release }}
     steps:
       - uses: actions/checkout@v7
 
@@ -47,6 +52,21 @@ jobs:
         id: info
         run: build-aux/release-info.py | tee -a "$GITHUB_OUTPUT"
 
+      - name: Is this a release?
+        id: release
+        env:
+          VERSION: ${{ steps.info.outputs.version }}
+          STABLE: ${{ steps.info.outputs.stable }}
+        run: |
+          if [ "$GITHUB_REF" = refs/heads/main ] && [ "$STABLE" = true ] &&
+             [ -z "$(git ls-remote --tags origin "refs/tags/v$VERSION")" ]; then
+            echo "Yes: v$VERSION isn't released yet, so this build is signed and published."
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No: nothing is signed or published."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Install the SDK's Rust extension and anything else the recipe needs
         run: |
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
@@ -56,19 +76,54 @@ jobs:
       - name: Clippy, tests, app store and .desktop checks
         run: build-aux/sdk-check.sh
 
-      - name: Build the Flatpak
-        # rofiles-fuse can't run in a container; it only saves disk space
+      # Only for a release. The private key lives in a GitHub secret and is
+      # loaded into a throwaway GPG folder that's gone when the job ends. Its
+      # public half is build-aux/leafmd-signing-key.gpg, which says which key
+      # to sign with.
+      - name: Load the signing key
+        if: steps.release.outputs.release == 'true'
+        env:
+          LEAFMD_GPG_PRIVATE_KEY: ${{ secrets.LEAFMD_GPG_PRIVATE_KEY }}
         run: |
-          flatpak-builder --user --disable-rofiles-fuse --force-clean --repo=repo \
+          if [ -z "$LEAFMD_GPG_PRIVATE_KEY" ]; then
+            echo "::error::The LEAFMD_GPG_PRIVATE_KEY secret isn't set, so this release can't be signed. See README, Publishing setup."
+            exit 1
+          fi
+          command -v gpg > /dev/null || dnf install -y gnupg2
+          gnupg=$(mktemp -d)
+          chmod 700 "$gnupg"
+          printf '%s\n' "$LEAFMD_GPG_PRIVATE_KEY" | gpg --homedir "$gnupg" --batch --import
+          key_id=$(gpg --show-keys --with-colons build-aux/leafmd-signing-key.gpg | awk -F: '/^pub/ { print $5; exit }')
+          gpg --homedir "$gnupg" --list-secret-keys "$key_id" > /dev/null
+          echo "GPG_ARGS=--gpg-sign=$key_id --gpg-homedir=$gnupg" >> "$GITHUB_ENV"
+
+      - name: Build the Flatpak
+        # rofiles-fuse can't run in a container; it only saves disk space.
+        # GPG_ARGS is only set for a release, so other builds aren't signed.
+        run: |
+          flatpak-builder --user --disable-rofiles-fuse --force-clean \
+            --default-branch=stable --repo=repo $GPG_ARGS \
             flatpak-build build-aux/io.github.jeremehancock.LeafMD.json
+          flatpak build-update-repo --title=LeafMD --generate-static-deltas $GPG_ARGS repo
+
+      - name: Flathub's checks on the recipe, app store description and build
+        run: build-aux/flathub-lint.sh --gha-format repo
 
       - name: Make the .flatpak file
         # --runtime-repo lets GNOME Software fetch the GNOME runtime from
-        # Flathub when someone installs the file
+        # Flathub when someone installs the file. A release's file also points
+        # at leafmd.app and carries the public key, so installs from it get
+        # updates. Test files from other builds don't.
+        env:
+          VERSION: ${{ steps.info.outputs.version }}
+          RELEASE: ${{ steps.release.outputs.release }}
         run: |
-          flatpak build-bundle repo "LeafMD-${{ steps.info.outputs.version }}.flatpak" \
-            io.github.jeremehancock.LeafMD \
-            --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo
+          extra=()
+          if [ "$RELEASE" = true ]; then
+            extra=(--repo-url=https://leafmd.app/repo/ --gpg-keys=build-aux/leafmd-signing-key.gpg)
+          fi
+          flatpak build-bundle repo "LeafMD-$VERSION.flatpak" io.github.jeremehancock.LeafMD stable \
+            --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo "${extra[@]}"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -77,51 +132,66 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
+      - name: Build leafmd.app
+        if: steps.release.outputs.release == 'true'
+        run: |
+          build-aux/build-site.py _site --base-url https://leafmd.app/ \
+            --repo repo --key build-aux/leafmd-signing-key.gpg
+
+      - uses: actions/upload-pages-artifact@v5
+        if: steps.release.outputs.release == 'true'
+        with:
+          path: _site
+
   release:
     # A plain name: GitHub shows a skipped job's name without filling it in
     name: Release
     needs: build
-    if: github.ref == 'refs/heads/main' && needs.build.outputs.stable == 'true'
+    if: needs.build.outputs.release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write   # to create the tag and the GitHub Release
+      pages: write      # to publish leafmd.app
+      id-token: write   # lets GitHub Pages check this job is allowed to publish
+    environment:
+      name: github-pages
+      url: ${{ steps.pages.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
 
-      - name: Skip if this version is already released
-        id: tag
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ needs.build.outputs.version }}
-        run: |
-          if gh release view "v$VERSION" > /dev/null 2>&1; then
-            echo "v$VERSION is already released, so this merge publishes nothing."
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - uses: actions/download-artifact@v8
-        if: steps.tag.outputs.exists == 'false'
         with:
           name: LeafMD-flatpak
 
       - name: Create the tag and the GitHub Release
-        if: steps.tag.outputs.exists == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.build.outputs.version }}
         run: |
+          # Already there if this job is being re-run to publish leafmd.app again
+          if gh release view "v$VERSION" > /dev/null 2>&1; then
+            echo "v$VERSION is already released; only publishing leafmd.app."
+            exit 0
+          fi
           {
             build-aux/release-info.py --notes
             echo
             echo "## Installing"
             echo
-            echo "Download \`LeafMD-$VERSION.flatpak\` below and open it with GNOME Software, or run:"
+            echo "Go to **https://leafmd.app/** and click Install, or run:"
             echo
             echo '```'
-            echo "flatpak install --user LeafMD-$VERSION.flatpak"
+            echo "flatpak install https://leafmd.app/LeafMD.flatpakref"
             echo '```'
+            echo
+            echo "Either way, updates arrive through GNOME Software (or \`flatpak update\`) from then on."
+            echo "\`LeafMD-$VERSION.flatpak\` below works too: open it with GNOME Software, and it updates the same way."
           } > notes.md
           gh release create "v$VERSION" "LeafMD-$VERSION.flatpak" \
             --target "$GITHUB_SHA" --title "LeafMD $VERSION" --notes-file notes.md
+
+      # After the GitHub Release, so a publishing problem can't stop the
+      # release itself. Re-running this job publishes again.
+      - name: Publish leafmd.app
+        id: pages
+        uses: actions/deploy-pages@v5

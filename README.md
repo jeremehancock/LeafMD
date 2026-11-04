@@ -1,5 +1,7 @@
 # LeafMD
 
+![LeafMD in split view: the raw markdown of a community garden plan on the left, and the same plan formatted on the right](data/screenshots/split.png)
+
 > **Early days:** LeafMD is a very new app and is in active, early development. It works, but expect rough edges, missing features and changes from one version to the next. Bug reports and ideas are welcome in [Issues](https://github.com/jeremehancock/LeafMD/issues), and [ROADMAP.md](ROADMAP.md) shows what's coming.
 
 A markdown viewer and editor for Linux with three views, including a formatted-only view for pure reading. Switch views with the icons in the toolbar or Ctrl+1, 2 and 3.
@@ -23,6 +25,20 @@ The raw text can always be edited in Raw and Split view, and changes are only wr
 - **Help** (F1) explains all of this inside the app, and **Keyboard Shortcuts** (Ctrl+?) lists every shortcut.
 
 Built with Rust, GTK4 and libadwaita. The app itself uses no npm or Node.js (only the optional OpenSpec planning tool below does).
+
+## Install
+
+Go to **[leafmd.app](https://leafmd.app/)** and click **Install**. GNOME Software (or another Flatpak app store) opens with LeafMD ready to install. Or, in a terminal:
+
+```
+flatpak install https://leafmd.app/LeafMD.flatpakref
+```
+
+Either way, updates arrive through your app store (or `flatpak update`) like any other app. LeafMD needs Linux with [Flatpak](https://flatpak.org/setup/) on an x86_64 computer, and the GNOME runtime it uses comes from Flathub, which is added for you if it's missing. Everything is signed with LeafMD's own key.
+
+Each [release](https://github.com/jeremehancock/LeafMD/releases) also has a `LeafMD-<version>.flatpak` file, which installs the same way and updates from leafmd.app afterwards.
+
+LeafMD isn't on Flathub yet, but it's kept to Flathub's rules (see `build-aux/flathub-lint.sh` below).
 
 ## Keyboard shortcuts
 
@@ -77,7 +93,7 @@ npm install -g @fission-ai/openspec
 openspec validate --specs --strict
 ```
 
-## Installing as a Flatpak
+## Building the Flatpak yourself
 
 Needs `flatpak-builder` and the GNOME 51 runtime, SDK and Rust extension:
 
@@ -93,6 +109,14 @@ Then build and install for your user:
 ```
 
 The script copies the Rust libraries into `./vendor` (Flatpak builds can't download anything), builds the app, and installs it. LeafMD then appears in your app grid.
+
+To try leafmd.app itself before publishing (the storefront, the Install button and updates), build a private copy that's served from this computer:
+
+```
+./build-aux/flatpak-repo-preview.sh
+```
+
+It builds a signed repository with a throwaway key, builds the site for `http://localhost:8642/`, and serves it until you press Ctrl+C. Run it again after a change and the installed preview copy is offered the update. The preview installs as LeafMD's `stable` branch, next to your own build (`master`), and the script prints how to remove it.
 
 ### Permissions
 
@@ -112,7 +136,61 @@ To run the same checks GitHub runs (clippy, the tests, and the app store and `.d
 ./build-aux/sdk-check.sh
 ```
 
+LeafMD isn't on Flathub, but it keeps meeting Flathub's rules. To run Flathub's own checker (`flatpak-builder-lint`) on the Flatpak recipe and the app store description:
+
+```
+./build-aux/flathub-lint.sh
+```
+
+It installs the checker (the `org.flatpak.Builder` Flatpak) the first time. GitHub also runs it on every finished build (`./build-aux/flathub-lint.sh repo`). Any problem fails, except the one in `build-aux/flathub-lint-exceptions.json`: Flathub keeps its own copy of every app's screenshots in its repository, which a self-hosted repository can't do.
+
 The version number is in `Cargo.toml`, and the newest `<release>` in `data/*.metainfo.xml` has the same number and the release notes. While that entry is marked `type="development"`, it's the next version still collecting changes. When a merge into `main` carries a finished entry whose version hasn't been released yet, GitHub tags it `v<version>` and publishes a [release](https://github.com/jeremehancock/LeafMD/releases) with the `.flatpak` attached.
+
+### What a release publishes
+
+A release also publishes [leafmd.app](https://leafmd.app/) on GitHub Pages, built by `build-aux/build-site.py`:
+
+- the storefront, from `site/`, with the screenshots from `data/screenshots/` and the version from the newest release in the metainfo file, linked to its release notes on GitHub
+- `LeafMD.flatpakref` and `leafmd.flatpakrepo`, the files that tell Flatpak where to install LeafMD from and which key it's signed with
+- `repo/`, the signed Flatpak repository installed copies get their updates from. It only ever holds the newest version.
+
+### Publishing setup
+
+Done once, before the first release. You need `gpg` and the GitHub command line (`gh`).
+
+1. **Make LeafMD's signing key.** It signs every release, so Flatpak only accepts updates that really came from you. It has no passphrase (GitHub has to use it without anyone typing) and never expires (an expired key would stop updates for everyone). Make it in a fresh, empty keyring so it stays separate from any personal keys:
+
+   ```
+   export GNUPGHOME=$(mktemp -d)
+   gpg --batch --passphrase '' --quick-gen-key "LeafMD release signing key" rsa4096 sign never
+   gpg --export > build-aux/leafmd-signing-key.gpg
+   gpg --armor --export-secret-keys | gh secret set LEAFMD_GPG_PRIVATE_KEY
+   gpg --armor --export-secret-keys > ~/leafmd-signing-key-PRIVATE.asc
+   rm -rf "$GNUPGHOME"; unset GNUPGHOME
+   ```
+
+   - `build-aux/leafmd-signing-key.gpg` is the public half. Commit it.
+   - The secret `LEAFMD_GPG_PRIVATE_KEY` is the private half, for GitHub's build.
+   - `~/leafmd-signing-key-PRIVATE.asc` is your backup. **Put it in your password manager, then delete the file.** If the key is ever lost, no more updates can be signed, and everyone would have to install LeafMD again.
+
+2. **Turn on GitHub Pages:** the repository's Settings, Pages, then under "Build and deployment" set Source to **GitHub Actions**.
+
+3. **Point leafmd.app at GitHub.** At the domain provider, add:
+
+   | Type | Name | Value |
+   |---|---|---|
+   | A | `@` | `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153` (four records) |
+   | AAAA | `@` | `2606:50c0:8000::153`, `2606:50c0:8001::153`, `2606:50c0:8002::153`, `2606:50c0:8003::153` (four records) |
+   | CNAME | `www` | `jeremehancock.github.io` |
+
+   Then:
+   - In your GitHub account's Settings, Pages, **add `leafmd.app` as a verified domain**. GitHub shows one more TXT record to add. This stops any other GitHub account from using the domain.
+   - In the repository's Settings, Pages, set **Custom domain** to `leafmd.app`.
+   - Once GitHub says the certificate is ready (minutes, up to a day), tick **Enforce HTTPS**. Every `.app` address needs HTTPS, so the site won't open at all until then.
+
+4. **Keep `leafmd.app` on auto-renew** at the domain provider. Installed copies check it for updates, so if it lapsed, updates would stop.
+
+To check: `dig +short leafmd.app` lists GitHub's four addresses, and `gh api repos/jeremehancock/LeafMD/pages` shows `"build_type": "workflow"`, `"cname": "leafmd.app"` and `"https_enforced": true`.
 
 With Claude Code, `/ship` walks a change through all of this: the checks, trying it locally, the version and release notes, the pull request, and tidying up after the merge.
 
@@ -131,8 +209,10 @@ With Claude Code, `/ship` walks a change through all of this: the checks, trying
 | `src/state.rs` | Remembers the last view and window size in `~/.config/leafmd/state.ini` |
 | `data/*.desktop` | The app menu entry: name, icon, and the file types LeafMD opens |
 | `data/*.metainfo.xml` | The description, license and release notes shown in software centers |
-| `build-aux/` | The Flatpak recipe, the script that builds and installs it, `sdk-check.sh` (the checks GitHub runs) and `release-info.py` (reads the version and release notes, and checks they match) |
-| `.github/workflows/ci.yml` | GitHub's build: checks and builds every push, and publishes a release when a new version reaches `main` |
+| `build-aux/` | The Flatpak recipe, the script that builds and installs it, `sdk-check.sh` (the checks GitHub runs), `flathub-lint.sh` and its exceptions file (Flathub's checker), `release-info.py` (reads the version and release notes, and checks they match), `build-site.py` (builds leafmd.app), `flatpak-repo-preview.sh` (a private copy of leafmd.app on this computer), `screenshot-mode.sh` (GNOME's default look for taking screenshots) and `leafmd-signing-key.gpg` (the public half of LeafMD's signing key) |
+| `site/` | The storefront at leafmd.app: the page, its styles, its two small scripts (the Copy button, and the viewer that shows screenshots full size), and the templates for the install files |
+| `data/screenshots/` | The screenshots used on leafmd.app, in app stores and above, the sample document they show, and how to take them again |
+| `.github/workflows/ci.yml` | GitHub's build: checks and builds every push, and when a new version reaches `main`, signs it, publishes a GitHub Release and publishes leafmd.app |
 | `data/resources/` | Files built into the program: the view icons and formatting bar icons (so they look the same with any icon theme). They're drawn with filled shapes only, because GTK doesn't paint outlined lines in these icons |
 | `openspec/specs/` | How LeafMD behaves, written as rules with examples, one folder per area |
 | `openspec/changes/` | Features being planned or built, and finished ones under `archive/` |

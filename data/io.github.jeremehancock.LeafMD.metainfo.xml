@@ -35,12 +35,33 @@
     </ul>
   </description>
 
+  <!-- Taken as described in data/screenshots/README.md, and served from
+       leafmd.app, which the GitHub build publishes with each release -->
+  <screenshots>
+    <screenshot type="default">
+      <image>https://leafmd.app/screenshots/formatted.png</image>
+      <caption>Read your document cleanly formatted</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://leafmd.app/screenshots/raw.png</image>
+      <caption>Edit markdown with the formatting bar</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://leafmd.app/screenshots/split.png</image>
+      <caption>Watch your changes appear side by side as you type</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://leafmd.app/screenshots/split-dark.png</image>
+      <caption>Follows your system's dark style</caption>
+    </screenshot>
+  </screenshots>
+
   <launchable type="desktop-id">io.github.jeremehancock.LeafMD.desktop</launchable>
   <provides>
     <binary>leafmd</binary>
   </provides>
 
-  <url type="homepage">https://github.com/jeremehancock/LeafMD</url>
+  <url type="homepage">https://leafmd.app/</url>
   <url type="bugtracker">https://github.com/jeremehancock/LeafMD/issues</url>
   <url type="vcs-browser">https://github.com/jeremehancock/LeafMD</url>
 
@@ -62,15 +83,25 @@
     <display_length compare="ge">360</display_length>
   </requires>
 
+  <!-- The banner colour app stores show behind the icon: a teal that sits
+       beside the leaf's green without blending into it -->
+  <branding>
+    <color type="primary" scheme_preference="light">#62c4b0</color>
+    <color type="primary" scheme_preference="dark">#1f4e46</color>
+  </branding>
+
   <content_rating type="oars-1.1"/>
 
   <releases>
-    <release version="0.1.0" date="2026-11-03" type="development">
+    <release version="0.1.0" date="2026-11-04">
       <description>
-        <p>First release.</p>
+        <p>The first release of LeafMD, a simple markdown viewer and editor.</p>
         <ul>
-          <li>Lists continue when you press Enter: the next bullet, number or unticked checkbox is added for you, and Enter on an empty item ends the list</li>
-          <li>Select some text and paste a web address over it to turn it into a link</li>
+          <li>Read a document formatted, edit the raw text, or see both side by side as you type</li>
+          <li>A formatting bar and a built-in cheatsheet for bold, links, lists, headings, tables and more</li>
+          <li>Lists continue when you press Enter, and pasting a web address over text makes a link</li>
+          <li>Find and replace, in the raw text or the formatted document</li>
+          <li>Install from leafmd.app, and get updates through your app store</li>
         </ul>
       </description>
     </release>

@@ -2212,7 +2212,10 @@ impl Window {
             // Wider than GNOME's default, so the Built With rows fit on one line
             .content_width(560)
             .build();
-        // A custom link instead of the built-in "Website" row, so it can be called GitHub
+        // Custom links instead of libadwaita's built-in website row: that row
+        // shows the address itself, sits apart from other links, and there can
+        // only be one. These two read "Website" and "GitHub", side by side.
+        about.add_link("Website", "https://leafmd.app/");
         about.add_link("GitHub", env!("CARGO_PKG_REPOSITORY"));
         // Credits page, in order. A custom section instead of .developers(),
         // because that one's heading always says "Code by". "Name URL" makes

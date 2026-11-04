@@ -43,10 +43,19 @@ those commands.
   collecting changes. Merging it into `main` publishes nothing.
 - **A release** happens when a merge into `main` carries a `<release>` without
   that mark, whose `v<version>` tag doesn't exist yet. GitHub then creates the
-  tag and a GitHub Release with `LeafMD-<version>.flatpak` attached
-  (`.github/workflows/ci.yml`).
-- Every push, to any branch, runs `build-aux/sdk-check.sh` on GitHub and builds
-  a test `.flatpak` (kept 7 days under the run's Artifacts).
+  tag and a GitHub Release with `LeafMD-<version>.flatpak` attached, signs
+  the build with LeafMD's key, and publishes leafmd.app (the storefront and
+  the Flatpak repository installed copies update from) on GitHub Pages
+  (`.github/workflows/ci.yml`). Before the first release, the owner's one-time
+  "Publishing setup" in the README must be done (signing key secret, Pages,
+  the leafmd.app DNS); check `gh secret list` shows `LEAFMD_GPG_PRIVATE_KEY`
+  and `gh api repos/jeremehancock/LeafMD/pages` works before opening a
+  release PR.
+- Every push, to any branch, runs `build-aux/sdk-check.sh` on GitHub, builds
+  a test `.flatpak` (kept 7 days under the run's Artifacts), and runs
+  `build-aux/flathub-lint.sh` (Flathub's checker) on the recipe, the app store
+  description and the finished build. Locally, `/ship` runs it on the first
+  two only, since checking a finished build means a second full build.
 
 ## Step 1: Find out where things stand
 
@@ -88,6 +97,7 @@ Before any commit:
 ```bash
 cargo build && cargo test && cargo clippy --all-targets -- -D warnings
 build-aux/sdk-check.sh            # the same checks GitHub runs, in the GNOME SDK
+build-aux/flathub-lint.sh         # Flathub's checker on the recipe and app store description
 openspec validate --specs --strict
 openspec validate <change> --strict   # for each active change
 ```
@@ -108,7 +118,8 @@ git diff --stat origin/main..HEAD; git diff --stat
 
 | A change touching... | Re-read and fix... |
 | --- | --- |
-| Anything a user sees or does | Help (`show_help` in `src/window.rs`), README features, the metainfo `<description>`, the matching spec in `openspec/specs/` |
+| Anything a user sees or does | Help (`show_help` in `src/window.rs`), README features, the metainfo `<description>`, the storefront's text (`site/index.html`: the feature cards, hero and install cards), the matching spec in `openspec/specs/` |
+| How a window looks (the header bar, formatting bar, views, menus, dialogs or styles) | The screenshots in `data/screenshots/`. They can't be retaken without the owner, so say in the report that they're now out of date. The release check below asks about them. |
 | A keyboard shortcut | Keyboard Shortcuts (`show_shortcuts`), Help, README shortcuts table |
 | A new or renamed source file | README's file table |
 | `.github/workflows/`, `build-aux/`, this file, or how work is released | CLAUDE.md ("How work gets released"), README's development section, this file |
@@ -152,6 +163,25 @@ is still collecting changes), ask:
 - **Release now:** add the notes, remove `type="development"` and set `date`
   to today; merging the PR publishes `v<version>`.
 
+**Before releasing, check the screenshots.** They're on leafmd.app and in
+every app store, so they should show the version being released. List the
+interface changes since they were last updated:
+
+```bash
+last=$(git log -1 --format=%H -- data/screenshots/*.png)
+git log --oneline "$last"..HEAD -- src/ data/resources/
+```
+
+Read those commits for anything a screenshot shows (`data/screenshots/README.md`
+says which view and style each one is), not just whether there are any. If
+something visible changed, ask the owner with **AskUserQuestion**: retake the
+screenshots now, or release with the old ones. Never release with outdated
+screenshots without asking. A tooltip or menu wording usually doesn't show.
+
+To retake, follow `data/screenshots/README.md` with the owner: give them its
+steps, then check each new picture against its "Checking them" list (look at
+it) before copying it over the old one under the same name.
+
 **If the newest `<release>` is already released** (its tag exists), this work
 needs a new version. Ask patch, minor or major (recommend one: a fix is a
 patch, a new feature is a minor; before 1.0, nothing is a major), then ask
@@ -193,7 +223,8 @@ patch), what changed, how it was tested (the checks, the owner's local test,
 GitHub's build), and **what merging does**:
 
 - the newest `<release>` is finished and has no tag yet: merging publishes
-  `v<version>` with a `.flatpak` and these release notes
+  `v<version>` with a `.flatpak` and these release notes, and puts the new
+  version on leafmd.app (the storefront and the Flatpak repository)
 - otherwise: merging publishes nothing; the work waits for a later release
 
 End the body with the attribution lines from the session's system reminder.
@@ -205,9 +236,15 @@ End the body with the attribution lines from the session's system reminder.
 ```bash
 gh run list --branch main --limit 1 --json databaseId,status,conclusion,url
 gh release view v<version> --json tagName,url,assets
+curl -fsS https://leafmd.app/ | grep -o 'Version [0-9.]*' | head -1
+curl -fsS https://leafmd.app/LeafMD.flatpakref | head -3
 ```
 
-Report the release URL, or what failed.
+The release job also publishes leafmd.app. The storefront should say the new
+version, and `LeafMD.flatpakref` should download. Report the release URL and
+that leafmd.app is updated, or what failed. If the release worked but
+publishing leafmd.app failed, say so plainly: people who already installed
+LeafMD won't get the update until it's published.
 
 **Resync `dev`:**
 

@@ -14,9 +14,10 @@
   <!-- the page, with its top-right corner folded -->
   <path d="M30 12h50l28 28v68a10 10 0 0 1-10 10H30a10 10 0 0 1-10-10V22a10 10 0 0 1 10-10z" fill="url(#page)"/>
   <path d="M80 12v20a8 8 0 0 0 8 8h20z" fill="#c0bfbc"/>
-  <!-- markdown text: a heading mark and lines -->
-  <path d="M36 30h4M36 36h4M38 27v12M42 27v12" stroke="#5e5c64" stroke-width="2.4" stroke-linecap="round"/>
-  <rect x="48" y="29" width="22" height="6" rx="3" fill="#5e5c64"/>
+  <!-- markdown text: a heading mark (#, its cross strokes spanning both
+       uprights) and lines -->
+  <path d="M36 30h10M36 36h10M39 27v12M43 27v12" stroke="#5e5c64" stroke-width="2.4" stroke-linecap="round"/>
+  <rect x="50" y="29" width="20" height="6" rx="3" fill="#5e5c64"/>
   <rect x="36" y="46" width="56" height="4" rx="2" fill="#c0bfbc"/>
   <rect x="36" y="56" width="44" height="4" rx="2" fill="#c0bfbc"/>
   <!-- the leaf -->

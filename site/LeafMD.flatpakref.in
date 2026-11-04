@@ -1,0 +1,11 @@
+[Flatpak Ref]
+Title=LeafMD
+Name=io.github.jeremehancock.LeafMD
+Branch=stable
+Url={{base_url}}repo/
+SuggestRemoteName=leafmd
+Homepage={{base_url}}
+Icon={{base_url}}icon.svg
+RuntimeRepo=https://dl.flathub.org/repo/flathub.flatpakrepo
+IsRuntime=false
+GPGKey={{gpg_key}}
