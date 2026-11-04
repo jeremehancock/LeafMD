@@ -94,18 +94,73 @@ impl SavedState {
     }
 
     pub fn save(&self) {
-        let file = glib::KeyFile::new();
-        file.set_string(GROUP, "view", self.view.as_str());
-        file.set_integer(GROUP, "width", self.width);
-        file.set_integer(GROUP, "height", self.height);
-        file.set_boolean(GROUP, "maximized", self.maximized);
+        update_state_file(|file| {
+            file.set_string(GROUP, "view", self.view.as_str());
+            file.set_integer(GROUP, "width", self.width);
+            file.set_integer(GROUP, "height", self.height);
+            file.set_boolean(GROUP, "maximized", self.maximized);
+        });
+    }
+}
 
-        let path = state_path();
-        if let Some(dir) = path.parent() {
-            let _ = std::fs::create_dir_all(dir);
-        }
-        if let Err(err) = file.save_to_file(&path) {
-            eprintln!("LeafMD: could not save settings: {err}");
-        }
+const RECENT_GROUP: &str = "recent";
+
+/// How many recent files to remember.
+pub const RECENT_LIMIT: usize = 10;
+
+/// The recently opened files (as file:// addresses), newest first.
+pub fn load_recent() -> Vec<String> {
+    let file = glib::KeyFile::new();
+    if file
+        .load_from_file(state_path(), glib::KeyFileFlags::NONE)
+        .is_err()
+    {
+        return Vec::new();
+    }
+    // One address per line (file:// addresses can't contain a line break)
+    file.string(RECENT_GROUP, "files")
+        .map(|text| {
+            text.lines()
+                .filter(|uri| !uri.is_empty())
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+pub fn save_recent(uris: &[String]) {
+    update_state_file(|file| file.set_string(RECENT_GROUP, "files", &uris.join("\n")));
+}
+
+/// The file in the LeafMD window that was closed last, which is the one to
+/// reopen next time. (Not simply the newest recent file: open README, click a
+/// link to LICENSE, close LICENSE and then README, and README should come back.)
+pub fn load_last_file() -> Option<String> {
+    let file = glib::KeyFile::new();
+    file.load_from_file(state_path(), glib::KeyFileFlags::NONE)
+        .ok()?;
+    file.string(RECENT_GROUP, "last")
+        .ok()
+        .map(|uri| uri.to_string())
+        .filter(|uri| !uri.is_empty())
+}
+
+pub fn save_last_file(uri: &str) {
+    update_state_file(|file| file.set_string(RECENT_GROUP, "last", uri));
+}
+
+/// Reads the state file, lets `change` edit it, and writes it back, so saving
+/// one setting never wipes out the others.
+fn update_state_file(change: impl FnOnce(&glib::KeyFile)) {
+    let path = state_path();
+    let file = glib::KeyFile::new();
+    let _ = file.load_from_file(&path, glib::KeyFileFlags::KEEP_COMMENTS);
+    change(&file);
+
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    if let Err(err) = file.save_to_file(&path) {
+        eprintln!("LeafMD: could not save settings: {err}");
     }
 }

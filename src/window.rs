@@ -11,7 +11,7 @@ use sourceview5::prelude::*;
 use webkit6::prelude::*;
 
 use crate::render;
-use crate::state::{SavedState, ViewMode};
+use crate::state::{self, SavedState, ViewMode};
 
 /// The empty page (styles only) that the formatted view is drawn into.
 const PREVIEW_PAGE: &str = include_str!("preview.html");
@@ -47,6 +47,10 @@ pub struct Window {
     stack: gtk::Stack,
     paned: gtk::Paned,
     view_switcher: adw::ToggleGroup,
+    /// The list under the arrow next to Open
+    recent_menu: gio::Menu,
+    /// Recently opened files as file:// addresses, newest first
+    recent: RefCell<Vec<String>>,
     source_scroll: gtk::ScrolledWindow,
     source_view: sourceview5::View,
     buffer: sourceview5::Buffer,
@@ -66,6 +70,8 @@ pub struct Window {
     ignore_preview_scroll_until: Cell<Instant>,
     /// Briefly highlights the line you jumped to
     flash_tag: gtk::TextTag,
+    /// A heading to scroll to once the next file has loaded (from a link like other.md#intro)
+    pending_heading: RefCell<Option<String>>,
 }
 
 impl Window {
@@ -89,12 +95,16 @@ impl Window {
         let header = adw::HeaderBar::new();
         header.set_title_widget(Some(&title));
 
+        // "Open" with a small arrow beside it that lists recent files. A word instead
+        // of an icon, because folder icons vary a lot between icon themes.
+        let recent_menu = gio::Menu::new();
         header.pack_start(
-            // A word instead of an icon: folder icons vary a lot between icon themes
-            &gtk::Button::builder()
+            &adw::SplitButton::builder()
                 .label("Open")
                 .tooltip_text("Open a file (Ctrl+O)")
+                .dropdown_tooltip("Recent files")
                 .action_name("win.open")
+                .menu_model(&recent_menu)
                 .build(),
         );
         header.pack_start(
@@ -231,6 +241,8 @@ impl Window {
             stack,
             paned,
             view_switcher,
+            recent_menu,
+            recent: RefCell::new(state::load_recent()),
             source_scroll,
             source_view,
             buffer,
@@ -244,6 +256,7 @@ impl Window {
             ignore_editor_scroll_until: Cell::new(Instant::now()),
             ignore_preview_scroll_until: Cell::new(Instant::now()),
             flash_tag,
+            pending_heading: RefCell::new(None),
         });
 
         win.setup_actions(saved.view);
@@ -252,6 +265,7 @@ impl Window {
         win.apply_view(saved.view);
         win.update_style();
         win.update_title();
+        win.update_recent_menu();
         win
     }
 
@@ -272,6 +286,17 @@ impl Window {
         };
         add("new", |win| win.ask_new());
         add("open", |win| win.ask_open());
+        add("clear-recent", |win| win.clear_recent());
+
+        // Opening a recent file: the menu item carries the file's address
+        let open_recent = gio::SimpleAction::new("open-recent", Some(glib::VariantTy::STRING));
+        let weak = Rc::downgrade(self);
+        open_recent.connect_activate(move |_, param| {
+            if let (Some(win), Some(uri)) = (weak.upgrade(), param.and_then(|p| p.str())) {
+                win.ask_open_file(gio::File::for_uri(uri));
+            }
+        });
+        self.window.add_action(&open_recent);
         add("save", |win| {
             let win = win.clone();
             glib::spawn_future_local(async move {
@@ -349,6 +374,10 @@ impl Window {
                 win.tell_preview_view_mode();
                 win.update_style();
                 win.render_now();
+                // Opened from a link like other.md#part-two: scroll to that heading
+                if let Some(heading) = win.pending_heading.take() {
+                    win.scroll_to_heading(&heading);
+                }
             }
         });
 
@@ -400,6 +429,17 @@ impl Window {
         });
         self.window.add_controller(drop);
 
+        // Switching to this window: refresh the recent list, which another
+        // LeafMD window may have changed
+        let weak = Rc::downgrade(self);
+        self.window.connect_is_active_notify(move |window| {
+            if window.is_active()
+                && let Some(win) = weak.upgrade()
+            {
+                win.reload_recent();
+            }
+        });
+
         // Ask before closing with unsaved changes
         let weak = Rc::downgrade(self);
         self.window.connect_close_request(move |_| {
@@ -414,6 +454,12 @@ impl Window {
                 return glib::Propagation::Stop;
             }
             win.save_state();
+            // Each window records its file as it closes, so the window closed
+            // last decides what opens next time. A window with no saved file
+            // (start page or a new, never-saved document) leaves it unchanged.
+            if let Some(uri) = win.file_uri() {
+                state::save_last_file(&uri);
+            }
             glib::Propagation::Proceed
         });
     }
@@ -733,7 +779,12 @@ impl Window {
         // Anything else is blocked. Clicked links open in the right app instead,
         // and a file dropped onto the formatted view is opened in LeafMD.
         decision.ignore();
-        if action.navigation_type() == webkit6::NavigationType::LinkClicked {
+        if action.navigation_type() == webkit6::NavigationType::LinkClicked
+            && uri.starts_with("file://")
+        {
+            // A link to another file, like [License](LICENSE)
+            self.open_local_link(&uri);
+        } else if action.navigation_type() == webkit6::NavigationType::LinkClicked {
             // Opens the link in your default browser. Inside Flatpak, GIO asks the
             // desktop to do it through a "portal". (GTK's UriLauncher was tried first,
             // but its requests failed with "The application launch failed", while
@@ -753,6 +804,60 @@ impl Window {
             self.ask_open_file(gio::File::for_uri(&uri));
         }
         true
+    }
+
+    /// A clicked link to a file on this computer. Text files (markdown, LICENSE,
+    /// .txt and so on) open in a new LeafMD window; anything else, like an image,
+    /// PDF or folder, opens in its usual app.
+    fn open_local_link(self: &Rc<Self>, uri: &str) {
+        // A "#heading" part names a spot in the file, used after it opens
+        let (file_uri, heading) = match uri.split_once('#') {
+            Some((file_uri, heading)) => (file_uri, Some(heading.to_string())),
+            None => (uri, None),
+        };
+        let file = gio::File::for_uri(file_uri);
+        let win = self.clone();
+        glib::spawn_future_local(async move {
+            let info = file
+                .query_info_future(
+                    "standard::type,standard::content-type",
+                    gio::FileQueryInfoFlags::NONE,
+                    glib::Priority::DEFAULT,
+                )
+                .await;
+            let info = match info {
+                Ok(info) => info,
+                Err(_) => {
+                    let name = file
+                        .basename()
+                        .map(|n| n.display().to_string())
+                        .unwrap_or_default();
+                    win.toast(&format!("“{name}” doesn't exist"));
+                    return;
+                }
+            };
+            let is_text = info.file_type() == gio::FileType::Regular
+                && info
+                    .content_type()
+                    .is_some_and(|kind| gio::content_type_is_a(&kind, "text/plain"));
+            if is_text {
+                // Opens in its own window, so this document stays open too
+                let target = match heading {
+                    Some(heading) => format!("{}#{heading}", file.uri()),
+                    None => file.uri().to_string(),
+                };
+                if let Some(app) = win.window.application() {
+                    app.activate_action("open-in-new-window", Some(&target.to_variant()));
+                }
+            } else {
+                let context = WidgetExt::display(&win.window).app_launch_context();
+                if let Err(err) =
+                    gio::AppInfo::launch_default_for_uri_future(&file.uri(), Some(&context)).await
+                {
+                    win.toast(&format!("Couldn't open the link: {}", err.message()));
+                }
+            }
+        });
     }
 
     // =====================================================================
@@ -789,7 +894,35 @@ impl Window {
     }
 
     pub fn ask_open_file(self: &Rc<Self>, file: gio::File) {
+        self.ask_open_file_at(file, None);
+    }
+
+    /// Opens a file in this window, scrolled to `heading` if one is given.
+    pub fn open_file_at(self: &Rc<Self>, file: gio::File, heading: Option<String>) {
+        self.ask_open_file_at(file, heading);
+    }
+
+    /// The address of the file this window shows, if any.
+    pub fn file_uri(&self) -> Option<String> {
+        self.file.borrow().as_ref().map(|file| file.uri().to_string())
+    }
+
+    /// False while the window shows the "No Document Open" start page.
+    pub fn has_document(&self) -> bool {
+        self.stack.visible_child_name().as_deref() == Some("document")
+    }
+
+    /// Scrolls the formatted view to the heading with this id (like "part-two").
+    pub fn scroll_to_heading(&self, heading: &str) {
+        let id = serde_json::to_string(heading).unwrap_or_default();
+        self.run_js(&format!("document.getElementById({id})?.scrollIntoView();"));
+    }
+
+    /// Opens a file (asking about unsaved changes first), then scrolls the
+    /// formatted view to `heading` if one is given.
+    fn ask_open_file_at(self: &Rc<Self>, file: gio::File, heading: Option<String>) {
         self.confirm_discard(move |win| {
+            *win.pending_heading.borrow_mut() = heading;
             let win = win.clone();
             glib::spawn_future_local(async move {
                 win.load_file(file).await;
@@ -802,6 +935,8 @@ impl Window {
             Ok((bytes, _)) => bytes,
             Err(err) => {
                 self.toast(&format!("Could not open the file: {}", err.message()));
+                // A recent file that has been moved or deleted drops off the list
+                self.forget_recent(&file.uri());
                 return;
             }
         };
@@ -810,8 +945,115 @@ impl Window {
             return;
         };
         self.set_text(&text);
-        self.set_file(Some(file));
+        self.set_file(Some(file.clone()));
         self.show_document();
+        self.remember_recent(&file);
+    }
+
+    /// Opens the file LeafMD had open last time, if it's still there.
+    /// If it has been moved or deleted, the normal start page shows instead.
+    pub fn open_last_file(self: &Rc<Self>) {
+        // The file in the window closed last; if that was never saved (say
+        // LeafMD didn't close normally), fall back to the newest recent file
+        let last = state::load_last_file().or_else(|| self.recent.borrow().first().cloned());
+        let Some(uri) = last else {
+            return;
+        };
+        let file = gio::File::for_uri(&uri);
+        if !file.query_exists(gio::Cancellable::NONE) {
+            return;
+        }
+        let win = self.clone();
+        glib::spawn_future_local(async move {
+            win.load_file(file).await;
+        });
+    }
+
+    // =====================================================================
+    // Recent files
+    // =====================================================================
+
+    /// Moves a file to the top of the recent list.
+    fn remember_recent(&self, file: &gio::File) {
+        let uri = file.uri().to_string();
+        // Start from the saved list, which other LeafMD windows may have added to
+        let mut recent = state::load_recent();
+        recent.retain(|u| *u != uri);
+        recent.insert(0, uri);
+        recent.truncate(state::RECENT_LIMIT);
+        state::save_recent(&recent);
+        *self.recent.borrow_mut() = recent;
+        self.update_recent_menu();
+    }
+
+    fn forget_recent(&self, uri: &str) {
+        let mut recent = state::load_recent();
+        let before = recent.len();
+        recent.retain(|u| u != uri);
+        if recent.len() != before {
+            state::save_recent(&recent);
+        }
+        *self.recent.borrow_mut() = recent;
+        self.update_recent_menu();
+    }
+
+    /// Picks up changes other LeafMD windows made to the recent list.
+    fn reload_recent(&self) {
+        *self.recent.borrow_mut() = state::load_recent();
+        self.update_recent_menu();
+    }
+
+    fn clear_recent(&self) {
+        self.recent.borrow_mut().clear();
+        state::save_recent(&[]);
+        self.update_recent_menu();
+    }
+
+    /// Rebuilds the list under the arrow next to Open: each file's name with
+    /// its folder in brackets, then "Clear Recent Files". The open file is skipped.
+    fn update_recent_menu(&self) {
+        let current = self.file.borrow().as_ref().map(|f| f.uri().to_string());
+        let files = gio::Menu::new();
+        for uri in self.recent.borrow().iter() {
+            if Some(uri) == current.as_ref() {
+                continue;
+            }
+            let file = gio::File::for_uri(uri);
+            // Hide files that aren't there right now, but keep them on the list:
+            // they may be on a drive that's just unplugged
+            if !file.query_exists(gio::Cancellable::NONE) {
+                continue;
+            }
+            let name = file
+                .basename()
+                .map(|n| n.display().to_string())
+                .unwrap_or_else(|| uri.clone());
+            let folder = file
+                .parent()
+                .and_then(|dir| dir.basename())
+                .map(|n| n.display().to_string());
+            let label = match folder {
+                Some(folder) => format!("{name} ({folder})"),
+                None => name,
+            };
+            // Underscores in menu labels mean "keyboard shortcut letter", so double them
+            let item = gio::MenuItem::new(Some(&label.replace('_', "__")), None);
+            item.set_action_and_target_value(Some("win.open-recent"), Some(&uri.to_variant()));
+            files.append_item(&item);
+        }
+        let has_files = files.n_items() > 0;
+        if !has_files {
+            // No action, so it shows greyed out
+            files.append(Some("No Recent Files"), None);
+        }
+
+        self.recent_menu.remove_all();
+        self.recent_menu.append_section(Some("Recent Files"), &files);
+        if has_files {
+            let clear = gio::Menu::new();
+            clear.append(Some("Clear Recent Files"), Some("win.clear-recent"));
+            self.recent_menu.append_section(None, &clear);
+        }
     }
 
     /// Saves to the current file, or asks where to save a new document.
@@ -837,7 +1079,8 @@ impl Window {
         if !self.write_to(&file).await {
             return false;
         }
-        self.set_file(Some(file));
+        self.set_file(Some(file.clone()));
+        self.remember_recent(&file);
         true
     }
 
@@ -1034,7 +1277,8 @@ impl Window {
                 "Files and Links",
                 &[
                     ("Opening files", "Use Open, drop a file onto the window, or double-click a markdown file in your file manager."),
-                    ("Links", "Links open in your web browser. Links to headings in the same document scroll to them."),
+                    ("Recent files", "The arrow next to Open lists the files you opened recently. When you start LeafMD, it reopens the last file you had open."),
+                    ("Links", "Web links open in your browser. Links to other markdown or text files open them in a new LeafMD window, and links to headings scroll to them."),
                     ("Images", "Images next to the file and images online are shown in the formatted view."),
                 ],
             ),

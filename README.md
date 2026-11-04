@@ -10,6 +10,8 @@ The raw text can always be edited in Raw and Split view, and changes are only wr
 
 - In split view, **scrolling either side** scrolls the other to the same spot.
 - In split view, **double-click** a word on the formatted side to select that same word in the raw text. Its line lights up briefly so you can spot it.
+- **Links** to websites open in your browser. Links to other markdown or text files (like `LICENSE`) open them in a new LeafMD window, scrolled to the heading if the link names one.
+- **Recent files:** the arrow next to **Open** lists the files you opened recently, and LeafMD reopens your last file when you start it.
 - **Help** (F1) explains all of this inside the app, and **Keyboard Shortcuts** (Ctrl+?) lists every shortcut.
 
 Built with Rust, GTK4 and libadwaita. No npm.

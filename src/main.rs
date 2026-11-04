@@ -12,8 +12,8 @@ use window::Window;
 
 pub const APP_ID: &str = "io.github.jeremehancock.LeafMD";
 
-/// LeafMD has a single window. This holds on to it while it is open.
-type CurrentWindow = Rc<RefCell<Option<Rc<Window>>>>;
+/// Every open LeafMD window. Each document gets its own window.
+type Windows = Rc<RefCell<Vec<Rc<Window>>>>;
 
 fn main() -> glib::ExitCode {
     // The view icons built into the program (see build.rs). GTK finds icons
@@ -31,36 +31,88 @@ fn main() -> glib::ExitCode {
         set_shortcuts(app);
     });
 
-    let current = CurrentWindow::default();
+    let windows = Windows::default();
 
-    let c = current.clone();
+    let w = windows.clone();
     app.connect_activate(move |app| {
-        get_window(app, &c).window.present();
-    });
-
-    let c = current.clone();
-    app.connect_open(move |app, files, _hint| {
-        let win = get_window(app, &c);
-        win.window.present();
-        if let Some(file) = files.first() {
-            win.ask_open_file(file.clone());
+        // Started from the app grid with no file: pick up where you left off.
+        // Clicking the app icon while LeafMD is already open just shows it.
+        let existing = w.borrow().last().cloned();
+        match existing {
+            Some(win) => win.window.present(),
+            None => {
+                let win = new_window(app, &w);
+                win.window.present();
+                win.open_last_file();
+            }
         }
     });
+
+    // Files opened from the file manager or command line
+    let w = windows.clone();
+    app.connect_open(move |app, files, _hint| {
+        for file in files {
+            open_in_window(app, &w, file.clone(), None);
+        }
+    });
+
+    // Links to other text files ask for this, with the file's address
+    // (optionally ending in #heading)
+    let open_link = gio::SimpleAction::new("open-in-new-window", Some(glib::VariantTy::STRING));
+    let w = windows.clone();
+    let app_ref = app.downgrade();
+    open_link.connect_activate(move |_, param| {
+        let (Some(app), Some(uri)) = (app_ref.upgrade(), param.and_then(|p| p.str())) else {
+            return;
+        };
+        let (file_uri, heading) = match uri.split_once('#') {
+            Some((file_uri, heading)) => (file_uri, Some(heading)),
+            None => (uri, None),
+        };
+        // "#My%20Heading" in a link means the heading id "My Heading"
+        let heading = heading.map(|h| {
+            glib::Uri::unescape_string(h, None::<&str>)
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| h.to_string())
+        });
+        open_in_window(&app, &w, gio::File::for_uri(file_uri), heading);
+    });
+    app.add_action(&open_link);
 
     app.run()
 }
 
-fn get_window(app: &adw::Application, current: &CurrentWindow) -> Rc<Window> {
-    if let Some(win) = current.borrow().as_ref() {
-        return win.clone();
-    }
+fn new_window(app: &adw::Application, windows: &Windows) -> Rc<Window> {
     let win = Window::new(app);
-    let c = current.clone();
-    win.window.connect_destroy(move |_| {
-        c.borrow_mut().take();
+    let w = windows.clone();
+    win.window.connect_destroy(move |closed| {
+        w.borrow_mut().retain(|win| win.window != *closed);
     });
-    *current.borrow_mut() = Some(win.clone());
+    windows.borrow_mut().push(win.clone());
     win
+}
+
+/// Shows a file: brings its window forward if it's already open, otherwise
+/// uses an empty LeafMD window or opens a new one.
+fn open_in_window(app: &adw::Application, windows: &Windows, file: gio::File, heading: Option<String>) {
+    let uri = file.uri().to_string();
+    let (already_open, empty) = {
+        let list = windows.borrow();
+        (
+            list.iter().find(|win| win.file_uri().as_deref() == Some(uri.as_str())).cloned(),
+            list.iter().find(|win| !win.has_document()).cloned(),
+        )
+    };
+    if let Some(win) = already_open {
+        win.window.present();
+        if let Some(heading) = heading {
+            win.scroll_to_heading(&heading);
+        }
+        return;
+    }
+    let win = empty.unwrap_or_else(|| new_window(app, windows));
+    win.window.present();
+    win.open_file_at(file, heading);
 }
 
 fn set_shortcuts(app: &adw::Application) {
