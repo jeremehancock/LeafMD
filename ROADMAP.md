@@ -40,10 +40,10 @@ Each feature is planned in detail with [OpenSpec](https://github.com/Fission-AI/
 
 ## 6. First public release
 
-- [ ] Screenshots of the three views for the README and the app store listing
-- [ ] Release notes for version 0.1.0 listing what's included
+- [x] Screenshots of the three views for the README and the app store listing
+- [x] Release notes for version 0.1.0 listing what's included
 - [x] Publish the code on GitHub
-- [ ] Install from LeafMD's own Flatpak repository at [leafmd.app](https://leafmd.app/) with one click, and get updates automatically
+- [x] Install from LeafMD's own Flatpak repository at [leafmd.app](https://leafmd.app/) with one click, and get updates automatically
 
 ## Later
 
