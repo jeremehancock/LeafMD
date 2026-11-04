@@ -8,7 +8,8 @@ of what each source file does.
 
 `openspec/specs/` describes how LeafMD behaves today, one folder per area
 (views, documents, recent-files, windows, links, formatted-view,
-formatting-bar, find-replace, help-and-about, desktop-integration). Read the relevant spec before
+formatting-bar, find-replace, smart-typing, help-and-about,
+desktop-integration). Read the relevant spec before
 changing behaviour, and don't change behaviour a spec describes without
 saying so.
 

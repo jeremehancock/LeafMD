@@ -8,8 +8,8 @@ Each feature is planned in detail with [OpenSpec](https://github.com/Fission-AI/
 
 ## 1. Loose ends
 
-- [ ] Check that clicking a link to a file that's already open brings its window to the front
-- [ ] Check that files that no longer exist are left out of the Recent files list
+- [x] Check that clicking a link to a file that's already open brings its window to the front
+- [x] Check that files that no longer exist are left out of the Recent files list
 
 ## 2. Find and replace
 
