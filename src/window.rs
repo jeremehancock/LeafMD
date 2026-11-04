@@ -13,6 +13,7 @@ use webkit6::prelude::*;
 use crate::find::FindBar;
 use crate::format::{self, Inline, LineStyle};
 use crate::render;
+use crate::typing;
 use crate::state::{self, SavedState, ViewMode};
 
 /// The empty page (styles only) that the formatted view is drawn into.
@@ -88,6 +89,10 @@ pub struct Window {
     render_scheduled: Cell<bool>,
     /// Set after the user has answered "discard" or "save" when closing.
     close_confirmed: Cell<bool>,
+    /// True while an input method (for typing Chinese, Japanese and so on) is
+    /// part-way through composing text in the raw text. Enter then belongs
+    /// to the input method, so lists leave it alone.
+    composing: Cell<bool>,
     ignore_editor_scroll_until: Cell<Instant>,
     ignore_preview_scroll_until: Cell<Instant>,
     /// Briefly highlights the line you jumped to
@@ -307,6 +312,7 @@ impl Window {
             preview_loading: Cell::new(false),
             render_scheduled: Cell::new(false),
             close_confirmed: Cell::new(false),
+            composing: Cell::new(false),
             ignore_editor_scroll_until: Cell::new(Instant::now()),
             ignore_preview_scroll_until: Cell::new(Instant::now()),
             flash_tag,
@@ -549,6 +555,7 @@ impl Window {
         });
 
         self.setup_find_signals();
+        self.setup_typing_signals();
 
         // Ask before closing with unsaved changes
         let weak = Rc::downgrade(self);
@@ -572,6 +579,147 @@ impl Window {
             }
             glib::Propagation::Proceed
         });
+    }
+
+    // =====================================================================
+    // Smarter typing: lists on Enter, pasting a link over text
+    // =====================================================================
+
+    /// Lists continue when Enter is pressed and end on an empty item, and
+    /// pasting a web address over selected text makes a link. The rules for
+    /// what to type are in typing.rs; this wires them to the raw text.
+    fn setup_typing_signals(self: &Rc<Self>) {
+        // Enter in a list item. This watches key presses rather than text
+        // being inserted, so it only reacts to someone pressing Enter: pasted
+        // text with new lines in it, and undo and redo, never gain markers.
+        // The capture phase means it sees the key before the editor does, so
+        // it can make the edit itself and stop the editor's ordinary new line.
+        let keys = gtk::EventControllerKey::new();
+        keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+        let weak = Rc::downgrade(self);
+        keys.connect_key_pressed(move |_, key, _, modifiers| {
+            let enter = matches!(key, gdk::Key::Return | gdk::Key::KP_Enter);
+            // Shift+Enter (a plain new line) and Ctrl or Alt combinations go
+            // to the editor as usual
+            let held = gdk::ModifierType::SHIFT_MASK
+                | gdk::ModifierType::CONTROL_MASK
+                | gdk::ModifierType::ALT_MASK;
+            if enter
+                && !modifiers.intersects(held)
+                && let Some(win) = weak.upgrade()
+                && win.enter_in_list()
+            {
+                return glib::Propagation::Stop;
+            }
+            glib::Propagation::Proceed
+        });
+        self.source_view.add_controller(keys);
+
+        // While an input method is composing, the editor shows the unfinished
+        // text (the "preedit"), and Enter is how the user accepts it
+        let weak = Rc::downgrade(self);
+        self.source_view.connect_preedit_changed(move |_, preedit| {
+            if let Some(win) = weak.upgrade() {
+                win.composing.set(!preedit.is_empty());
+            }
+        });
+
+        // Ctrl+V, Shift+Insert and the right-click menu's Paste all come
+        // through this signal. Stopping it skips the editor's own paste, for
+        // when LeafMD pastes the link itself.
+        let weak = Rc::downgrade(self);
+        self.source_view.connect_paste_clipboard(move |view| {
+            if let Some(win) = weak.upgrade()
+                && win.paste_over_selection()
+            {
+                view.stop_signal_emission_by_name("paste-clipboard");
+            }
+        });
+    }
+
+    /// Enter in the raw text. In a list item it starts the next item, or on
+    /// an empty item ends the list, as one undo step. Returns false when
+    /// Enter should just insert an ordinary new line.
+    fn enter_in_list(&self) -> bool {
+        let buffer = &self.buffer;
+        if self.composing.get() || buffer.has_selection() {
+            return false;
+        }
+        let cursor = buffer.iter_at_mark(&buffer.get_insert());
+        let mut line_start = cursor;
+        line_start.set_line_offset(0);
+        let mut line_end = cursor;
+        if !line_end.ends_line() {
+            line_end.forward_to_line_end();
+        }
+        let line = buffer.text(&line_start, &line_end, true);
+        let action = typing::on_enter(&line, cursor.line_offset() as usize);
+        if action == typing::Enter::Normal {
+            return false;
+        }
+        // Lines in a code block are code, not markdown. Checked only now,
+        // once the line looks like a list item, because it reads the whole
+        // document above the cursor.
+        let before = buffer.text(&buffer.start_iter(), &line_start, true);
+        if typing::in_code_block(&before) {
+            return false;
+        }
+
+        buffer.begin_user_action();
+        match action {
+            // Inserting at the cursor moves the cursor along with the text,
+            // so it ends up after the new marker, ready to type
+            typing::Enter::Continue(text) => buffer.insert_at_cursor(&text),
+            // Clearing the line leaves the cursor on the now empty line
+            typing::Enter::EndList => buffer.delete(&mut line_start, &mut line_end),
+            typing::Enter::Normal => {}
+        }
+        buffer.end_user_action();
+        self.source_view.scroll_mark_onscreen(&buffer.get_insert());
+        true
+    }
+
+    /// A paste with text on one line selected: if the clipboard holds a web
+    /// address, the selection becomes `[selection](address)`; anything else
+    /// is pasted as usual. Returns true when LeafMD takes over the paste.
+    fn paste_over_selection(self: &Rc<Self>) -> bool {
+        let Some((start, end)) = self.buffer.selection_bounds() else {
+            return false;
+        };
+        if start.line() != end.line() {
+            return false;
+        }
+        let selected_range = (start.offset(), end.offset());
+        let clipboard = WidgetExt::clipboard(&self.source_view);
+        let win = self.clone();
+        // The clipboard may belong to another app, so its text arrives a
+        // moment later rather than straight away
+        glib::spawn_future_local(async move {
+            let pasted = clipboard.read_text_future().await.ok().flatten();
+            let buffer = &win.buffer;
+            // Only make the link if the same text is still selected
+            let selection = buffer
+                .selection_bounds()
+                .filter(|(s, e)| (s.offset(), e.offset()) == selected_range);
+            match (pasted, selection) {
+                (Some(address), Some((mut s, mut e))) if typing::is_web_address(&address) => {
+                    let selected = buffer.text(&s, &e, true);
+                    let link = format!("[{selected}]({})", address.trim());
+                    // Grouped so one Ctrl+Z brings back the selected text
+                    buffer.begin_user_action();
+                    buffer.delete(&mut s, &mut e);
+                    buffer.insert(&mut s, &link);
+                    buffer.end_user_action();
+                    // After inserting, `s` points just past the link
+                    buffer.place_cursor(&s);
+                }
+                // Not a web address (or the selection changed while
+                // waiting): paste exactly as the editor would have
+                _ => buffer.paste_clipboard(&clipboard, None, win.source_view.is_editable()),
+            }
+            win.source_view.scroll_mark_onscreen(&buffer.get_insert());
+        });
+        true
     }
 
     // =====================================================================
@@ -965,7 +1113,7 @@ impl Window {
         let buffer = &self.buffer;
         let (sel_start, mut sel_end) = buffer.selection_bounds().unwrap_or_else(|| {
             let cursor = buffer.iter_at_mark(&buffer.get_insert());
-            (cursor.clone(), cursor)
+            (cursor, cursor)
         });
         // Selecting whole lines usually ends at the very start of the next
         // line. Leave that next line out.
@@ -973,9 +1121,9 @@ impl Window {
             sel_end.backward_char();
         }
         // The formatting code is given the whole lines the selection touches
-        let mut block_start = sel_start.clone();
+        let mut block_start = sel_start;
         block_start.set_line_offset(0);
-        let mut block_end = sel_end.clone();
+        let mut block_end = sel_end;
         if !block_end.ends_line() {
             block_end.forward_to_line_end();
         }
@@ -999,9 +1147,9 @@ impl Window {
             "quote" => format::toggle_quote(&block, start, end),
             "code-block" => format::toggle_code_block(&block),
             "table" => {
-                let mut before = block_start.clone();
+                let mut before = block_start;
                 let before_blank = !before.backward_line() || line_is_blank(&before);
-                let mut after = block_end.clone();
+                let mut after = block_end;
                 let after_blank = !after.forward_line() || line_is_blank(&after);
                 format::table(&block, before_blank, after_blank)
             }
@@ -1695,11 +1843,8 @@ impl Window {
         glib::spawn_future_local(async move {
             match dialog.choose_future(Some(&win.window)).await.as_str() {
                 "discard" => then(&win),
-                "save" => {
-                    if win.save().await {
-                        then(&win);
-                    }
-                }
+                // Only carry on if the save actually worked
+                "save" if win.save().await => then(&win),
                 _ => {}
             }
         });
@@ -1826,6 +1971,8 @@ impl Window {
                     ("Editing the raw text", "The raw text can always be edited in Raw or Split view. Changes are only written to the file when you save."),
                     ("Unsaved changes", "A dot (•) before the file name means there are unsaved changes. LeafMD asks before closing or opening another file."),
                     ("Jump to a word", "In Split view, double-click a word on the formatted side to select it in the raw text."),
+                    ("Lists", "In a list, Enter starts the next item for you: another bullet, the next number, or an unticked checkbox. Press Enter on an empty item to end the list, or Shift+Enter for a new line without a marker."),
+                    ("Pasting a link", "Select some text and paste a web address over it to turn the text into a link. Pasting anything else replaces the text as usual."),
                 ],
             ),
             (
@@ -1910,6 +2057,7 @@ impl Window {
                     ("Strikethrough", "<Control><Shift>x"),
                     ("Inline code", "<Control>e"),
                     ("Link", "<Control>k"),
+                    ("New line without a list marker", "<Shift>Return"),
                 ],
             ),
             (
@@ -2214,7 +2362,7 @@ fn build_format_bar() -> gtk::ScrolledWindow {
 
 /// Whether the line starting at this point has nothing but spaces on it.
 fn line_is_blank(line_start: &gtk::TextIter) -> bool {
-    let mut line_end = line_start.clone();
+    let mut line_end = *line_start;
     if !line_end.ends_line() {
         line_end.forward_to_line_end();
     }

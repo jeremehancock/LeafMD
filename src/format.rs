@@ -251,13 +251,15 @@ pub fn link(block: &str, start: usize, end: usize) -> Edit {
 // =========================================================================
 
 /// One line split into its indent, its marker (like `- ` or `## `) and the rest.
-struct Parsed<'a> {
-    indent: &'a str,
-    style: Option<LineStyle>,
-    rest: &'a str,
+/// Also used by `typing.rs`, so Enter and the formatting bar agree on what
+/// counts as a list item.
+pub(crate) struct Parsed<'a> {
+    pub(crate) indent: &'a str,
+    pub(crate) style: Option<LineStyle>,
+    pub(crate) rest: &'a str,
 }
 
-fn parse_line(line: &str) -> Parsed<'_> {
+pub(crate) fn parse_line(line: &str) -> Parsed<'_> {
     let text = line.trim_start_matches([' ', '\t']);
     let indent = &line[..line.len() - text.len()];
     let found = |style, marker_len: usize| Parsed {

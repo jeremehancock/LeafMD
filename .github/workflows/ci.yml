@@ -1,0 +1,127 @@
+name: Build
+
+# Every push to any branch is checked and built as a Flatpak, in the same
+# GNOME 51 environment the app is built in on the owner's laptop.
+#
+#   push to any branch -> checks, then a test .flatpak kept for 7 days
+#                         (Actions tab -> the run -> Artifacts)
+#   push to main       -> the same, and if the version is a finished release
+#                         (its <release> in the metainfo file isn't marked
+#                         type="development") and has no v<version> tag yet,
+#                         also a v<version> tag and a GitHub Release with the
+#                         .flatpak attached and the metainfo release notes.
+#
+# Changes reach main only through a pull request from dev, so a release
+# happens when the owner merges one. See .claude/commands/ship.md.
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Check · Build Flatpak
+    runs-on: ubuntu-latest
+    # Flathub's own build image: Fedora with flatpak, flatpak-builder and the
+    # GNOME 51 SDK already installed. "privileged" lets it run the sandbox.
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-51
+      options: --privileged
+    outputs:
+      version: ${{ steps.info.outputs.version }}
+      stable: ${{ steps.info.outputs.stable }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # The checkout belongs to GitHub's runner account, but this container
+      # runs as root, and the Flatpak sandbox gives up root's power to write
+      # to other people's folders. Owning the checkout lets the checks create
+      # ./vendor and ./target in it.
+      - name: Take ownership of the checkout
+        run: chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE"
+
+      - name: Read the version
+        id: info
+        run: build-aux/release-info.py | tee -a "$GITHUB_OUTPUT"
+
+      - name: Install the SDK's Rust extension and anything else the recipe needs
+        run: |
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak-builder --user --install-deps-from=flathub --install-deps-only \
+            flatpak-build build-aux/io.github.jeremehancock.LeafMD.json
+
+      - name: Clippy, tests, app store and .desktop checks
+        run: build-aux/sdk-check.sh
+
+      - name: Build the Flatpak
+        # rofiles-fuse can't run in a container; it only saves disk space
+        run: |
+          flatpak-builder --user --disable-rofiles-fuse --force-clean --repo=repo \
+            flatpak-build build-aux/io.github.jeremehancock.LeafMD.json
+
+      - name: Make the .flatpak file
+        # --runtime-repo lets GNOME Software fetch the GNOME runtime from
+        # Flathub when someone installs the file
+        run: |
+          flatpak build-bundle repo "LeafMD-${{ steps.info.outputs.version }}.flatpak" \
+            io.github.jeremehancock.LeafMD \
+            --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: LeafMD-flatpak
+          path: LeafMD-*.flatpak
+          retention-days: 7
+          if-no-files-found: error
+
+  release:
+    # A plain name: GitHub shows a skipped job's name without filling it in
+    name: Release
+    needs: build
+    if: github.ref == 'refs/heads/main' && needs.build.outputs.stable == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # to create the tag and the GitHub Release
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Skip if this version is already released
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          if gh release view "v$VERSION" > /dev/null 2>&1; then
+            echo "v$VERSION is already released, so this merge publishes nothing."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/download-artifact@v8
+        if: steps.tag.outputs.exists == 'false'
+        with:
+          name: LeafMD-flatpak
+
+      - name: Create the tag and the GitHub Release
+        if: steps.tag.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          {
+            build-aux/release-info.py --notes
+            echo
+            echo "## Installing"
+            echo
+            echo "Download \`LeafMD-$VERSION.flatpak\` below and open it with GNOME Software, or run:"
+            echo
+            echo '```'
+            echo "flatpak install --user LeafMD-$VERSION.flatpak"
+            echo '```'
+          } > notes.md
+          gh release create "v$VERSION" "LeafMD-$VERSION.flatpak" \
+            --target "$GITHUB_SHA" --title "LeafMD $VERSION" --notes-file notes.md

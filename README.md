@@ -12,6 +12,8 @@ The raw text can always be edited in Raw and Split view, and changes are only wr
 
 - **Formatting bar:** in Raw and Split view, a row of buttons above the text adds the markdown for you: bold, italic, strikethrough, inline code, links, headings, bulleted, numbered and check lists, quotes, code blocks and tables. Select some text and press a button, or press it with nothing selected to format the word or line the cursor is on. Press it again to take the formatting off.
 - **Markdown cheatsheet** (Shift+F1, or the Cheatsheet button) shows the most common markdown next to what it looks like.
+- **Lists continue as you type:** press Enter in a list and the next bullet, number or unticked checkbox is added for you. Enter on an empty item ends the list, and Shift+Enter starts a plain line instead.
+- **Paste a link over text:** select some text and paste a web address to turn it into `[text](address)`.
 
 - In split view, **scrolling either side** scrolls the other to the same spot.
 - In split view, **double-click** a word on the formatted side to select that same word in the raw text. Its line lights up briefly so you can spot it.
@@ -36,6 +38,7 @@ Built with Rust, GTK4 and libadwaita. The app itself uses no npm or Node.js (onl
 | Ctrl+Shift+X | Strikethrough |
 | Ctrl+E | Inline code |
 | Ctrl+K | Link |
+| Shift+Enter (in the raw text) | New line without a list marker |
 | Ctrl+F | Find |
 | Ctrl+H | Find and replace |
 | Enter / Shift+Enter, or F3 / Shift+F3 | Next / previous match |
@@ -99,6 +102,20 @@ The script copies the Rust libraries into `./vendor` (Flatpak builds can't downl
 | Network | So images hosted online (like README badges) load |
 | Graphics (dri) | The formatted view draws faster with the graphics card |
 
+## Branches and releases
+
+Work happens on the `dev` branch. `main` only changes through a pull request from `dev`, and every push to any branch is checked and built as a Flatpak on GitHub (`.github/workflows/ci.yml`). A test `.flatpak` from each build is kept for a week under that run's Artifacts.
+
+To run the same checks GitHub runs (clippy, the tests, and the app store and `.desktop` files), inside the GNOME SDK:
+
+```
+./build-aux/sdk-check.sh
+```
+
+The version number is in `Cargo.toml`, and the newest `<release>` in `data/*.metainfo.xml` has the same number and the release notes. While that entry is marked `type="development"`, it's the next version still collecting changes. When a merge into `main` carries a finished entry whose version hasn't been released yet, GitHub tags it `v<version>` and publishes a [release](https://github.com/jeremehancock/LeafMD/releases) with the `.flatpak` attached.
+
+With Claude Code, `/ship` walks a change through all of this: the checks, trying it locally, the version and release notes, the pull request, and tidying up after the merge.
+
 ## How it's put together
 
 | File | What it does |
@@ -107,18 +124,20 @@ The script copies the Rust libraries into `./vendor` (Flatpak builds can't downl
 | `src/window.rs` | The window: toolbar, formatting bar, raw editor, formatted view, find and replace, Help, cheatsheet and About, opening and saving |
 | `src/find.rs` | The find and replace bar's buttons and boxes |
 | `src/format.rs` | What each formatting button does to the text (bold, lists, headings, tables and so on), with tests |
+| `src/typing.rs` | Help while typing: what Enter does in a list, spotting code blocks, and spotting a pasted web address, with tests |
 | `src/render.rs` | Turns markdown into HTML (comrak), then removes anything unsafe (ammonia) |
 | `src/preview.html` | The page the formatted view is drawn into, including its light and dark styles |
 | `src/preview.js` | Double-click to jump, synced scrolling and find in the formatted view, run in a private script area the document can't reach |
 | `src/state.rs` | Remembers the last view and window size in `~/.config/leafmd/state.ini` |
 | `data/*.desktop` | The app menu entry: name, icon, and the file types LeafMD opens |
 | `data/*.metainfo.xml` | The description, license and release notes shown in software centers |
-| `build-aux/` | The Flatpak recipe and the script that builds and installs it |
+| `build-aux/` | The Flatpak recipe, the script that builds and installs it, `sdk-check.sh` (the checks GitHub runs) and `release-info.py` (reads the version and release notes, and checks they match) |
+| `.github/workflows/ci.yml` | GitHub's build: checks and builds every push, and publishes a release when a new version reaches `main` |
 | `data/resources/` | Files built into the program: the view icons and formatting bar icons (so they look the same with any icon theme). They're drawn with filled shapes only, because GTK doesn't paint outlined lines in these icons |
 | `openspec/specs/` | How LeafMD behaves, written as rules with examples, one folder per area |
 | `openspec/changes/` | Features being planned or built, and finished ones under `archive/` |
 | `openspec/config.yaml` | Guidance for writing proposals and specs in this project |
-| `.claude/` | OpenSpec's commands for Claude Code (`/opsx:propose`, `/opsx:apply` and so on), generated by `openspec init` |
+| `.claude/` | OpenSpec's commands for Claude Code (`/opsx:propose`, `/opsx:apply` and so on), generated by `openspec init`, and `/ship` (`.claude/commands/ship.md`), which takes a change from written to released |
 | `CLAUDE.md` | How to work on LeafMD with Claude Code |
 | `build.rs` | Packs `data/resources` into the program when it's compiled, and notes the Rust version for the About window |
 | `data/icons/` | The app icon, plus a one-colour version GNOME uses in some places |

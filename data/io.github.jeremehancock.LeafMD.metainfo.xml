@@ -26,6 +26,7 @@
       <li>A formatted-only view for pure, distraction-free reading</li>
       <li>Edit the raw text with the formatted view updating as you type</li>
       <li>A formatting bar adds bold, links, lists, headings, tables and more for you</li>
+      <li>Lists continue themselves when you press Enter, and pasting a web address over text makes a link</li>
       <li>A built-in markdown cheatsheet shows the common syntax at a glance</li>
       <li>Find and replace, in the raw text or the formatted document</li>
       <li>In split view, both sides scroll together</li>
@@ -64,9 +65,13 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
-    <release version="0.1.0" date="2026-11-03">
+    <release version="0.1.0" date="2026-11-03" type="development">
       <description>
         <p>First release.</p>
+        <ul>
+          <li>Lists continue when you press Enter: the next bullet, number or unticked checkbox is added for you, and Enter on an empty item ends the list</li>
+          <li>Select some text and paste a web address over it to turn it into a link</li>
+        </ul>
       </description>
     </release>
   </releases>

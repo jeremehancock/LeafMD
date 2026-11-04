@@ -2,6 +2,7 @@ mod find;
 mod format;
 mod render;
 mod state;
+mod typing;
 mod window;
 
 use std::cell::RefCell;

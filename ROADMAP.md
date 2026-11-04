@@ -8,8 +8,8 @@ Each feature is planned in detail with [OpenSpec](https://github.com/Fission-AI/
 
 ## 1. Loose ends
 
-- [ ] Check that clicking a link to a file that's already open brings its window to the front
-- [ ] Check that files that no longer exist are left out of the Recent files list
+- [x] Check that clicking a link to a file that's already open brings its window to the front
+- [x] Check that files that no longer exist are left out of the Recent files list
 
 ## 2. Find and replace
 
@@ -20,9 +20,9 @@ Each feature is planned in detail with [OpenSpec](https://github.com/Fission-AI/
 
 ## 3. Smarter typing
 
-- [ ] **Lists continue on Enter:** pressing Enter at the end of a list item starts the next one (`- `, `2. `, `- [ ] `), keeping the same indent
-- [ ] **Lists end on an empty item:** pressing Enter on an empty item removes its marker and ends the list
-- [ ] **Paste a link over text:** pasting a web address while text is selected turns the text into `[text](address)`
+- [x] **Lists continue on Enter:** pressing Enter at the end of a list item starts the next one (`- `, `2. `, `- [ ] `), keeping the same indent
+- [x] **Lists end on an empty item:** pressing Enter on an empty item removes its marker and ends the list
+- [x] **Paste a link over text:** pasting a web address while text is selected turns the text into `[text](address)`
 
 ## 4. Reading and writing comfort
 
