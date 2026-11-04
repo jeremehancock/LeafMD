@@ -3,7 +3,7 @@
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use adw::prelude::*;
 use gtk::{gdk, gio, glib};
@@ -16,8 +16,19 @@ use crate::state::{SavedState, ViewMode};
 /// The empty page (styles only) that the formatted view is drawn into.
 const PREVIEW_PAGE: &str = include_str!("preview.html");
 
+/// Helpers for click-to-jump and synced scrolling, run inside the formatted view.
+const PREVIEW_SCRIPT: &str = include_str!("preview.js");
+
+/// LeafMD's private script "world" in the formatted view. Code and messages here
+/// are kept apart from the document itself.
+const SCRIPT_WORLD: &str = "leafmd";
+
 /// How long to wait after the last keystroke before updating the formatted view.
 const RENDER_DELAY: Duration = Duration::from_millis(150);
+
+/// After LeafMD scrolls one side to match the other, scroll events from that
+/// side are ignored for this long, so the two sides don't keep nudging each other.
+const SYNC_QUIET: Duration = Duration::from_millis(250);
 
 /// Actions that only make sense while a document is open.
 const DOCUMENT_ACTIONS: [&str; 4] = ["save", "save-as", "edit", "view"];
@@ -28,7 +39,12 @@ pub struct Window {
     toasts: adw::ToastOverlay,
     stack: gtk::Stack,
     paned: gtk::Paned,
+    /// The raw editor plus the coloured bar shown above it while editing
+    source_pane: gtk::Box,
     source_scroll: gtk::ScrolledWindow,
+    edit_bar: gtk::Box,
+    edit_button: gtk::ToggleButton,
+    edit_button_content: adw::ButtonContent,
     source_view: sourceview5::View,
     buffer: sourceview5::Buffer,
     webview: webkit6::WebView,
@@ -43,6 +59,10 @@ pub struct Window {
     render_scheduled: Cell<bool>,
     /// Set after the user has answered "discard" or "save" when closing.
     close_confirmed: Cell<bool>,
+    /// The "turn on editing" hint, so typing doesn't stack up several of them
+    read_only_toast: RefCell<Option<adw::Toast>>,
+    ignore_editor_scroll_until: Cell<Instant>,
+    ignore_preview_scroll_until: Cell<Instant>,
 }
 
 impl Window {
@@ -94,13 +114,17 @@ impl Window {
                 .tooltip_text("Main Menu")
                 .build(),
         );
-        header.pack_end(
-            &gtk::ToggleButton::builder()
-                .icon_name("document-edit-symbolic")
-                .tooltip_text("Edit (Ctrl+E)")
-                .action_name("win.edit")
-                .build(),
-        );
+        // Shows "Edit" normally, and turns blue and says "Editing" while editing is on
+        let edit_button_content = adw::ButtonContent::builder()
+            .icon_name("document-edit-symbolic")
+            .label("Edit")
+            .build();
+        let edit_button = gtk::ToggleButton::builder()
+            .child(&edit_button_content)
+            .tooltip_text("Turn editing on or off (Ctrl+E)")
+            .action_name("win.edit")
+            .build();
+        header.pack_end(&edit_button);
 
         // Three buttons tied to one "view" action, so exactly one is pressed at a time
         let view_buttons = gtk::Box::new(gtk::Orientation::Horizontal, 0);
@@ -130,7 +154,6 @@ impl Window {
 
         let source_view = sourceview5::View::with_buffer(&buffer);
         source_view.set_show_line_numbers(true);
-        source_view.set_highlight_current_line(true);
         source_view.set_monospace(true);
         source_view.set_wrap_mode(gtk::WrapMode::WordChar);
         source_view.set_tab_width(4);
@@ -149,6 +172,14 @@ impl Window {
             .vexpand(true)
             .build();
 
+        // A thin bar in the accent colour across the top of the editor while editing
+        let edit_bar = gtk::Box::builder().visible(false).build();
+        edit_bar.add_css_class("leafmd-edit-bar");
+
+        let source_pane = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        source_pane.append(&edit_bar);
+        source_pane.append(&source_scroll);
+
         // ---- Formatted view ----
         let webview = webkit6::WebView::new();
         webview.set_hexpand(true);
@@ -158,11 +189,15 @@ impl Window {
             settings.set_enable_javascript_markup(false);
             settings.set_enable_developer_extras(false);
         }
+        // Lets LeafMD's own helper script (and only that) send messages back to the app
+        if let Some(content_manager) = webview.user_content_manager() {
+            content_manager.register_script_message_handler("leafmd", Some(SCRIPT_WORLD));
+        }
 
         // ---- Layout ----
         let paned = gtk::Paned::builder()
             .orientation(gtk::Orientation::Horizontal)
-            .start_child(&source_scroll)
+            .start_child(&source_pane)
             .end_child(&webview)
             .shrink_start_child(false)
             .shrink_end_child(false)
@@ -200,7 +235,11 @@ impl Window {
             toasts,
             stack,
             paned,
+            source_pane,
             source_scroll,
+            edit_bar,
+            edit_button,
+            edit_button_content,
             source_view,
             buffer,
             webview,
@@ -210,6 +249,9 @@ impl Window {
             preview_loading: Cell::new(false),
             render_scheduled: Cell::new(false),
             close_confirmed: Cell::new(false),
+            read_only_toast: RefCell::new(None),
+            ignore_editor_scroll_until: Cell::new(Instant::now()),
+            ignore_preview_scroll_until: Cell::new(Instant::now()),
         });
 
         win.setup_actions(saved.view);
@@ -304,10 +346,46 @@ impl Window {
                 && let Some(win) = weak.upgrade()
             {
                 win.preview_ready.set(true);
+                win.run_js(PREVIEW_SCRIPT);
                 win.update_style();
                 win.render_now();
             }
         });
+
+        // Messages from the formatted view: a double-click (jump) or a scroll
+        if let Some(content_manager) = self.webview.user_content_manager() {
+            let weak = Rc::downgrade(self);
+            content_manager.connect_script_message_received(Some("leafmd"), move |_, value| {
+                if let (Some(win), Some(json)) = (weak.upgrade(), value.to_json(0)) {
+                    win.handle_preview_message(&json);
+                }
+            });
+        }
+
+        // Scrolling the raw text scrolls the formatted view to match (split view only)
+        let weak = Rc::downgrade(self);
+        self.source_scroll.vadjustment().connect_value_changed(move |_| {
+            if let Some(win) = weak.upgrade() {
+                win.sync_preview_to_editor();
+            }
+        });
+
+        // Typing while editing is off shows a hint with a button to turn it on
+        let keys = gtk::EventControllerKey::new();
+        let weak = Rc::downgrade(self);
+        keys.connect_key_pressed(move |_, key, _, modifiers| {
+            let typed_text = key.to_unicode().is_some_and(|c| !c.is_control())
+                && !modifiers.intersects(gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::ALT_MASK);
+            let is_delete = matches!(key, gdk::Key::BackSpace | gdk::Key::Delete | gdk::Key::Return);
+            if let Some(win) = weak.upgrade()
+                && !win.source_view.is_editable()
+                && (typed_text || is_delete)
+            {
+                win.show_read_only_hint();
+            }
+            glib::Propagation::Proceed
+        });
+        self.source_view.add_controller(keys);
 
         // Stop the formatted view from ever leaving LeafMD's own page
         let weak = Rc::downgrade(self);
@@ -368,7 +446,7 @@ impl Window {
             ViewMode::Source => (true, false),
             ViewMode::Split => (true, true),
         };
-        self.source_scroll.set_visible(show_source);
+        self.source_pane.set_visible(show_source);
         self.webview.set_visible(show_preview);
 
         if mode == ViewMode::Split {
@@ -395,7 +473,22 @@ impl Window {
         self.action("edit").set_state(&on.to_variant());
         self.source_view.set_editable(on);
         self.source_view.set_cursor_visible(on);
+        self.source_view.set_highlight_current_line(on);
+
+        // Make it obvious: blue "Editing" button and a bar across the top of the editor
+        self.edit_button_content
+            .set_label(if on { "Editing" } else { "Edit" });
         if on {
+            self.edit_button.add_css_class("suggested-action");
+        } else {
+            self.edit_button.remove_css_class("suggested-action");
+        }
+        self.edit_bar.set_visible(on);
+
+        if on {
+            if let Some(toast) = self.read_only_toast.take() {
+                toast.dismiss();
+            }
             // You can only type in the raw text, so switch to split if it is hidden
             if self.view_mode.get() == ViewMode::Preview {
                 self.set_view(ViewMode::Split);
@@ -469,7 +562,7 @@ impl Window {
     fn run_js(&self, script: &str) {
         self.webview.evaluate_javascript(
             script,
-            None,
+            Some(SCRIPT_WORLD),
             None,
             gio::Cancellable::NONE,
             |result| {
@@ -478,6 +571,115 @@ impl Window {
                 }
             },
         );
+    }
+
+    fn handle_preview_message(&self, json: &str) {
+        let Ok(message) = serde_json::from_str::<serde_json::Value>(json) else {
+            return;
+        };
+        match message["kind"].as_str() {
+            Some("jump") => {
+                if let Some(line) = message["line"].as_i64() {
+                    self.jump_to_line(line as i32);
+                }
+            }
+            Some("scroll") => {
+                let now = Instant::now();
+                if self.view_mode.get() != ViewMode::Split
+                    || now < self.ignore_preview_scroll_until.get()
+                {
+                    return;
+                }
+                // About to scroll the editor: ignore the scroll events that causes
+                self.ignore_editor_scroll_until.set(now + SYNC_QUIET);
+                if message["bottom"].as_bool() == Some(true) {
+                    let adjustment = self.source_scroll.vadjustment();
+                    adjustment.set_value(adjustment.upper() - adjustment.page_size());
+                } else if let Some(line) = message["line"].as_f64() {
+                    self.scroll_editor_to_line(line);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Double-clicking the formatted view: turn on editing with the cursor on that line.
+    fn jump_to_line(&self, line: i32) {
+        self.set_editing(true);
+        let Some(iter) = self.buffer.iter_at_line((line - 1).max(0)) else {
+            return;
+        };
+        self.buffer.place_cursor(&iter);
+        // Wait until the split view has been laid out, then bring the line into view
+        let view = self.source_view.clone();
+        let mark = self.buffer.get_insert();
+        glib::idle_add_local_once(move || {
+            view.scroll_to_mark(&mark, 0.0, true, 0.0, 0.3);
+        });
+    }
+
+    /// Scrolls the raw text so the given (possibly fractional) line is at the top.
+    fn scroll_editor_to_line(&self, line: f64) {
+        let whole = line.floor().max(1.0);
+        let Some(iter) = self.buffer.iter_at_line(whole as i32 - 1) else {
+            return;
+        };
+        let (y, height) = self.source_view.line_yrange(&iter);
+        let target = y as f64 + (line - whole).clamp(0.0, 1.0) * height as f64;
+        let adjustment = self.source_scroll.vadjustment();
+        let max = (adjustment.upper() - adjustment.page_size()).max(0.0);
+        adjustment.set_value(target.clamp(0.0, max));
+    }
+
+    /// Called when the raw text scrolls: moves the formatted view to the same spot.
+    fn sync_preview_to_editor(&self) {
+        let now = Instant::now();
+        if self.view_mode.get() != ViewMode::Split
+            || !self.preview_ready.get()
+            || now < self.ignore_editor_scroll_until.get()
+        {
+            return;
+        }
+        let adjustment = self.source_scroll.vadjustment();
+        let top = adjustment.value();
+        let at_bottom = top > 0.0 && top >= adjustment.upper() - adjustment.page_size() - 1.0;
+
+        let (iter, line_top) = self.source_view.line_at_y(top as i32);
+        let (_, height) = self.source_view.line_yrange(&iter);
+        let fraction = if height > 0 {
+            ((top - line_top as f64) / height as f64).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let line = (iter.line() + 1) as f64 + fraction;
+
+        // About to scroll the formatted view: ignore the scroll events that causes
+        self.ignore_preview_scroll_until.set(now + SYNC_QUIET);
+        self.run_js(&format!(
+            "window.leafmd && window.leafmd.scrollToLine({line}, {at_bottom});"
+        ));
+    }
+
+    /// Typing while editing is off: explain why nothing happens and offer to turn it on.
+    fn show_read_only_hint(self: &Rc<Self>) {
+        if self.read_only_toast.borrow().is_some() {
+            return;
+        }
+        let toast = adw::Toast::builder()
+            .title("Editing is off")
+            .button_label("Turn On Editing")
+            .action_name("win.edit")
+            .timeout(4)
+            .build();
+        // Forget it once it's gone, so the hint can show again next time
+        let weak = Rc::downgrade(self);
+        toast.connect_dismissed(move |_| {
+            if let Some(win) = weak.upgrade() {
+                win.read_only_toast.borrow_mut().take();
+            }
+        });
+        *self.read_only_toast.borrow_mut() = Some(toast.clone());
+        self.toasts.add_toast(toast);
     }
 
     /// Decides what happens when something tries to change the page in the formatted view.
@@ -792,6 +994,13 @@ impl Window {
             .application_icon(crate::APP_ID)
             .version(env!("CARGO_PKG_VERSION"))
             .comments(env!("CARGO_PKG_DESCRIPTION"))
+            .developer_name("Jereme Hancock")
+            // "Name URL" makes the name a link on the Credits page
+            .developers(["Jereme Hancock https://jeremehancock.com"])
+            .copyright("© 2026 Jereme Hancock")
+            .license_type(gtk::License::Gpl30)
+            .website(env!("CARGO_PKG_REPOSITORY"))
+            .issue_url(concat!(env!("CARGO_PKG_REPOSITORY"), "/issues"))
             .build()
             .present(Some(&self.window));
     }

@@ -25,6 +25,7 @@ fn main() -> glib::ExitCode {
     app.connect_startup(|app| {
         sourceview5::init();
         set_shortcuts(app);
+        load_styles();
     });
 
     let current = CurrentWindow::default();
@@ -57,6 +58,26 @@ fn get_window(app: &adw::Application, current: &CurrentWindow) -> Rc<Window> {
     });
     *current.borrow_mut() = Some(win.clone());
     win
+}
+
+/// LeafMD's few custom styles. The edit bar uses the system accent colour.
+/// (The first line is for older GTK versions that don't understand var(...).)
+fn load_styles() {
+    let css = gtk::CssProvider::new();
+    css.load_from_string(
+        ".leafmd-edit-bar {
+            min-height: 4px;
+            background-color: @accent_bg_color;
+            background-color: var(--accent-bg-color);
+        }",
+    );
+    if let Some(display) = gtk::gdk::Display::default() {
+        gtk::style_context_add_provider_for_display(
+            &display,
+            &css,
+            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
+    }
 }
 
 fn set_shortcuts(app: &adw::Application) {

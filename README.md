@@ -6,7 +6,11 @@ A markdown viewer for Linux that switches between three views, with editing when
 - **Raw:** the markdown text, full window
 - **Split:** raw text on the left, formatted on the right
 
-Files open read-only. Turn on **Edit** to type in the raw text. If you're in the formatted view when you turn editing on, LeafMD switches to split view so you can see both.
+Files open read-only. Turn on **Edit** to type in the raw text. While editing is on, the Edit button turns into a filled **Editing** button and a bar appears across the top of the raw text, both in your system's accent colour. If you're in the formatted view when you turn editing on, LeafMD switches to split view so you can see both.
+
+- **Double-click** anything in the formatted view to turn on editing with the cursor on that line in the raw text.
+- In split view, **scrolling either side** scrolls the other to the same spot.
+- Typing while editing is off shows a reminder with a button to turn it on.
 
 Built with Rust, GTK4 and libadwaita. No npm.
 
@@ -73,6 +77,7 @@ The script copies the Rust libraries into `./vendor` (Flatpak builds can't downl
 | `src/window.rs` | The window: toolbar, raw editor, formatted view, edit mode, opening and saving |
 | `src/render.rs` | Turns markdown into HTML (comrak), then removes anything unsafe (ammonia) |
 | `src/preview.html` | The page the formatted view is drawn into, including its light and dark styles |
+| `src/preview.js` | Double-click to jump and synced scrolling, run in a private script area the document can't reach |
 | `src/state.rs` | Remembers the last view and window size in `~/.config/leafmd/state.ini` |
 | `data/*.desktop` | The app menu entry: name, icon, and the file types LeafMD opens |
 | `data/*.metainfo.xml` | The description, license and release notes shown in software centers |
@@ -90,11 +95,6 @@ Markdown files can contain raw HTML, including scripts. LeafMD protects against 
 ## App ID
 
 `io.github.jeremehancock.LeafMD`
-
-## Planned
-
-- Click a paragraph in the formatted view to jump to that line in the raw text
-- Synced scrolling in split view
 
 ## License
 

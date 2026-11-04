@@ -18,6 +18,9 @@ pub fn markdown_to_safe_html(markdown: &str) -> String {
     // Gives each heading an id so links like [see below](#install) work
     options.extension.header_id_prefix = Some(String::new());
     options.render.r#unsafe = true;
+    // Tags each block with the lines it came from (data-sourcepos="3:1-5:20"),
+    // which click-to-jump and synced scrolling use to match the two views up
+    options.render.sourcepos = true;
 
     let html = markdown_to_html(markdown, &options);
     clean(&html)
@@ -29,8 +32,9 @@ fn clean(html: &str) -> String {
         // Task list checkboxes: - [x] done
         .add_tags(["input"])
         .add_tag_attributes("input", ["type", "checked", "disabled"])
-        // ids for heading and footnote links, classes for styling, align for table columns
-        .add_generic_attributes(["id", "class", "align"]);
+        // ids for heading and footnote links, classes for styling, align for table
+        // columns, and the source line tags
+        .add_generic_attributes(["id", "class", "align", "data-sourcepos"]);
     cleaner.clean(html).to_string()
 }
 
@@ -42,7 +46,7 @@ mod tests {
     fn renders_basic_markdown() {
         let html = markdown_to_safe_html("# Title\n\nSome **bold** text.");
         assert!(html.contains("<h1"));
-        assert!(html.contains("<strong>bold</strong>"));
+        assert!(html.contains("<strong") && html.contains(">bold</strong>"));
     }
 
     #[test]
@@ -53,6 +57,13 @@ mod tests {
         assert!(!html.contains("<script"));
         assert!(!html.contains("onerror"));
         assert!(html.contains("a.png"));
+    }
+
+    #[test]
+    fn tags_blocks_with_source_lines() {
+        let html = markdown_to_safe_html("# Title\n\nFirst paragraph.\n\nSecond paragraph.");
+        assert!(html.contains("data-sourcepos=\"1:1-1:7\""));
+        assert!(html.contains("data-sourcepos=\"5:1-5:17\""));
     }
 
     #[test]
