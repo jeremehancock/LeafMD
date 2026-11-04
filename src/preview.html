@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #1e1e1e;
+    --muted: #5e5c64;
+    --border: #deddda;
+    --code-bg: #f6f5f4;
+    --link: #1c71d8;
+    --quote: #c0bfbc;
+  }
+  :root[data-theme="dark"] {
+    --bg: #1e1e1e;
+    --fg: #deddda;
+    --muted: #9a9996;
+    --border: #3d3846;
+    --code-bg: #2a2a2a;
+    --link: #78aeed;
+    --quote: #5e5c64;
+  }
+  html { background: var(--bg); color: var(--fg); }
+  body {
+    margin: 0;
+    padding: 32px 24px 64px;
+    font: 16px/1.6 system-ui, Cantarell, "Noto Sans", sans-serif;
+  }
+  #content { max-width: 46em; margin: 0 auto; overflow-wrap: break-word; }
+  #content > :first-child { margin-top: 0; }
+  h1, h2, h3, h4, h5, h6 { line-height: 1.25; margin: 1.6em 0 0.6em; }
+  h1 { font-size: 2em; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
+  h2 { font-size: 1.5em; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
+  a { color: var(--link); }
+  code, pre { font-family: "Source Code Pro", "DejaVu Sans Mono", monospace; font-size: 0.9em; }
+  code { background: var(--code-bg); padding: 0.15em 0.35em; border-radius: 4px; }
+  pre { background: var(--code-bg); padding: 12px 16px; border-radius: 8px; overflow-x: auto; }
+  pre code { background: none; padding: 0; font-size: 1em; }
+  blockquote { margin: 1em 0; padding: 0 1em; color: var(--muted); border-left: 4px solid var(--quote); }
+  table { border-collapse: collapse; display: block; overflow-x: auto; margin: 1em 0; }
+  th, td { border: 1px solid var(--border); padding: 6px 12px; }
+  th { background: var(--code-bg); }
+  img { max-width: 100%; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+  li > input[type="checkbox"] { margin: 0 0.4em 0 0; }
+  .footnotes { font-size: 0.9em; color: var(--muted); }
+</style>
+</head>
+<body>
+<article id="content"></article>
+</body>
+</html>

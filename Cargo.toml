@@ -1,0 +1,24 @@
+[package]
+name = "leafmd"
+version = "0.1.0"
+edition = "2024"
+description = "A markdown viewer that switches between formatted, raw and split views, with editing when you want it"
+
+[dependencies]
+# GTK4 and libadwaita: the window, buttons and dialogs (GNOME's toolkit)
+gtk = { package = "gtk4", version = "0.11", features = ["v4_12"] }
+adw = { package = "libadwaita", version = "0.9", features = ["v1_6"] }
+# GtkSourceView: the raw text editor (syntax colouring, line numbers, undo)
+sourceview5 = "0.11"
+# WebKitGTK: shows the formatted view
+webkit6 = "0.6"
+# Markdown to HTML. Default features are turned off to skip its command-line tool.
+comrak = { version = "0.59", default-features = false }
+# Removes anything unsafe (scripts and so on) from the formatted HTML
+ammonia = "4"
+# Safely wraps the HTML in a JavaScript string when updating the preview
+serde_json = "1"
+
+[profile.release]
+lto = true
+strip = true
