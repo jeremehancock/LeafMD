@@ -121,7 +121,7 @@ Every build SHALL pass Flathub's checker (`flatpak-builder-lint`) on the build r
 
 #### Scenario: Allowed exception
 - **WHEN** the finished build is checked
-- **THEN** `appstream-screenshots-not-mirrored-in-ostree` (Flathub's servers keeping their own copy of the screenshots) is allowed because the exceptions list names it, and the build passes
+- **THEN** `appstream-screenshots-not-mirrored-in-ostree` and `appstream-external-screenshot-url` (Flathub's servers keeping their own copies of the screenshots) are allowed because the exceptions list names them, and the build passes
 - **AND** removing a screenshot from the metainfo file fails the build with `metainfo-missing-screenshots`
 
 #### Scenario: Before the first release

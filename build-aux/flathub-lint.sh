@@ -9,11 +9,14 @@
 #     to (the GitHub build does this; locally it would need a second build)
 #
 # Any problem fails, except those in build-aux/flathub-lint-exceptions.json.
-# It allows only one:
+# It allows only two, both about Flathub's servers keeping their own copies
+# of every app's screenshots, which nothing outside Flathub can do. LeafMD's
+# repository serves its screenshots from leafmd.app instead:
 #   appstream-screenshots-not-mirrored-in-ostree
-#     Flathub's servers keep their own copy of every app's screenshots inside
-#     the repository. A self-hosted repository serves them from leafmd.app
-#     instead, so this can never pass outside Flathub.
+#     Flathub stores a copy of the screenshots inside the repository.
+#   appstream-external-screenshot-url
+#     Flathub points the app's screenshot addresses at its own media server
+#     (dl.flathub.org/media).
 #
 # Until LeafMD's first release (while GitHub has no v... tag), two more are
 # allowed (and the app store description is checked without going online),

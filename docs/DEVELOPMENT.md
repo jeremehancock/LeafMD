@@ -51,7 +51,7 @@ LeafMD isn't on Flathub, but it keeps meeting Flathub's rules. To run Flathub's 
 ./build-aux/flathub-lint.sh
 ```
 
-It installs the checker (the `org.flatpak.Builder` Flatpak) the first time. GitHub also runs it on every finished build (`./build-aux/flathub-lint.sh repo`). Any problem fails, except the one in `build-aux/flathub-lint-exceptions.json`: Flathub keeps its own copy of every app's screenshots in its repository, which a self-hosted repository can't do.
+It installs the checker (the `org.flatpak.Builder` Flatpak) the first time. GitHub also runs it on every finished build (`./build-aux/flathub-lint.sh repo`). Any problem fails, except the two in `build-aux/flathub-lint-exceptions.json`. Both are about Flathub keeping its own copies of every app's screenshots (inside its repository, and on its media server at `dl.flathub.org/media`), which nothing outside Flathub can do.
 
 ## How changes are planned
 
