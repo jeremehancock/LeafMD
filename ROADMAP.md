@@ -22,10 +22,12 @@ Items are ticked off as they're finished. The order can change.
 - [ ] **Lists end on an empty item:** pressing Enter on an empty item removes its marker and ends the list
 - [ ] **Paste a link over text:** pasting a web address while text is selected turns the text into `[text](address)`
 
-## 4. Reading comfort
+## 4. Reading and writing comfort
 
+- [ ] **Distraction-free mode:** one switch that hides the formatting bar, the Cheatsheet button and anything else that isn't your document, leaving just the text. Turned on and off from the main menu or a keyboard shortcut, and remembered. Going full screen (F11) hides the title bar too
+- [ ] **Font and text size:** choose the font and size for the raw text and for the formatted view, in a small Preferences window. LeafMD's description promises "no settings to tune", so that wording changes with this
 - [ ] **Reload when the file changes:** if another app changes the open file, LeafMD shows the new version. If there are unsaved changes too, it asks which to keep instead of overwriting anything
-- [ ] **Zoom:** Ctrl+plus, Ctrl+minus and Ctrl+0 make the text bigger, smaller or back to normal in both views, and the size is remembered
+- [ ] **Zoom:** Ctrl+plus, Ctrl+minus and Ctrl+0 make the text bigger, smaller or back to normal in both views, for a quick change without opening Preferences
 - [ ] **Word count:** the number of words (and reading time) shown somewhere unobtrusive
 
 ## 5. Sharing
@@ -38,7 +40,7 @@ Items are ticked off as they're finished. The order can change.
 
 - [ ] Screenshots of the three views for the README and the app store listing
 - [ ] Release notes for version 0.1.0 listing what's included
-- [ ] Publish the code on GitHub
+- [x] Publish the code on GitHub
 - [ ] A downloadable `.flatpak` file attached to the GitHub release, so people can install LeafMD without building it
 
 ## Later
@@ -52,7 +54,7 @@ These might fit LeafMD, or might add more than they're worth. Each one needs a d
 
 - Spell checking in the raw text
 - A headings menu for jumping to a section of a long document
-- A distraction-free full screen mode (F11)
+- A list of the other markdown files in the same folder, for moving between related documents. Either a full folder tree in a sidebar, or something lighter like a menu of the files next to the open one
 - Coloured syntax highlighting inside code blocks in the formatted view
 - Remembering where you were scrolled to in each file
 - Dropping an image onto the raw text inserts a markdown image link

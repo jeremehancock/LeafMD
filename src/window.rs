@@ -24,6 +24,10 @@ const PREVIEW_SCRIPT: &str = include_str!("preview.js");
 /// are kept apart from the document itself.
 const SCRIPT_WORLD: &str = "leafmd";
 
+/// When a file is opening, the longest LeafMD waits for the formatted view to
+/// finish drawing before showing the document anyway.
+const REVEAL_TIMEOUT: Duration = Duration::from_secs(1);
+
 /// How long to wait after the last keystroke before updating the formatted view.
 const RENDER_DELAY: Duration = Duration::from_millis(150);
 
@@ -77,6 +81,9 @@ pub struct Window {
     flash_tag: gtk::TextTag,
     /// A heading to scroll to once the next file has loaded (from a link like other.md#intro)
     pending_heading: RefCell<Option<String>>,
+    /// True while a file has loaded but its formatted view is still being drawn.
+    /// The document is shown once that's done, so it appears all at once.
+    reveal_pending: Cell<bool>,
 }
 
 impl Window {
@@ -231,8 +238,14 @@ impl Window {
             .child(&open_button)
             .build();
 
-        let stack = gtk::Stack::new();
+        // "loading" is a blank page shown while a file opens, so the
+        // "No Document Open" page doesn't flash up first
+        let stack = gtk::Stack::builder()
+            .transition_type(gtk::StackTransitionType::Crossfade)
+            .transition_duration(150)
+            .build();
         stack.add_named(&empty_page, Some("empty"));
+        stack.add_named(&adw::Bin::new(), Some("loading"));
         stack.add_named(&paned, Some("document"));
 
         let toasts = adw::ToastOverlay::new();
@@ -268,6 +281,7 @@ impl Window {
             ignore_preview_scroll_until: Cell::new(Instant::now()),
             flash_tag,
             pending_heading: RefCell::new(None),
+            reveal_pending: Cell::new(false),
         });
 
         win.setup_actions(saved.view);
@@ -399,6 +413,23 @@ impl Window {
                 // Opened from a link like other.md#part-two: scroll to that heading
                 if let Some(heading) = win.pending_heading.take() {
                     win.scroll_to_heading(&heading);
+                }
+                // A file just opened: show it once the formatted view has its
+                // content. Scripts run in order, so when this empty one finishes,
+                // the document is already in the page.
+                if win.reveal_pending.get() {
+                    let weak = Rc::downgrade(&win);
+                    win.webview.evaluate_javascript(
+                        "true",
+                        Some(SCRIPT_WORLD),
+                        None,
+                        gio::Cancellable::NONE,
+                        move |_| {
+                            if let Some(win) = weak.upgrade() {
+                                win.reveal_document();
+                            }
+                        },
+                    );
                 }
             }
         });
@@ -615,10 +646,45 @@ impl Window {
         self.source_view.grab_focus();
     }
 
-    fn show_document(&self) {
+    /// Shows the open document. If it has just been loaded into an empty
+    /// window and the formatted view is still drawing it, waits for that first
+    /// (at most REVEAL_TIMEOUT), so the document appears all at once.
+    fn show_document(self: &Rc<Self>) {
+        let opening = self.stack.visible_child_name().as_deref() == Some("loading");
+        if opening && self.webview.is_visible() && !self.preview_ready.get() {
+            self.reveal_pending.set(true);
+            let weak = Rc::downgrade(self);
+            glib::timeout_add_local_once(REVEAL_TIMEOUT, move || {
+                if let Some(win) = weak.upgrade()
+                    && win.reveal_pending.get()
+                {
+                    win.reveal_document();
+                }
+            });
+            return;
+        }
+        self.reveal_document();
+    }
+
+    fn reveal_document(&self) {
+        self.reveal_pending.set(false);
         self.stack.set_visible_child_name("document");
         self.set_document_actions_enabled(true);
         self.update_title();
+    }
+
+    /// Swaps "No Document Open" for a blank page while a file opens.
+    fn begin_loading(&self) {
+        if self.stack.visible_child_name().as_deref() == Some("empty") {
+            self.stack.set_visible_child_name("loading");
+        }
+    }
+
+    /// The file couldn't be opened: go back to "No Document Open" if nothing was showing.
+    fn cancel_loading(&self) {
+        if self.stack.visible_child_name().as_deref() == Some("loading") {
+            self.stack.set_visible_child_name("empty");
+        }
     }
 
     // =====================================================================
@@ -1022,6 +1088,7 @@ impl Window {
     fn ask_open_file_at(self: &Rc<Self>, file: gio::File, heading: Option<String>) {
         self.confirm_discard(move |win| {
             *win.pending_heading.borrow_mut() = heading;
+            win.begin_loading();
             let win = win.clone();
             glib::spawn_future_local(async move {
                 win.load_file(file).await;
@@ -1033,6 +1100,7 @@ impl Window {
         let bytes = match file.load_contents_future().await {
             Ok((bytes, _)) => bytes,
             Err(err) => {
+                self.cancel_loading();
                 self.toast(&format!("Could not open the file: {}", err.message()));
                 // A recent file that has been moved or deleted drops off the list
                 self.forget_recent(&file.uri());
@@ -1040,6 +1108,7 @@ impl Window {
             }
         };
         let Ok(text) = String::from_utf8(bytes.to_vec()) else {
+            self.cancel_loading();
             self.toast("This file isn't plain text, so LeafMD can't open it");
             return;
         };
@@ -1062,6 +1131,8 @@ impl Window {
         if !file.query_exists(gio::Cancellable::NONE) {
             return;
         }
+        // Set before the window is first drawn, so it opens blank, not "No Document Open"
+        self.begin_loading();
         let win = self.clone();
         glib::spawn_future_local(async move {
             win.load_file(file).await;
