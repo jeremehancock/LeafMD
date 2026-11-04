@@ -965,7 +965,7 @@ impl Window {
         let buffer = &self.buffer;
         let (sel_start, mut sel_end) = buffer.selection_bounds().unwrap_or_else(|| {
             let cursor = buffer.iter_at_mark(&buffer.get_insert());
-            (cursor.clone(), cursor)
+            (cursor, cursor)
         });
         // Selecting whole lines usually ends at the very start of the next
         // line. Leave that next line out.
@@ -973,9 +973,9 @@ impl Window {
             sel_end.backward_char();
         }
         // The formatting code is given the whole lines the selection touches
-        let mut block_start = sel_start.clone();
+        let mut block_start = sel_start;
         block_start.set_line_offset(0);
-        let mut block_end = sel_end.clone();
+        let mut block_end = sel_end;
         if !block_end.ends_line() {
             block_end.forward_to_line_end();
         }
@@ -999,9 +999,9 @@ impl Window {
             "quote" => format::toggle_quote(&block, start, end),
             "code-block" => format::toggle_code_block(&block),
             "table" => {
-                let mut before = block_start.clone();
+                let mut before = block_start;
                 let before_blank = !before.backward_line() || line_is_blank(&before);
-                let mut after = block_end.clone();
+                let mut after = block_end;
                 let after_blank = !after.forward_line() || line_is_blank(&after);
                 format::table(&block, before_blank, after_blank)
             }
@@ -1695,11 +1695,8 @@ impl Window {
         glib::spawn_future_local(async move {
             match dialog.choose_future(Some(&win.window)).await.as_str() {
                 "discard" => then(&win),
-                "save" => {
-                    if win.save().await {
-                        then(&win);
-                    }
-                }
+                // Only carry on if the save actually worked
+                "save" if win.save().await => then(&win),
                 _ => {}
             }
         });
@@ -2214,7 +2211,7 @@ fn build_format_bar() -> gtk::ScrolledWindow {
 
 /// Whether the line starting at this point has nothing but spaces on it.
 fn line_is_blank(line_start: &gtk::TextIter) -> bool {
-    let mut line_end = line_start.clone();
+    let mut line_end = *line_start;
     if !line_end.ends_line() {
         line_end.forward_to_line_end();
     }
