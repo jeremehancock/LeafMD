@@ -12,6 +12,13 @@ LeafMD SHALL appear in the app grid as "LeafMD" (described as a Markdown Viewer)
 - **WHEN** the user types "readme" in the GNOME app search
 - **THEN** LeafMD is offered
 
+### Requirement: Same icons on every distro
+LeafMD SHALL look the same whatever icon theme the system has chosen: its buttons and window controls SHALL use LeafMD's own icons or the Adwaita icons from the GNOME runtime, never the system's icon theme.
+
+#### Scenario: A system with a different icon theme
+- **WHEN** LeafMD runs on a system set to another icon theme, such as Papirus or Ubuntu's Yaru
+- **THEN** the main menu button shows three lines, and every other icon matches what LeafMD shows on any other distro
+
 ### Requirement: Markdown files open in LeafMD
 LeafMD SHALL register itself for markdown files (`text/markdown` and `text/x-markdown`), so it can be chosen to open them from the file manager, and SHALL accept several files at once.
 

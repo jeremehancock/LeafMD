@@ -137,9 +137,11 @@ impl Window {
                 .menu_model(&recent_menu)
                 .build(),
         );
+        // LeafMD's own floppy disk icon, because the Adwaita theme LeafMD uses
+        // (see main.rs) draws Save as a downward arrow.
         header.pack_start(
             &gtk::Button::builder()
-                .icon_name("document-save-symbolic")
+                .icon_name("leafmd-save-symbolic")
                 .tooltip_text("Save (Ctrl+S)")
                 .action_name("win.save")
                 .build(),

@@ -13,11 +13,15 @@ LeafMD SHALL show a "No Document Open" page with an "Open File…" button when n
 - **THEN** the "No Document Open" page is shown
 
 ### Requirement: Open and Save buttons
-The left of the header bar SHALL have an Open button with a small arrow beside it that lists recent files, and a Save button. Open SHALL be a word rather than a folder icon, because folder icons vary a lot between icon themes.
+The left of the header bar SHALL have an Open button with a small arrow beside it that lists recent files, and a Save button. Open SHALL be a word rather than a folder icon, because folder icons vary a lot between icon themes. Save SHALL use LeafMD's own floppy disk icon.
 
 #### Scenario: Hovering the buttons
 - **WHEN** the user hovers over Open or Save
 - **THEN** a tooltip names the action and its shortcut, like "Save (Ctrl+S)"
+
+#### Scenario: Save icon on any distro
+- **WHEN** LeafMD runs with any system icon theme
+- **THEN** the Save button shows the same floppy disk icon
 
 ### Requirement: Opening files
 LeafMD SHALL open a markdown or text file chosen with Open (Ctrl+O or the Open button), dropped anywhere on the window, double-clicked in the file manager, or given on the command line (`leafmd notes.md`). The Open dialog SHALL offer Markdown (.md, .markdown, .mdown, .mkd), Plain text and All files filters.
