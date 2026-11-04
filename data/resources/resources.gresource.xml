@@ -1,10 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Files built into the LeafMD program itself. GTK automatically looks for
-     icons under /io/github/jeremehancock/LeafMD/icons. -->
+     icons under /io/github/jeremehancock/LeafMD/icons.
+     The view icons and the formatting bar icons live here so they look the same
+     with any icon theme. -->
 <gresources>
   <gresource prefix="/io/github/jeremehancock/LeafMD">
     <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-view-formatted-symbolic.svg</file>
     <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-view-raw-symbolic.svg</file>
     <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-view-split-symbolic.svg</file>
+    <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-format-bold-symbolic.svg</file>
+    <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-format-bullet-list-symbolic.svg</file>
+    <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-format-code-block-symbolic.svg</file>
+    <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-format-code-symbolic.svg</file>
+    <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-format-heading-symbolic.svg</file>
+    <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-format-italic-symbolic.svg</file>
+    <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-format-link-symbolic.svg</file>
+    <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-format-numbered-list-symbolic.svg</file>
+    <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-format-quote-symbolic.svg</file>
+    <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-format-strikethrough-symbolic.svg</file>
+    <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-format-table-symbolic.svg</file>
+    <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-format-task-list-symbolic.svg</file>
   </gresource>
 </gresources>

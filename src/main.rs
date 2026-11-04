@@ -1,3 +1,4 @@
+mod format;
 mod render;
 mod state;
 mod window;
@@ -116,20 +117,27 @@ fn open_in_window(app: &adw::Application, windows: &Windows, file: gio::File, he
 }
 
 fn set_shortcuts(app: &adw::Application) {
-    let shortcuts: [(&str, &[&str]); 10] = [
+    let shortcuts: &[(&str, &[&str])] = &[
         ("win.new", &["<Control>n"]),
         ("win.open", &["<Control>o"]),
         ("win.save", &["<Control>s"]),
         ("win.save-as", &["<Control><Shift>s"]),
         ("win.help", &["F1"]),
+        ("win.cheatsheet", &["<Shift>F1"]),
         ("win.shortcuts", &["<Control>question"]),
         ("win.view::preview", &["<Control>1"]),
         ("win.view::source", &["<Control>2"]),
         ("win.view::split", &["<Control>3"]),
+        // Formatting the raw text (only works in Raw and Split view)
+        ("win.format::bold", &["<Control>b"]),
+        ("win.format::italic", &["<Control>i"]),
+        ("win.format::strikethrough", &["<Control><Shift>x"]),
+        ("win.format::code", &["<Control>e"]),
+        ("win.format::link", &["<Control>k"]),
         // "window.close" is built into GTK and goes through the unsaved-changes check
         ("window.close", &["<Control>w", "<Control>q"]),
     ];
-    for (action, keys) in shortcuts {
+    for &(action, keys) in shortcuts {
         app.set_accels_for_action(action, keys);
     }
 }

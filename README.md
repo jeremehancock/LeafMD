@@ -8,6 +8,9 @@ A markdown viewer and editor for Linux with three views, including a formatted-o
 
 The raw text can always be edited in Raw and Split view, and changes are only written to the file when you save.
 
+- **Formatting bar:** in Raw and Split view, a row of buttons above the text adds the markdown for you: bold, italic, strikethrough, inline code, links, headings, bulleted, numbered and check lists, quotes, code blocks and tables. Select some text and press a button, or press it with nothing selected to format the word or line the cursor is on. Press it again to take the formatting off.
+- **Markdown cheatsheet** (Shift+F1, or the Cheatsheet button) shows the most common markdown next to what it looks like.
+
 - In split view, **scrolling either side** scrolls the other to the same spot.
 - In split view, **double-click** a word on the formatted side to select that same word in the raw text. Its line lights up briefly so you can spot it.
 - **Links** to websites open in your browser. Links to other markdown or text files (like `LICENSE`) open them in a new LeafMD window, scrolled to the heading if the link names one.
@@ -26,7 +29,12 @@ Built with Rust, GTK4 and libadwaita. No npm.
 | Ctrl+S | Save |
 | Ctrl+Shift+S | Save as |
 | Ctrl+W or Ctrl+Q | Close (asks first if there are unsaved changes) |
+| Ctrl+B / Ctrl+I | Bold / italic |
+| Ctrl+Shift+X | Strikethrough |
+| Ctrl+E | Inline code |
+| Ctrl+K | Link |
 | F1 | Help |
+| Shift+F1 | Markdown cheatsheet |
 | Ctrl+? | Keyboard shortcuts |
 
 You can also open a file by dropping it on the window, or with `leafmd file.md`.
@@ -45,7 +53,7 @@ Then, from this folder:
 cargo run -- path/to/file.md
 ```
 
-`cargo test` runs the tests for the markdown conversion and the safety filter.
+`cargo test` runs the tests for the markdown conversion, the safety filter and the formatting buttons.
 
 ## Installing as a Flatpak
 
@@ -77,7 +85,8 @@ The script copies the Rust libraries into `./vendor` (Flatpak builds can't downl
 | File | What it does |
 |---|---|
 | `src/main.rs` | Starts the app, sets up keyboard shortcuts, opens files passed on the command line |
-| `src/window.rs` | The window: toolbar, raw editor, formatted view, edit mode, opening and saving |
+| `src/window.rs` | The window: toolbar, formatting bar, raw editor, formatted view, Help, cheatsheet and About, opening and saving |
+| `src/format.rs` | What each formatting button does to the text (bold, lists, headings, tables and so on), with tests |
 | `src/render.rs` | Turns markdown into HTML (comrak), then removes anything unsafe (ammonia) |
 | `src/preview.html` | The page the formatted view is drawn into, including its light and dark styles |
 | `src/preview.js` | Double-click to jump and synced scrolling, run in a private script area the document can't reach |
@@ -85,8 +94,8 @@ The script copies the Rust libraries into `./vendor` (Flatpak builds can't downl
 | `data/*.desktop` | The app menu entry: name, icon, and the file types LeafMD opens |
 | `data/*.metainfo.xml` | The description, license and release notes shown in software centers |
 | `build-aux/` | The Flatpak recipe and the script that builds and installs it |
-| `data/resources/` | Files built into the program: the three view icons (so they look the same with any icon theme) |
-| `build.rs` | Packs `data/resources` into the program when it's compiled |
+| `data/resources/` | Files built into the program: the view icons and formatting bar icons (so they look the same with any icon theme). They're drawn with filled shapes only, because GTK doesn't paint outlined lines in these icons |
+| `build.rs` | Packs `data/resources` into the program when it's compiled, and notes the Rust version for the About window |
 | `data/icons/` | The app icon, plus a one-colour version GNOME uses in some places |
 
 ### Safety in the formatted view

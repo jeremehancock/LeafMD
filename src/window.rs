@@ -1,5 +1,5 @@
-//! The LeafMD window: the toolbar, the raw editor, the formatted view, and
-//! opening and saving files.
+//! The LeafMD window: the toolbar, the formatting bar, the raw editor, the
+//! formatted view, and opening and saving files.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -10,6 +10,7 @@ use gtk::{gdk, gio, glib};
 use sourceview5::prelude::*;
 use webkit6::prelude::*;
 
+use crate::format::{self, Inline, LineStyle};
 use crate::render;
 use crate::state::{self, SavedState, ViewMode};
 
@@ -35,7 +36,9 @@ const ABOUT_TEXT: &str = "LeafMD is a markdown viewer and editor that keeps thin
 
 Read a document cleanly formatted, work directly in the raw text, or see both side by side and watch your changes appear as you type.
 
-Rather than trying to do everything, LeafMD focuses on doing the essentials well. There are no plugins to manage, panels to arrange or settings to tune. It is just a fast, dependable app that feels obvious from the moment you open it, so you can spend your time on your writing instead of your tools.";
+Rather than trying to do everything, LeafMD focuses on doing the essentials well. There are no plugins to manage, panels to arrange or settings to tune. It is just a fast, dependable app that feels obvious from the moment you open it, so you can spend your time on your writing instead of your tools.
+
+LeafMD was created with the help of AI.";
 
 /// Actions that only make sense while a document is open.
 const DOCUMENT_ACTIONS: [&str; 3] = ["save", "save-as", "view"];
@@ -47,6 +50,8 @@ pub struct Window {
     stack: gtk::Stack,
     paned: gtk::Paned,
     view_switcher: adw::ToggleGroup,
+    /// The row of formatting buttons above the raw text (Raw and Split view only)
+    format_bar: gtk::ScrolledWindow,
     /// The list under the arrow next to Open
     recent_menu: gio::Menu,
     /// Recently opened files as file:// addresses, newest first
@@ -125,6 +130,7 @@ impl Window {
         save_section.append(Some("Save As…"), Some("win.save-as"));
         let app_section = gio::Menu::new();
         app_section.append(Some("Help"), Some("win.help"));
+        app_section.append(Some("Markdown Cheatsheet"), Some("win.cheatsheet"));
         app_section.append(Some("Keyboard Shortcuts"), Some("win.shortcuts"));
         app_section.append(Some("About LeafMD"), Some("win.about"));
         let menu = gio::Menu::new();
@@ -199,6 +205,9 @@ impl Window {
             content_manager.register_script_message_handler("leafmd", Some(SCRIPT_WORLD));
         }
 
+        // ---- Formatting bar ----
+        let format_bar = build_format_bar();
+
         // ---- Layout ----
         let paned = gtk::Paned::builder()
             .orientation(gtk::Orientation::Horizontal)
@@ -231,6 +240,7 @@ impl Window {
 
         let toolbar_view = adw::ToolbarView::new();
         toolbar_view.add_top_bar(&header);
+        toolbar_view.add_top_bar(&format_bar);
         toolbar_view.set_content(Some(&toasts));
         window.set_content(Some(&toolbar_view));
 
@@ -241,6 +251,7 @@ impl Window {
             stack,
             paned,
             view_switcher,
+            format_bar,
             recent_menu,
             recent: RefCell::new(state::load_recent()),
             source_scroll,
@@ -310,6 +321,17 @@ impl Window {
             });
         });
         add("help", |win| win.show_help());
+        add("cheatsheet", |win| win.show_cheatsheet());
+
+        // The formatting buttons and their shortcuts: the target names the format
+        let format = gio::SimpleAction::new("format", Some(glib::VariantTy::STRING));
+        let weak = Rc::downgrade(self);
+        format.connect_activate(move |_, param| {
+            if let (Some(win), Some(name)) = (weak.upgrade(), param.and_then(|p| p.str())) {
+                win.apply_format(name);
+            }
+        });
+        self.window.add_action(&format);
         add("shortcuts", |win| win.show_shortcuts());
         add("about", |win| win.show_about());
 
@@ -492,6 +514,15 @@ impl Window {
             self.render_now();
         }
         self.tell_preview_view_mode();
+        self.update_format_bar();
+    }
+
+    /// The formatting bar (and its shortcuts) only work where the raw text can be edited.
+    fn update_format_bar(&self) {
+        let editable = self.stack.visible_child_name().as_deref() == Some("document")
+            && self.view_mode.get() != ViewMode::Preview;
+        self.format_bar.set_visible(editable);
+        self.action("format").set_enabled(editable);
     }
 
     /// Double-click on the formatted side only jumps to the raw text in split view.
@@ -514,6 +545,74 @@ impl Window {
             self.action(name).set_enabled(enabled);
         }
         self.view_switcher.set_sensitive(enabled);
+        self.update_format_bar();
+    }
+
+    // =====================================================================
+    // Formatting bar
+    // =====================================================================
+
+    /// Applies a formatting button (bold, bullet list, ...) to the selection,
+    /// or to the word or line the cursor is on. One Ctrl+Z undoes it.
+    fn apply_format(&self, name: &str) {
+        let buffer = &self.buffer;
+        let (sel_start, mut sel_end) = buffer.selection_bounds().unwrap_or_else(|| {
+            let cursor = buffer.iter_at_mark(&buffer.get_insert());
+            (cursor.clone(), cursor)
+        });
+        // Selecting whole lines usually ends at the very start of the next
+        // line. Leave that next line out.
+        if sel_end.line_offset() == 0 && sel_end.offset() > sel_start.offset() {
+            sel_end.backward_char();
+        }
+        // The formatting code is given the whole lines the selection touches
+        let mut block_start = sel_start.clone();
+        block_start.set_line_offset(0);
+        let mut block_end = sel_end.clone();
+        if !block_end.ends_line() {
+            block_end.forward_to_line_end();
+        }
+        let block = buffer.text(&block_start, &block_end, true).to_string();
+        let base = block_start.offset();
+        let start = (sel_start.offset() - base) as usize;
+        let end = (sel_end.offset() - base) as usize;
+
+        let edit = match name {
+            "bold" => format::toggle_inline(&block, start, end, Inline::Bold),
+            "italic" => format::toggle_inline(&block, start, end, Inline::Italic),
+            "strikethrough" => format::toggle_inline(&block, start, end, Inline::Strikethrough),
+            "code" => format::toggle_inline(&block, start, end, Inline::Code),
+            "link" => format::link(&block, start, end),
+            "heading-1" => format::toggle_line_style(&block, start, end, LineStyle::Heading(1)),
+            "heading-2" => format::toggle_line_style(&block, start, end, LineStyle::Heading(2)),
+            "heading-3" => format::toggle_line_style(&block, start, end, LineStyle::Heading(3)),
+            "bullet-list" => format::toggle_line_style(&block, start, end, LineStyle::Bullet),
+            "numbered-list" => format::toggle_line_style(&block, start, end, LineStyle::Numbered),
+            "task-list" => format::toggle_line_style(&block, start, end, LineStyle::Task),
+            "quote" => format::toggle_quote(&block, start, end),
+            "code-block" => format::toggle_code_block(&block),
+            "table" => {
+                let mut before = block_start.clone();
+                let before_blank = !before.backward_line() || line_is_blank(&before);
+                let mut after = block_end.clone();
+                let after_blank = !after.forward_line() || line_is_blank(&after);
+                format::table(&block, before_blank, after_blank)
+            }
+            _ => return,
+        };
+
+        if edit.text != block {
+            // Grouped so a single undo puts everything back
+            buffer.begin_user_action();
+            buffer.delete(&mut block_start, &mut block_end);
+            buffer.insert(&mut block_start, &edit.text);
+            buffer.end_user_action();
+        }
+        let new_start = buffer.iter_at_offset(base + edit.start as i32);
+        let new_end = buffer.iter_at_offset(base + edit.end as i32);
+        buffer.select_range(&new_end, &new_start);
+        self.source_view.scroll_mark_onscreen(&buffer.get_insert());
+        self.source_view.grab_focus();
     }
 
     fn show_document(&self) {
@@ -1256,7 +1355,7 @@ impl Window {
     /// A short guide to how LeafMD works.
     fn show_help(&self) {
         let page = adw::PreferencesPage::new();
-        let sections: [(&str, &[(&str, &str)]); 3] = [
+        let sections: [(&str, &[(&str, &str)]); 4] = [
             (
                 "The Three Views",
                 &[
@@ -1271,6 +1370,15 @@ impl Window {
                     ("Editing the raw text", "The raw text can always be edited in Raw or Split view. Changes are only written to the file when you save."),
                     ("Unsaved changes", "A dot (•) before the file name means there are unsaved changes. LeafMD asks before closing or opening another file."),
                     ("Jump to a word", "In Split view, double-click a word on the formatted side to select it in the raw text."),
+                ],
+            ),
+            (
+                "Formatting",
+                &[
+                    ("Formatting bar", "In Raw and Split view, a row of buttons above the text adds markdown for you. Select some text and press Bold, for example, to put ** around it."),
+                    ("Nothing selected", "Bold, italic and the other text styles apply to the word the cursor is in. Lists, headings and quotes apply to the cursor's line."),
+                    ("Undoing a format", "Press the same button again to take the formatting off, or press Ctrl+Z."),
+                    ("Markdown cheatsheet", "Shows the most common markdown and what each one looks like. Open it from the main menu, the Cheatsheet button, or Shift+F1."),
                 ],
             ),
             (
@@ -1311,7 +1419,7 @@ impl Window {
     /// Lists every keyboard shortcut.
     fn show_shortcuts(&self) {
         let dialog = adw::ShortcutsDialog::new();
-        let sections: [(&str, &[(&str, &str)]); 3] = [
+        let sections: [(&str, &[(&str, &str)]); 4] = [
             (
                 "Views",
                 &[
@@ -1331,9 +1439,20 @@ impl Window {
                 ],
             ),
             (
+                "Formatting",
+                &[
+                    ("Bold", "<Control>b"),
+                    ("Italic", "<Control>i"),
+                    ("Strikethrough", "<Control><Shift>x"),
+                    ("Inline code", "<Control>e"),
+                    ("Link", "<Control>k"),
+                ],
+            ),
+            (
                 "Help",
                 &[
                     ("Help", "F1"),
+                    ("Markdown cheatsheet", "<Shift>F1"),
                     ("Keyboard shortcuts", "<Control>question"),
                 ],
             ),
@@ -1348,6 +1467,116 @@ impl Window {
         dialog.present(Some(&self.window));
     }
 
+    /// The most common markdown, with what each one looks like.
+    fn show_cheatsheet(&self) {
+        // Each row: the markdown to type, and a preview drawn with GTK's own
+        // text styles. "accent" colours the preview like a link.
+        type Row = (&'static str, &'static str, &'static str);
+        let sections: [(&str, &str, &[Row]); 6] = [
+            (
+                "Text",
+                "",
+                &[
+                    ("**Bold text**", "<b>Bold text</b>", ""),
+                    ("*Italic text*", "<i>Italic text</i>", ""),
+                    ("***Bold and italic***", "<b><i>Bold and italic</i></b>", ""),
+                    ("~~Strikethrough~~", "<s>Strikethrough</s>", ""),
+                    ("`Inline code`", "<tt>Inline code</tt>", ""),
+                ],
+            ),
+            (
+                "Headings",
+                "Use one to six # signs, then a space. More # signs make a smaller heading.",
+                &[
+                    ("# Heading 1", "<span size='xx-large' weight='bold'>Heading 1</span>", ""),
+                    ("## Heading 2", "<span size='x-large' weight='bold'>Heading 2</span>", ""),
+                    ("### Heading 3", "<span size='large' weight='bold'>Heading 3</span>", ""),
+                ],
+            ),
+            (
+                "Lists",
+                "Leave a blank line before a list. Indent with two spaces to put one list inside another.",
+                &[
+                    ("- Item", "•  Item", ""),
+                    ("1. Item", "1.  Item", ""),
+                    ("- [ ] To do", "☐  To do", ""),
+                    ("- [x] Done", "☑  Done", ""),
+                    ("  - Nested item", "      ◦  Nested item", ""),
+                ],
+            ),
+            (
+                "Links and Images",
+                "",
+                &[
+                    ("[LeafMD](https://example.com)", "<u>LeafMD</u>", "accent"),
+                    ("https://example.com", "<u>https://example.com</u>", "accent"),
+                    ("[See below](#heading-1)", "<u>See below</u> (jumps to a heading)", "accent"),
+                    ("![A cat](cat.png)", "Shows cat.png, described as \u{201c}A cat\u{201d}", ""),
+                ],
+            ),
+            (
+                "Blocks",
+                "",
+                &[
+                    ("> Quoted text", "<span alpha='50%'>▎</span> <i>Quoted text</i>", ""),
+                    ("```\nCode block\n```", "<tt>Code block</tt>", ""),
+                    ("| A | B |\n| - | - |\n| 1 | 2 |", "A table with columns A and B", ""),
+                    ("---", "A dividing line across the page", ""),
+                ],
+            ),
+            (
+                "Paragraphs and More",
+                "",
+                &[
+                    ("First paragraph\n\nSecond paragraph", "A blank line starts a new paragraph", ""),
+                    ("Line one\\\nLine two", "Line one\nLine two", ""),
+                    ("Text[^1]\n\n[^1]: The note", "Text<sup>1</sup>, with the note at the bottom", ""),
+                    ("\\*Not italic\\*", "*Not italic*", ""),
+                ],
+            ),
+        ];
+
+        let page = adw::PreferencesPage::new();
+        for (title, description, rows) in sections {
+            let group = adw::PreferencesGroup::builder()
+                .title(title)
+                .description(description)
+                .build();
+            for (markdown, preview, class) in rows {
+                // The markdown side can be selected and copied
+                let row = adw::ActionRow::builder()
+                    .title(format!("<tt>{}</tt>", glib::markup_escape_text(markdown)))
+                    .title_selectable(true)
+                    .build();
+                let label = gtk::Label::builder()
+                    .label(*preview)
+                    .use_markup(true)
+                    .wrap(true)
+                    .xalign(0.0)
+                    .width_chars(24)
+                    .max_width_chars(24)
+                    .build();
+                if !class.is_empty() {
+                    label.add_css_class(class);
+                }
+                row.add_suffix(&label);
+                group.add(&row);
+            }
+            page.add(&group);
+        }
+
+        let content = adw::ToolbarView::new();
+        content.add_top_bar(&adw::HeaderBar::new());
+        content.set_content(Some(&page));
+        adw::Dialog::builder()
+            .title("Markdown Cheatsheet")
+            .content_width(600)
+            .content_height(680)
+            .child(&content)
+            .build()
+            .present(Some(&self.window));
+    }
+
     fn show_about(&self) {
         let about = adw::AboutDialog::builder()
             .application_name("LeafMD")
@@ -1355,18 +1584,60 @@ impl Window {
             .version(env!("CARGO_PKG_VERSION"))
             .comments(ABOUT_TEXT)
             .developer_name("Jereme Hancock")
-            // "Name URL" makes the name a link on the Credits page
-            .developers(["Jereme Hancock https://jeremehancock.com"])
             .copyright("© 2026 Jereme Hancock")
             .license_type(gtk::License::Gpl30)
             .issue_url(concat!(env!("CARGO_PKG_REPOSITORY"), "/issues"))
+            // Wider than GNOME's default, so the Built With rows fit on one line
+            .content_width(560)
             .build();
         // A custom link instead of the built-in "Website" row, so it can be called GitHub
         about.add_link("GitHub", env!("CARGO_PKG_REPOSITORY"));
+        // Credits page, in order. A custom section instead of .developers(),
+        // because that one's heading always says "Code by". "Name URL" makes
+        // the name a link.
+        about.add_credit_section(
+            Some("Developed by"),
+            &["Jereme Hancock https://jeremehancock.com"],
+        );
+        // Right under the developer, so it's seen without scrolling
         about.add_credit_section(
             Some("AI Disclosure"),
             &["This project was created with the help of AI."],
         );
+        // The language and libraries LeafMD is made with. Version numbers are
+        // the ones LeafMD is running with right now.
+        let built_with = [
+            format!("Rust {}, the programming language https://www.rust-lang.org", env!("LEAFMD_RUST_VERSION")),
+            format!(
+                "GTK {}.{}.{}, the user interface toolkit https://www.gtk.org",
+                gtk::major_version(),
+                gtk::minor_version(),
+                gtk::micro_version()
+            ),
+            format!(
+                "libadwaita {}.{}.{}, GNOME's look and widgets https://gnome.pages.gitlab.gnome.org/libadwaita/",
+                adw::major_version(),
+                adw::minor_version(),
+                adw::micro_version()
+            ),
+            format!(
+                "GtkSourceView {}.{}.{}, the raw text editor https://gitlab.gnome.org/GNOME/gtksourceview",
+                sourceview5::major_version(),
+                sourceview5::minor_version(),
+                sourceview5::micro_version()
+            ),
+            format!(
+                "WebKitGTK {}.{}.{}, draws the formatted view https://webkitgtk.org",
+                webkit6::functions::major_version(),
+                webkit6::functions::minor_version(),
+                webkit6::functions::micro_version()
+            ),
+            "comrak, turns markdown into HTML https://github.com/kivikakk/comrak".to_string(),
+            "ammonia, removes anything unsafe from the HTML https://github.com/rust-ammonia/ammonia"
+                .to_string(),
+        ];
+        let built_with: Vec<&str> = built_with.iter().map(String::as_str).collect();
+        about.add_credit_section(Some("Built With"), &built_with);
         about.present(Some(&self.window));
     }
 
@@ -1380,6 +1651,104 @@ impl Window {
         }
         .save();
     }
+}
+
+/// The row of formatting buttons. Each button runs "win.format" with the
+/// format's name, so the buttons, the heading menu and the keyboard shortcuts
+/// all share the same code.
+fn build_format_bar() -> gtk::ScrolledWindow {
+    let bar = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    // GNOME's toolbar style: flat buttons with even spacing
+    bar.add_css_class("toolbar");
+
+    let button = |name: &str, tooltip: &str| {
+        gtk::Button::builder()
+            .icon_name(format!("leafmd-format-{name}-symbolic"))
+            .tooltip_text(tooltip)
+            .action_name("win.format")
+            .action_target(&name.to_variant())
+            .build()
+    };
+    let separator = || {
+        let line = gtk::Separator::new(gtk::Orientation::Vertical);
+        line.set_margin_top(6);
+        line.set_margin_bottom(6);
+        line
+    };
+
+    for (name, tooltip) in [
+        ("bold", "Bold (Ctrl+B)"),
+        ("italic", "Italic (Ctrl+I)"),
+        ("strikethrough", "Strikethrough (Ctrl+Shift+X)"),
+        ("code", "Inline code (Ctrl+E)"),
+        ("link", "Link (Ctrl+K)"),
+    ] {
+        bar.append(&button(name, tooltip));
+    }
+    bar.append(&separator());
+
+    let headings = gio::Menu::new();
+    for level in 1..=3 {
+        headings.append(
+            Some(&format!("Heading {level}")),
+            Some(&format!("win.format::heading-{level}")),
+        );
+    }
+    bar.append(
+        &gtk::MenuButton::builder()
+            .icon_name("leafmd-format-heading-symbolic")
+            .always_show_arrow(true)
+            .tooltip_text("Heading")
+            .menu_model(&headings)
+            .build(),
+    );
+    bar.append(&separator());
+
+    for (name, tooltip) in [
+        ("bullet-list", "Bulleted list"),
+        ("numbered-list", "Numbered list"),
+        ("task-list", "Checklist"),
+        ("quote", "Quote"),
+    ] {
+        bar.append(&button(name, tooltip));
+    }
+    bar.append(&separator());
+    bar.append(&button("code-block", "Code block"));
+    bar.append(&button("table", "Table"));
+
+    // The cheatsheet button sits at the far end
+    let spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    spacer.set_hexpand(true);
+    bar.append(&spacer);
+    bar.append(
+        &gtk::Button::builder()
+            .label("Cheatsheet")
+            .tooltip_text("Markdown cheatsheet (Shift+F1)")
+            .action_name("win.cheatsheet")
+            .css_classes(["flat"])
+            .build(),
+    );
+
+    // In a very narrow window the buttons scroll sideways instead of
+    // stopping the window from getting smaller
+    gtk::ScrolledWindow::builder()
+        .child(&bar)
+        .hscrollbar_policy(gtk::PolicyType::Automatic)
+        .vscrollbar_policy(gtk::PolicyType::Never)
+        .build()
+}
+
+/// Whether the line starting at this point has nothing but spaces on it.
+fn line_is_blank(line_start: &gtk::TextIter) -> bool {
+    let mut line_end = line_start.clone();
+    if !line_end.ends_line() {
+        line_end.forward_to_line_end();
+    }
+    line_start
+        .buffer()
+        .text(line_start, &line_end, true)
+        .trim()
+        .is_empty()
 }
 
 fn file_filters() -> gio::ListStore {
