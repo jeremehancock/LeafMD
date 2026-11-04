@@ -5,8 +5,9 @@ Takes the storefront's source in site/ and turns it into the finished site:
 
   - copies site/ (leaving out the .in templates), the app icon as icon.svg,
     and the screenshots in data/screenshots/
-  - fills in the newest release's version, date and notes from the metainfo
-    file, so the site always describes the version the repository offers
+  - fills in the newest release's version from the metainfo file (linked to
+    its release notes on GitHub), so the site always names the version the
+    repository offers
   - fills in LeafMD.flatpakref and leafmd.flatpakrepo (the "install from
     here" files) with the site's address and LeafMD's public signing key
   - copies the Flatpak repository into repo/, when given one
@@ -26,7 +27,6 @@ Usage:
 
 import argparse
 import base64
-import datetime
 import shutil
 import sys
 import xml.etree.ElementTree as ET
@@ -45,27 +45,12 @@ def fail(message: str) -> None:
     sys.exit(1)
 
 
-def newest_release() -> dict[str, str]:
-    """The version, date and notes of the newest <release> in the metainfo file."""
+def newest_version() -> str:
+    """The version of the newest <release> in the metainfo file."""
     release = ET.parse(METAINFO).getroot().find("releases/release")
-    if release is None:
-        fail(f"no <release> in {METAINFO.name}")
-    date = datetime.date.fromisoformat(release.get("date", ""))
-    # The notes are already simple HTML (<p>, <ul>, <li>), so each part is
-    # copied over as it is
-    description = release.find("description")
-    notes = ""
-    if description is not None:
-        notes = "\n".join(
-            ET.tostring(part, encoding="unicode", short_empty_elements=False).strip()
-            for part in description
-        )
-    return {
-        "version": release.get("version", ""),
-        "release_date": f"{date:%B} {date.day}, {date.year}",
-        "release_date_iso": date.isoformat(),
-        "release_notes": notes,
-    }
+    if release is None or not release.get("version"):
+        fail(f"no <release> with a version in {METAINFO.name}")
+    return release.get("version")
 
 
 def fill(text: str, values: dict[str, str]) -> str:
@@ -85,7 +70,7 @@ def main() -> None:
     args = parser.parse_args()
 
     base_url = args.base_url if args.base_url.endswith("/") else args.base_url + "/"
-    values = {"base_url": base_url, **newest_release()}
+    values = {"base_url": base_url, "version": newest_version()}
     if args.key:
         # Flatpak wants the key in its binary form, written as base64
         values["gpg_key"] = base64.b64encode(args.key.read_bytes()).decode()

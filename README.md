@@ -150,7 +150,7 @@ The version number is in `Cargo.toml`, and the newest `<release>` in `data/*.met
 
 A release also publishes [leafmd.app](https://leafmd.app/) on GitHub Pages, built by `build-aux/build-site.py`:
 
-- the storefront, from `site/`, with the screenshots from `data/screenshots/` and the version and notes from the newest release in the metainfo file
+- the storefront, from `site/`, with the screenshots from `data/screenshots/` and the version from the newest release in the metainfo file, linked to its release notes on GitHub
 - `LeafMD.flatpakref` and `leafmd.flatpakrepo`, the files that tell Flatpak where to install LeafMD from and which key it's signed with
 - `repo/`, the signed Flatpak repository installed copies get their updates from. It only ever holds the newest version.
 
@@ -210,7 +210,7 @@ With Claude Code, `/ship` walks a change through all of this: the checks, trying
 | `data/*.desktop` | The app menu entry: name, icon, and the file types LeafMD opens |
 | `data/*.metainfo.xml` | The description, license and release notes shown in software centers |
 | `build-aux/` | The Flatpak recipe, the script that builds and installs it, `sdk-check.sh` (the checks GitHub runs), `flathub-lint.sh` and its exceptions file (Flathub's checker), `release-info.py` (reads the version and release notes, and checks they match), `build-site.py` (builds leafmd.app), `flatpak-repo-preview.sh` (a private copy of leafmd.app on this computer), `screenshot-mode.sh` (GNOME's default look for taking screenshots) and `leafmd-signing-key.gpg` (the public half of LeafMD's signing key) |
-| `site/` | The storefront at leafmd.app: the page, its styles, the Copy button's script, and the templates for the install files |
+| `site/` | The storefront at leafmd.app: the page, its styles, its two small scripts (the Copy button, and the viewer that shows screenshots full size), and the templates for the install files |
 | `data/screenshots/` | The screenshots used on leafmd.app, in app stores and above, the sample document they show, and how to take them again |
 | `.github/workflows/ci.yml` | GitHub's build: checks and builds every push, and when a new version reaches `main`, signs it, publishes a GitHub Release and publishes leafmd.app |
 | `data/resources/` | Files built into the program: the view icons and formatting bar icons (so they look the same with any icon theme). They're drawn with filled shapes only, because GTK doesn't paint outlined lines in these icons |

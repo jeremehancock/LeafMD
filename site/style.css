@@ -56,6 +56,10 @@ a:hover { text-decoration-thickness: 2px; }
 :focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
 
 h1, h2, h3 { line-height: 1.2; margin: 0; }
+/* Spreads short text evenly over its lines, so no line ends up with a single
+   word on it. Browsers that don't know it just wrap as usual. */
+h1, h2, h3, .tagline, .lede, .section-lede, .hint, .facts, .note,
+.gallery figcaption { text-wrap: balance; }
 h2 { font-size: clamp(1.6rem, 4vw, 2.1rem); font-weight: 800; letter-spacing: -0.01em; text-align: center; }
 h3 { font-size: 1.1rem; font-weight: 700; }
 
@@ -96,6 +100,8 @@ h3 { font-size: 1.1rem; font-weight: 700; }
 .actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin: 28px 0 14px; }
 .hint { color: var(--muted); font-size: 0.9rem; margin: -2px 0 10px; }
 .facts { color: var(--muted); font-size: 0.9rem; margin: 0; }
+/* Each piece stays whole, with its dot, so lines only break after a dot */
+.facts > span { white-space: nowrap; }
 
 .button {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
@@ -126,6 +132,41 @@ h3 { font-size: 1.1rem; font-weight: 700; }
 .gallery figure { margin: 0; text-align: center; }
 .gallery img { display: block; width: 100%; }
 .gallery figcaption { color: var(--muted); font-size: 0.95rem; margin-top: 4px; }
+/* Each small screenshot opens full size (lightbox.js) */
+.zoom { display: block; cursor: zoom-in; border-radius: 12px; }
+.zoom img { transition: transform 0.2s; }
+@media (prefers-reduced-motion: no-preference) {
+  .zoom:hover img { transform: scale(1.02); }
+}
+
+/* The screenshot viewer: the picture as large as the window allows, up to
+   its real size, on a dark see-through backdrop */
+.lightbox {
+  width: 100vw; height: 100vh; max-width: none; max-height: none;
+  margin: 0; padding: 0; border: 0; background: transparent; color: #ffffff;
+}
+.lightbox::backdrop { background: rgb(0 0 0 / 0.82); }
+.lightbox-inner {
+  position: relative; width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center; padding: 24px 80px;
+}
+.lightbox figure { margin: 0; text-align: center; }
+.lightbox img {
+  display: block; margin: 0 auto;
+  max-width: min(1050px, 100%); max-height: calc(100vh - 110px); width: auto; height: auto;
+}
+.lightbox figcaption { margin-top: 10px; font-size: 1rem; }
+.lightbox-button {
+  position: absolute; width: 44px; height: 44px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  background: rgb(255 255 255 / 0.14); color: #ffffff; border: 0;
+}
+.lightbox-button:hover { background: rgb(255 255 255 / 0.26); }
+.lightbox-button svg { fill: currentColor; }
+.lightbox-close { top: 20px; right: 20px; }
+.lightbox-prev { left: 20px; top: 50%; transform: translateY(-50%); }
+.lightbox-next { right: 20px; top: 50%; transform: translateY(-50%); }
+.lightbox :focus-visible { outline-color: #ffffff; }
 
 .features {
   list-style: none; margin: 0; padding: 0;
@@ -164,11 +205,6 @@ h3 { font-size: 1.1rem; font-weight: 700; }
 .copy:hover { filter: brightness(0.96); }
 code { font-family: var(--mono); font-size: 0.92em; }
 .note { color: var(--muted); font-size: 0.92rem; max-width: 760px; margin: 24px auto 0; text-align: center; }
-
-/* What's new: the newest release's notes from the app store description */
-.release-version { font-weight: 700; color: var(--fg) !important; margin-top: 0 !important; }
-.release ul { color: var(--muted); padding-left: 1.3em; margin: 10px 0 0; }
-.release li + li { margin-top: 4px; }
 
 /* Footer */
 .footer { border-top: 1px solid var(--border); padding: 32px 0 40px; font-size: 0.92rem; color: var(--muted); }

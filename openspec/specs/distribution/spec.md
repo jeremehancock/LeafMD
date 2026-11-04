@@ -41,11 +41,12 @@ The storefront SHALL explain each way to install LeafMD: the Install button for 
 - **THEN** it shows `flatpak install https://leafmd.app/LeafMD.flatpakref` as text they can select and copy
 
 ### Requirement: Current version on the storefront
-The storefront SHALL show the version the repository offers and that release's notes, taken from the newest release in the app store description, so the site and the repository never disagree.
+The storefront SHALL show the version the repository offers, taken from the newest release in the app store description so the site and the repository never disagree, as a link to that version's release notes on GitHub.
 
 #### Scenario: After a release
 - **WHEN** 0.2.0 is released
-- **THEN** the storefront says "Version 0.2.0" with 0.2.0's release notes
+- **THEN** the storefront's hero says "Version 0.2.0"
+- **AND** clicking it opens `https://github.com/jeremehancock/LeafMD/releases/tag/v0.2.0`
 
 ### Requirement: Storefront look and behaviour
 The storefront SHALL follow the visitor's light or dark style, fit a 360-pixel-wide phone screen without sideways scrolling, and work fully with scripts turned off. It SHALL load nothing from other websites and SHALL use no tracking or cookies.
@@ -57,6 +58,18 @@ The storefront SHALL follow the visitor's light or dark style, fit a 360-pixel-w
 #### Scenario: Nothing from elsewhere
 - **WHEN** the page loads with the browser's network panel open
 - **THEN** every request goes to `leafmd.app`
+
+### Requirement: Larger screenshots
+On a screen at least 700 pixels wide, clicking one of the storefront's small screenshots SHALL show it full size over the page with its caption, previous and next buttons, and SHALL close with Esc, the close button or a click outside the picture. On a narrower screen, or with scripts turned off, clicking SHALL open the picture by itself.
+
+#### Scenario: Looking closer on a laptop
+- **WHEN** someone clicks the raw view screenshot on a 1280-pixel-wide window
+- **THEN** it opens full size over the page with "Edit markdown with the formatting bar" under it
+- **AND** the next button shows the next screenshot, and Esc closes the viewer
+
+#### Scenario: On a phone
+- **WHEN** someone taps the raw view screenshot on a 390-pixel-wide phone
+- **THEN** the browser opens `screenshots/raw.png` by itself, where it can be zoomed
 
 ### Requirement: Link previews
 The storefront SHALL give link previews a title, the summary and a screenshot, so posting `https://leafmd.app/` in a chat app shows a card for LeafMD.

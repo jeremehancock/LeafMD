@@ -7,7 +7,7 @@ and at the top of the README.
 | File | View | Style | Caption |
 |---|---|---|---|
 | `formatted.png` | Formatted (Ctrl+1) | Light | Read your document cleanly formatted |
-| `raw.png` | Raw (Ctrl+2) | Light | Edit the raw markdown with the formatting bar |
+| `raw.png` | Raw (Ctrl+2) | Light | Edit markdown with the formatting bar |
 | `split.png` | Split (Ctrl+3) | Light | Watch your changes appear side by side as you type |
 | `split-dark.png` | Split (Ctrl+3) | Dark | Follows your system's dark style |
 
