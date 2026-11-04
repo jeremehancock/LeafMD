@@ -49,6 +49,9 @@ cargo run -- path/to/file.md
 | `src/render.rs` | Turns markdown into HTML (comrak), then removes anything unsafe (ammonia) |
 | `src/preview.html` | The page the formatted view is drawn into, including its light and dark styles |
 | `src/state.rs` | Remembers the last view and window size in `~/.config/leafmd/state.ini` |
+| `data/*.desktop` | The app menu entry: name, icon, and the file types LeafMD opens |
+| `data/*.metainfo.xml` | The description, license and release notes shown in software centers |
+| `data/icons/` | The app icon, plus a one-colour version GNOME uses in some places |
 
 ### Safety in the formatted view
 
@@ -65,6 +68,9 @@ Markdown files can contain raw HTML, including scripts. LeafMD protects against 
 ## Planned
 
 - Flatpak packaging
-- App icon and desktop entry (so it appears in the app menu and can be the default for `.md` files)
 - Click a paragraph in the formatted view to jump to that line in the raw text
 - Synced scrolling in split view
+
+## License
+
+GPL-3.0-or-later. See [LICENSE](LICENSE).

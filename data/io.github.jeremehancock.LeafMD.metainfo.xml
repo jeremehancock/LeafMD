@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.jeremehancock.LeafMD</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+
+  <name>LeafMD</name>
+  <summary>Read and edit markdown your way</summary>
+  <developer id="io.github.jeremehancock">
+    <name>Jereme Hancock</name>
+  </developer>
+
+  <description>
+    <p>
+      LeafMD is a markdown viewer that lets you choose how you see a document:
+      nicely formatted, as raw text, or both side by side.
+    </p>
+    <ul>
+      <li>Switch between formatted, raw and split views with one click or Ctrl+1, 2 and 3</li>
+      <li>Files open read-only, so nothing changes by accident</li>
+      <li>Turn on editing when you want it, with the formatted view updating as you type</li>
+      <li>Supports tables, task lists, footnotes and other GitHub-style markdown</li>
+      <li>Follows your system's light or dark style</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">io.github.jeremehancock.LeafMD.desktop</launchable>
+  <provides>
+    <binary>leafmd</binary>
+  </provides>
+
+  <url type="homepage">https://github.com/jeremehancock/LeafMD</url>
+  <url type="bugtracker">https://github.com/jeremehancock/LeafMD/issues</url>
+  <url type="vcs-browser">https://github.com/jeremehancock/LeafMD</url>
+
+  <categories>
+    <category>Utility</category>
+    <category>TextEditor</category>
+  </categories>
+  <keywords>
+    <keyword>markdown</keyword>
+    <keyword>viewer</keyword>
+    <keyword>editor</keyword>
+  </keywords>
+
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+  </supports>
+  <requires>
+    <display_length compare="ge">360</display_length>
+  </requires>
+
+  <content_rating type="oars-1.1"/>
+
+  <releases>
+    <release version="0.1.0" date="2026-11-03">
+      <description>
+        <p>First release.</p>
+      </description>
+    </release>
+  </releases>
+</component>

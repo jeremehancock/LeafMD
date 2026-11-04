@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=LeafMD
+GenericName=Markdown Viewer
+Comment=View markdown as formatted text, raw text or side by side, and edit when you want to
+Icon=io.github.jeremehancock.LeafMD
+Exec=leafmd %U
+Terminal=false
+Categories=Utility;TextEditor;
+MimeType=text/markdown;text/x-markdown;
+Keywords=markdown;md;viewer;editor;notes;readme;
+StartupNotify=true

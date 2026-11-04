@@ -2,6 +2,8 @@
 name = "leafmd"
 version = "0.1.0"
 edition = "2024"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/jeremehancock/LeafMD"
 description = "A markdown viewer that switches between formatted, raw and split views, with editing when you want it"
 
 [dependencies]

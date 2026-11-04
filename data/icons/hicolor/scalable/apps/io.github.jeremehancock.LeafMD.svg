@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="page" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e8e6e3"/>
+    </linearGradient>
+    <linearGradient id="leaf" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#1f8f5a"/>
+      <stop offset="1" stop-color="#57e389"/>
+    </linearGradient>
+  </defs>
+  <!-- soft shadow under the page -->
+  <path d="M30 18h50l28 28v66a10 10 0 0 1-10 10H30a10 10 0 0 1-10-10V28a10 10 0 0 1 10-10z" fill="#000" opacity=".18"/>
+  <!-- the page, with its top-right corner folded -->
+  <path d="M30 12h50l28 28v68a10 10 0 0 1-10 10H30a10 10 0 0 1-10-10V22a10 10 0 0 1 10-10z" fill="url(#page)"/>
+  <path d="M80 12v20a8 8 0 0 0 8 8h20z" fill="#c0bfbc"/>
+  <!-- markdown text: a heading mark and lines -->
+  <path d="M36 30h4M36 36h4M38 27v12M42 27v12" stroke="#5e5c64" stroke-width="2.4" stroke-linecap="round"/>
+  <rect x="48" y="29" width="22" height="6" rx="3" fill="#5e5c64"/>
+  <rect x="36" y="46" width="56" height="4" rx="2" fill="#c0bfbc"/>
+  <rect x="36" y="56" width="44" height="4" rx="2" fill="#c0bfbc"/>
+  <!-- the leaf -->
+  <path d="M38 106C38 78 58 64 92 64c0 28-20 42-54 42z" fill="url(#leaf)"/>
+  <path d="M42 102c12-12 26-22 44-32" fill="none" stroke="#14653f" stroke-width="3" stroke-linecap="round"/>
+</svg>

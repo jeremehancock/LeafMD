@@ -789,6 +789,7 @@ impl Window {
     fn show_about(&self) {
         adw::AboutDialog::builder()
             .application_name("LeafMD")
+            .application_icon(crate::APP_ID)
             .version(env!("CARGO_PKG_VERSION"))
             .comments(env!("CARGO_PKG_DESCRIPTION"))
             .build()
