@@ -51,6 +51,15 @@ Rules that hold even outside `/ship`:
   file (same number, checked by `build-aux/release-info.py`). A `<release>`
   marked `type="development"` is unreleased; GitHub publishes a release when
   a merge into `main` carries one without that mark whose tag doesn't exist.
+- A release also publishes leafmd.app (GitHub Pages): the storefront from
+  `site/`, and the Flatpak repository installed copies update from, signed
+  with LeafMD's key (the `LEAFMD_GPG_PRIVATE_KEY` secret; the public half is
+  `build-aux/leafmd-signing-key.gpg`). Never print, copy or move that
+  private key. `./build-aux/flatpak-repo-preview.sh` builds the same thing
+  locally with a throwaway key, for trying before a release.
+- LeafMD isn't on Flathub, but it keeps to Flathub's rules:
+  `build-aux/flathub-lint.sh` must pass. Don't add exceptions to
+  `build-aux/flathub-lint-exceptions.json` without asking.
 
 ## Trying a change
 
@@ -69,6 +78,9 @@ GNOME SDK.
 - Help (`show_help` in src/window.rs) and Keyboard Shortcuts (`show_shortcuts`)
 - README.md (features, shortcuts table, file table)
 - The app store description in `data/io.github.jeremehancock.LeafMD.metainfo.xml`
+- The storefront at leafmd.app (`site/index.html`)
+- The screenshots (`data/screenshots/`), if it changes how a window looks.
+  Only the owner can take them; `data/screenshots/README.md` has the steps
 - The matching spec in `openspec/specs/`
 
 ## Conventions

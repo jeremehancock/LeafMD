@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Only files from this site may load: no outside fonts, scripts or trackers -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'none'">
+<title>LeafMD: read and edit markdown your way</title>
+<meta name="description" content="LeafMD is a simple, fast markdown viewer and editor for Linux. Read a document cleanly formatted, edit the raw text, or see both side by side.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#fafafb" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222226" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+<!-- The preview card chat apps and social sites show when the link is shared -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="LeafMD">
+<meta property="og:title" content="LeafMD">
+<meta property="og:description" content="Read and edit markdown your way">
+<meta property="og:url" content="{{base_url}}">
+<meta property="og:image" content="{{base_url}}screenshots/split.png">
+<meta property="og:image:width" content="1050">
+<meta property="og:image:height" content="750">
+<meta property="og:image:alt" content="LeafMD showing a markdown document as raw text and formatted, side by side">
+<meta name="twitter:card" content="summary_large_image">
+<script src="copy.js" defer></script>
+</head>
+<body>
+
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="topbar">
+  <nav class="wrap topbar-inner" aria-label="Main">
+    <a class="brand" href="#top">
+      <img src="icon.svg" alt="" width="32" height="32">
+      <span>LeafMD</span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#install">Install</a></li>
+      <li><a href="https://github.com/jeremehancock/LeafMD">GitHub</a></li>
+    </ul>
+  </nav>
+</header>
+
+<main id="main">
+
+  <section class="hero" id="top">
+    <div class="wrap hero-inner">
+      <img class="hero-icon" src="icon.svg" alt="" width="128" height="128">
+      <h1>LeafMD</h1>
+      <p class="tagline">Read and edit markdown your way</p>
+      <p class="lede">A simple, fast markdown viewer and editor for Linux. Read a document cleanly formatted, work in the raw text, or see both side by side and watch your changes appear as you type.</p>
+      <div class="actions">
+        <a class="button primary" href="LeafMD.flatpakref">
+          <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16"><path d="M7 1h2v7.6l2.3-2.3 1.4 1.4L8 12.4 3.3 7.7l1.4-1.4L7 8.6zM2 13h12v2H2z"/></svg>
+          Install
+        </a>
+        <a class="button" href="#install">Other ways to install</a>
+      </div>
+      <p class="hint">Install downloads a small file. Open it, and your app store installs LeafMD.</p>
+      <p class="facts">Free and open source <span aria-hidden="true">·</span> Version {{version}} <span aria-hidden="true">·</span> For Linux, with Flatpak</p>
+    </div>
+
+    <figure class="wrap showcase">
+      <picture>
+        <source srcset="screenshots/split-dark.png" media="(prefers-color-scheme: dark)">
+        <img src="screenshots/split.png" width="1050" height="750"
+             alt="LeafMD in split view: the raw markdown of a community garden plan on the left, and the same plan formatted on the right">
+      </picture>
+    </figure>
+  </section>
+
+  <section class="section" aria-labelledby="views-title">
+    <div class="wrap">
+      <h2 id="views-title">Three ways to look at a document</h2>
+      <p class="section-lede">Switch with one click in the header bar, or Ctrl+1, 2 and 3.</p>
+      <div class="gallery">
+        <figure>
+          <img src="screenshots/formatted.png" width="1050" height="750" loading="lazy"
+               alt="The formatted view: a community garden plan with headings, a checklist and a budget table">
+          <figcaption>Read your document cleanly formatted</figcaption>
+        </figure>
+        <figure>
+          <img src="screenshots/raw.png" width="1050" height="750" loading="lazy"
+               alt="The raw view: the same plan as markdown text, with line numbers and the formatting bar above it">
+          <figcaption>Edit the raw markdown with the formatting bar</figcaption>
+        </figure>
+        <figure>
+          <!-- Shows the style the visitor isn't using, since the big picture above shows theirs -->
+          <picture>
+            <source srcset="screenshots/split.png" media="(prefers-color-scheme: dark)">
+            <img src="screenshots/split-dark.png" width="1050" height="750" loading="lazy"
+                 alt="Split view in the other style, showing LeafMD follows the system's light or dark setting">
+          </picture>
+          <figcaption>Follows your system's light or dark style</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="features" aria-labelledby="features-title">
+    <div class="wrap">
+      <h2 id="features-title">The essentials, done well</h2>
+      <p class="section-lede">No plugins to manage, panels to arrange or settings to tune. Just a dependable app that feels obvious from the moment you open it.</p>
+      <ul class="features">
+        <li>
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 4h18v16H3zm2 2v12h6V6zm8 0v12h6V6z"/></svg>
+          <h3>Three views</h3>
+          <p>Formatted for reading, raw for writing, or both side by side. A formatted-only view keeps reading distraction free.</p>
+        </li>
+        <li>
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>
+          <h3>Live preview</h3>
+          <p>The formatted side updates as you type, and both sides scroll together so you never lose your place.</p>
+        </li>
+        <li>
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 3h7a5 5 0 0 1 3.6 8.4A5 5 0 0 1 13 21H5zm3 3v4h4a2 2 0 0 0 0-4zm0 7v5h5a2.5 2.5 0 0 0 0-5z"/></svg>
+          <h3>A formatting bar</h3>
+          <p>Bold, links, lists, headings, tables and more, added for you. A built-in cheatsheet shows the common syntax at a glance.</p>
+        </li>
+        <li>
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 5h3v3H4zm5 0.5h11v2H9zM4 10.5h3v3H4zm5 .5h11v2H9zM4 16h3v3H4zm5 .5h7v2H9z"/></svg>
+          <h3>Smart typing</h3>
+          <p>Lists carry on when you press Enter. Paste a web address over some text and it becomes a link.</p>
+        </li>
+        <li>
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M10 3a7 7 0 0 1 5.6 11.2l5.6 5.6-1.4 1.4-5.6-5.6A7 7 0 1 1 10 3zm0 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10z"/></svg>
+          <h3>Find and replace</h3>
+          <p>Search the raw text or the formatted document, with a count of every match. Replace one, or all of them at once.</p>
+        </li>
+        <li>
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 4h18v16H3zm2 2v3h4V6zm6 0v3h8V6zM5 11v3h4v-3zm6 0v3h8v-3zM5 16v2h4v-2zm6 0v2h8v-2z"/></svg>
+          <h3>GitHub-style markdown</h3>
+          <p>Tables, checklists, footnotes and strikethrough all work. Scripts inside a document never run.</p>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="install" aria-labelledby="install-title">
+    <div class="wrap">
+      <h2 id="install-title">Install LeafMD</h2>
+      <p class="section-lede">Once it's installed, updates arrive through your app store, like any other app.</p>
+      <div class="install">
+        <article class="card">
+          <h3>With your app store</h3>
+          <p>Click Install, then open the small file it downloads. GNOME Software, KDE Discover or another app store that supports Flatpak shows LeafMD, ready to install. If nothing opens it, use the terminal command instead.</p>
+          <a class="button primary" href="LeafMD.flatpakref">Install</a>
+        </article>
+        <article class="card">
+          <h3>From a terminal</h3>
+          <p>One command installs LeafMD and keeps it updated:</p>
+          <div class="command">
+            <code id="install-command">flatpak install <wbr>{{base_url}}<wbr>LeafMD.flatpakref</code>
+            <button type="button" class="copy" data-copy="install-command" hidden>Copy</button>
+          </div>
+        </article>
+        <article class="card">
+          <h3>As a file</h3>
+          <p>Every version is also a <code>.flatpak</code> file on GitHub. Open it with your app store, and it updates from here afterwards.</p>
+          <a class="button" href="https://github.com/jeremehancock/LeafMD/releases/latest">Download from GitHub</a>
+        </article>
+      </div>
+      <p class="note">LeafMD needs a Linux computer with <a href="https://flatpak.org/setup/">Flatpak</a> set up, on a 64-bit Intel or AMD processor (x86_64). The GNOME parts it needs come from Flathub, which is added for you if it isn't already. Everything LeafMD installs is signed, so updates can only come from its developer.</p>
+    </div>
+  </section>
+
+  <section class="section" id="whats-new" aria-labelledby="new-title">
+    <div class="wrap narrow">
+      <h2 id="new-title">What's new</h2>
+      <article class="card release">
+        <p class="release-version">Version {{version}} <span aria-hidden="true">·</span> <time datetime="{{release_date_iso}}">{{release_date}}</time></p>
+        {{release_notes}}
+        <p><a href="https://github.com/jeremehancock/LeafMD/releases">Every release</a></p>
+      </article>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap footer-inner">
+    <div class="footer-brand">
+      <img src="icon.svg" alt="" width="40" height="40">
+      <div>
+        <p><strong>LeafMD</strong> is free software, made by <a href="https://jeremehancock.com">Jereme Hancock</a>.</p>
+        <p>This project was created with the help of AI.</p>
+      </div>
+    </div>
+    <ul class="footer-links">
+      <li><a href="https://github.com/jeremehancock/LeafMD">Source code</a></li>
+      <li><a href="https://github.com/jeremehancock/LeafMD/issues">Report a problem</a></li>
+      <li><a href="https://github.com/jeremehancock/LeafMD/blob/main/LICENSE">License: GPL 3.0</a></li>
+    </ul>
+    <p class="privacy">This site uses no cookies and no tracking.</p>
+  </div>
+</footer>
+
+</body>
+</html>

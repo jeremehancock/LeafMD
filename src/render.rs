@@ -14,6 +14,9 @@ pub fn markdown_to_safe_html(markdown: &str) -> String {
     options.extension.table = true;
     options.extension.autolink = true;
     options.extension.tasklist = true;
+    // Marks checklist items with class="task-list-item", so the formatted
+    // view can show just the checkbox on them instead of a bullet as well
+    options.render.tasklist_classes = true;
     options.extension.footnotes = true;
     // Gives each heading an id so links like [see below](#install) work
     options.extension.header_id_prefix = Some(String::new());
@@ -71,5 +74,13 @@ mod tests {
         let html = markdown_to_safe_html("- [x] done\n- [ ] todo\n\n| a | b |\n|---|---|\n| 1 | 2 |");
         assert!(html.contains("type=\"checkbox\""));
         assert!(html.contains("<table"));
+    }
+
+    #[test]
+    fn marks_checklist_items_but_not_plain_ones() {
+        // The class survives cleaning, and only the checklist line gets it
+        let html = markdown_to_safe_html("- [ ] todo\n- plain");
+        assert!(html.contains("<li class=\"task-list-item\""));
+        assert_eq!(html.matches("task-list-item\"").count(), 1);
     }
 }

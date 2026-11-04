@@ -45,6 +45,10 @@
   img { max-width: 100%; }
   hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
   li > input[type="checkbox"] { margin: 0 0.4em 0 0; }
+  /* Checklist lines show only the checkbox, sitting where the bullet would
+     be, like GitHub. Plain items in the same list keep their bullet. */
+  li.task-list-item { list-style: none; }
+  li.task-list-item > input[type="checkbox"] { margin: 0 0.4em 0 -1.4em; vertical-align: middle; }
   .footnotes { font-size: 0.9em; color: var(--muted); }
   /* Find: every match, and the selected one stronger */
   ::highlight(leafmd-find) { background-color: #f8e45c; color: #1e1e1e; }

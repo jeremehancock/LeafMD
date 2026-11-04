@@ -35,12 +35,33 @@
     </ul>
   </description>
 
+  <!-- Taken as described in data/screenshots/README.md, and served from
+       leafmd.app, which the GitHub build publishes with each release -->
+  <screenshots>
+    <screenshot type="default">
+      <image>https://leafmd.app/screenshots/formatted.png</image>
+      <caption>Read your document cleanly formatted</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://leafmd.app/screenshots/raw.png</image>
+      <caption>Edit the raw markdown with the formatting bar</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://leafmd.app/screenshots/split.png</image>
+      <caption>Watch your changes appear side by side as you type</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://leafmd.app/screenshots/split-dark.png</image>
+      <caption>Follows your system's dark style</caption>
+    </screenshot>
+  </screenshots>
+
   <launchable type="desktop-id">io.github.jeremehancock.LeafMD.desktop</launchable>
   <provides>
     <binary>leafmd</binary>
   </provides>
 
-  <url type="homepage">https://github.com/jeremehancock/LeafMD</url>
+  <url type="homepage">https://leafmd.app/</url>
   <url type="bugtracker">https://github.com/jeremehancock/LeafMD/issues</url>
   <url type="vcs-browser">https://github.com/jeremehancock/LeafMD</url>
 
@@ -61,6 +82,13 @@
   <requires>
     <display_length compare="ge">360</display_length>
   </requires>
+
+  <!-- The banner colour app stores show behind the icon: a teal that sits
+       beside the leaf's green without blending into it -->
+  <branding>
+    <color type="primary" scheme_preference="light">#62c4b0</color>
+    <color type="primary" scheme_preference="dark">#1f4e46</color>
+  </branding>
 
   <content_rating type="oars-1.1"/>
 
