@@ -93,12 +93,15 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
-    <release version="0.1.0" date="2026-11-03" type="development">
+    <release version="0.1.0" date="2026-11-04">
       <description>
-        <p>First release.</p>
+        <p>The first release of LeafMD, a simple markdown viewer and editor.</p>
         <ul>
-          <li>Lists continue when you press Enter: the next bullet, number or unticked checkbox is added for you, and Enter on an empty item ends the list</li>
-          <li>Select some text and paste a web address over it to turn it into a link</li>
+          <li>Read a document formatted, edit the raw text, or see both side by side as you type</li>
+          <li>A formatting bar and a built-in cheatsheet for bold, links, lists, headings, tables and more</li>
+          <li>Lists continue when you press Enter, and pasting a web address over text makes a link</li>
+          <li>Find and replace, in the raw text or the formatted document</li>
+          <li>Install from leafmd.app, and get updates through your app store</li>
         </ul>
       </description>
     </release>
