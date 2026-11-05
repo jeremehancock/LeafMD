@@ -52,7 +52,8 @@ The raw text can always be edited in Raw and Split view, and changes are only wr
 - In split view, **double-click** a word on the formatted side to select that same word in the raw text. Its line lights up briefly so you can spot it.
 - **Links** to websites open in your browser. Links to other markdown or text files (like `LICENSE`) open them in a new LeafMD window, scrolled to the heading if the link names one.
 - **Find and replace** (Ctrl+F, Ctrl+H, the magnifying glass button, or the main menu): highlights every match with a count like "3 of 12". It searches the raw text in Raw and Split view, and the formatted text in Formatted view. Replace one match or all of them, and undo Replace All with one Ctrl+Z. Options: match case, and whole words only.
-- **Recent files:** the arrow next to **Open** lists the files you opened recently, and LeafMD reopens your last file when you start it.
+- **Recent files:** the arrow next to **Open** lists the files you opened recently, and LeafMD reopens your last file when you start it. **Clear Recent Files** empties the list and forgets the last file too.
+- **Close Document** (in the main menu) closes the file but keeps the window open, and LeafMD starts with no document next time.
 - **Help** (F1) explains all of this inside the app, and **Keyboard Shortcuts** (Ctrl+?) lists every shortcut.
 
 ## Keyboard shortcuts
@@ -64,7 +65,7 @@ The raw text can always be edited in Raw and Split view, and changes are only wr
 | Ctrl+O | Open |
 | Ctrl+S | Save |
 | Ctrl+Shift+S | Save as |
-| Ctrl+W or Ctrl+Q | Close (asks first if there are unsaved changes) |
+| Ctrl+W or Ctrl+Q | Close window (asks first if there are unsaved changes) |
 | Ctrl+B / Ctrl+I | Bold / italic |
 | Ctrl+Shift+X | Strikethrough |
 | Ctrl+E | Inline code |

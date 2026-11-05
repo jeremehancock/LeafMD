@@ -47,7 +47,8 @@ Rather than trying to do everything, LeafMD focuses on doing the essentials well
 LeafMD was created with the help of AI.";
 
 /// Actions that only make sense while a document is open.
-const DOCUMENT_ACTIONS: [&str; 7] = [
+const DOCUMENT_ACTIONS: [&str; 8] = [
+    "close-document",
     "save",
     "save-as",
     "view",
@@ -137,9 +138,11 @@ impl Window {
                 .menu_model(&recent_menu)
                 .build(),
         );
+        // LeafMD's own floppy disk icon, because the Adwaita theme LeafMD uses
+        // (see main.rs) draws Save as a downward arrow.
         header.pack_start(
             &gtk::Button::builder()
-                .icon_name("document-save-symbolic")
+                .icon_name("leafmd-save-symbolic")
                 .tooltip_text("Save (Ctrl+S)")
                 .action_name("win.save")
                 .build(),
@@ -150,6 +153,7 @@ impl Window {
         let file_section = gio::Menu::new();
         file_section.append(Some("New"), Some("win.new"));
         file_section.append(Some("Open…"), Some("win.open"));
+        file_section.append(Some("Close Document"), Some("win.close-document"));
         let save_section = gio::Menu::new();
         save_section.append(Some("Save"), Some("win.save"));
         save_section.append(Some("Save As…"), Some("win.save-as"));
@@ -347,6 +351,7 @@ impl Window {
         };
         add("new", |win| win.ask_new());
         add("open", |win| win.ask_open());
+        add("close-document", |win| win.ask_close_document());
         add("clear-recent", |win| win.clear_recent());
 
         // Opening a recent file: the menu item carries the file's address
@@ -574,7 +579,12 @@ impl Window {
             // Each window records its file as it closes, so the window closed
             // last decides what opens next time. A window with no saved file
             // (start page or a new, never-saved document) leaves it unchanged.
-            if let Some(uri) = win.file_uri() {
+            // So does a file that isn't on the recent list: after Clear Recent
+            // Files, closing a file that's still open shouldn't bring it back.
+            // This reads the saved list because another window may have cleared it.
+            if let Some(uri) = win.file_uri()
+                && state::load_recent().contains(&uri)
+            {
                 state::save_last_file(&uri);
             }
             glib::Propagation::Proceed
@@ -1575,6 +1585,23 @@ impl Window {
         });
     }
 
+    /// Closes the document but keeps the window, going back to the
+    /// "No Document Open" page. LeafMD starts on that page next time too.
+    fn ask_close_document(self: &Rc<Self>) {
+        self.confirm_discard(|win| {
+            win.find.bar.set_search_mode(false);
+            win.set_text("");
+            win.reveal_pending.set(false);
+            win.stack.set_visible_child_name("empty");
+            // After switching page, so the title goes back to "LeafMD"
+            win.set_file(None);
+            win.set_document_actions_enabled(false);
+            // The closed file was left out of the list while open; show it again
+            win.update_recent_menu();
+            state::forget_last_file();
+        });
+    }
+
     fn ask_open(self: &Rc<Self>) {
         self.confirm_discard(|win| {
             let win = win.clone();
@@ -1654,10 +1681,8 @@ impl Window {
     /// Opens the file LeafMD had open last time, if it's still there.
     /// If it has been moved or deleted, the normal start page shows instead.
     pub fn open_last_file(self: &Rc<Self>) {
-        // The file in the window closed last; if that was never saved (say
-        // LeafMD didn't close normally), fall back to the newest recent file
-        let last = state::load_last_file().or_else(|| self.recent.borrow().first().cloned());
-        let Some(uri) = last else {
+        let last = state::load_last_file();
+        let Some(uri) = state::file_to_reopen(last.as_deref(), &self.recent.borrow()) else {
             return;
         };
         let file = gio::File::for_uri(&uri);
@@ -1709,6 +1734,7 @@ impl Window {
     fn clear_recent(&self) {
         self.recent.borrow_mut().clear();
         state::save_recent(&[]);
+        state::forget_last_file();
         self.update_recent_menu();
     }
 
@@ -1744,15 +1770,16 @@ impl Window {
             item.set_action_and_target_value(Some("win.open-recent"), Some(&uri.to_variant()));
             files.append_item(&item);
         }
-        let has_files = files.n_items() > 0;
-        if !has_files {
+        if files.n_items() == 0 {
             // No action, so it shows greyed out
             files.append(Some("No Recent Files"), None);
         }
 
         self.recent_menu.remove_all();
         self.recent_menu.append_section(Some("Recent Files"), &files);
-        if has_files {
+        // Going by the saved list, not what's showing: the open file and missing
+        // files aren't shown, but there's still something to clear
+        if !self.recent.borrow().is_empty() {
             let clear = gio::Menu::new();
             clear.append(Some("Clear Recent Files"), Some("win.clear-recent"));
             self.recent_menu.append_section(None, &clear);
@@ -1764,7 +1791,15 @@ impl Window {
     async fn save(self: &Rc<Self>) -> bool {
         let file = self.file.borrow().clone();
         match file {
-            Some(file) => self.write_to(&file).await,
+            Some(file) => {
+                let saved = self.write_to(&file).await;
+                // Saving counts as recent use, and puts the file back on the
+                // list if Clear Recent Files emptied it while the file was open
+                if saved {
+                    self.remember_recent(&file);
+                }
+                saved
+            }
             None => self.save_as().await,
         }
     }
@@ -1996,7 +2031,8 @@ impl Window {
                 "Files and Links",
                 &[
                     ("Opening files", "Use Open, drop a file onto the window, or double-click a markdown file in your file manager."),
-                    ("Recent files", "The arrow next to Open lists the files you opened recently. When you start LeafMD, it reopens the last file you had open."),
+                    ("Recent files", "The arrow next to Open lists the files you opened recently. When you start LeafMD, it reopens the last file you had open. Clear Recent Files empties the list, and LeafMD then forgets the last file too."),
+                    ("Closing a document", "Close Document in the main menu closes the file but keeps the window open, and LeafMD starts with no document next time. Closing the window instead (Ctrl+W) brings the file back next time."),
                     ("Links", "Web links open in your browser. Links to other markdown or text files open them in a new LeafMD window, and links to headings scroll to them."),
                     ("Images", "Images next to the file and images online are shown in the formatted view."),
                 ],
@@ -2029,64 +2065,83 @@ impl Window {
 
     /// Lists every keyboard shortcut.
     fn show_shortcuts(&self) {
-        let dialog = adw::ShortcutsDialog::new();
+        // Built like Help rather than with adw::ShortcutsDialog, which always
+        // has a search box. Keep the keys in step with set_shortcuts in main.rs.
+        let page = adw::PreferencesPage::new();
         let sections: [(&str, &[(&str, &str)]); 5] = [
             (
                 "Views",
                 &[
-                    ("Formatted view", "<Control>1"),
-                    ("Raw text", "<Control>2"),
-                    ("Split view", "<Control>3"),
+                    ("Formatted view", "Ctrl+1"),
+                    ("Raw text", "Ctrl+2"),
+                    ("Split view", "Ctrl+3"),
                 ],
             ),
             (
                 "Files",
                 &[
-                    ("New document", "<Control>n"),
-                    ("Open", "<Control>o"),
-                    ("Save", "<Control>s"),
-                    ("Save as", "<Control><Shift>s"),
-                    ("Close", "<Control>w"),
+                    ("New document", "Ctrl+N"),
+                    ("Open", "Ctrl+O"),
+                    ("Save", "Ctrl+S"),
+                    ("Save as", "Ctrl+Shift+S"),
+                    ("Close window", "Ctrl+W or Ctrl+Q"),
                 ],
             ),
             (
                 "Formatting",
                 &[
-                    ("Bold", "<Control>b"),
-                    ("Italic", "<Control>i"),
-                    ("Strikethrough", "<Control><Shift>x"),
-                    ("Inline code", "<Control>e"),
-                    ("Link", "<Control>k"),
-                    ("New line without a list marker", "<Shift>Return"),
+                    ("Bold", "Ctrl+B"),
+                    ("Italic", "Ctrl+I"),
+                    ("Strikethrough", "Ctrl+Shift+X"),
+                    ("Inline code", "Ctrl+E"),
+                    ("Link", "Ctrl+K"),
+                    ("New line without a list marker", "Shift+Enter"),
                 ],
             ),
             (
                 "Find",
                 &[
-                    ("Find", "<Control>f"),
-                    ("Find and replace", "<Control>h"),
+                    ("Find", "Ctrl+F"),
+                    ("Find and replace", "Ctrl+H"),
                     ("Next match", "F3"),
-                    ("Previous match", "<Shift>F3"),
-                    ("Close the find bar", "Escape"),
+                    ("Previous match", "Shift+F3"),
+                    ("Close the find bar", "Esc"),
                 ],
             ),
             (
                 "Help",
                 &[
                     ("Help", "F1"),
-                    ("Markdown cheatsheet", "<Shift>F1"),
-                    ("Keyboard shortcuts", "<Control>question"),
+                    ("Markdown cheatsheet", "Shift+F1"),
+                    ("Keyboard shortcuts", "Ctrl+?"),
                 ],
             ),
         ];
         for (title, items) in sections {
-            let section = adw::ShortcutsSection::new(Some(title));
+            let group = adw::PreferencesGroup::builder().title(title).build();
             for (name, keys) in items {
-                section.add(adw::ShortcutsItem::new(name, keys));
+                let row = adw::ActionRow::builder().title(*name).build();
+                row.add_suffix(
+                    &gtk::Label::builder()
+                        .label(*keys)
+                        .css_classes(["dim-label"])
+                        .build(),
+                );
+                group.add(&row);
             }
-            dialog.add(section);
+            page.add(&group);
         }
-        dialog.present(Some(&self.window));
+
+        let content = adw::ToolbarView::new();
+        content.add_top_bar(&adw::HeaderBar::new());
+        content.set_content(Some(&page));
+        adw::Dialog::builder()
+            .title("Keyboard Shortcuts")
+            .content_width(520)
+            .content_height(640)
+            .child(&content)
+            .build()
+            .present(Some(&self.window));
     }
 
     /// The most common markdown, with what each one looks like.

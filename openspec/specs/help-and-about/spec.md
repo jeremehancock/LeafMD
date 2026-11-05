@@ -6,7 +6,7 @@ The built-in help: the Help window, the list of keyboard shortcuts, the markdown
 ## Requirements
 
 ### Requirement: Main menu
-The main menu (the button at the right of the header bar) SHALL contain, in sections: New and Open…; Save and Save As…; Find… and Find and Replace…; Help, Markdown Cheatsheet, Keyboard Shortcuts and About LeafMD. Each item SHALL show its keyboard shortcut.
+The main menu (the button at the right of the header bar) SHALL contain, in sections: New, Open… and Close Document; Save and Save As…; Find… and Find and Replace…; Help, Markdown Cheatsheet, Keyboard Shortcuts and About LeafMD. Each item with a keyboard shortcut SHALL show it.
 
 #### Scenario: Opening the menu
 - **WHEN** the user clicks the main menu button
@@ -20,11 +20,19 @@ Help (F1) SHALL open a window explaining, in plain language, the three views, ed
 - **THEN** the Help window opens over the document
 
 ### Requirement: Keyboard shortcuts window
-Keyboard Shortcuts (Ctrl+?) SHALL list every keyboard shortcut, grouped into Views, Files, Formatting, Find and Help.
+Keyboard Shortcuts (Ctrl+?) SHALL list every keyboard shortcut, grouped into Views, Files, Formatting, Find and Help, with no search box, in the same style as the Help window.
 
 #### Scenario: A new shortcut is added
 - **WHEN** a feature adds a keyboard shortcut
 - **THEN** it also appears in this window
+
+#### Scenario: Opening the window
+- **WHEN** the user presses Ctrl+?
+- **THEN** the list starts directly under the title bar with no search box, and each row shows its keys as text, like "Ctrl+1" beside "Formatted view"
+
+#### Scenario: Closing keys
+- **WHEN** the user looks under Files
+- **THEN** "Close window" shows "Ctrl+W or Ctrl+Q"
 
 ### Requirement: Markdown cheatsheet
 The Markdown Cheatsheet (Shift+F1, the Cheatsheet button on the formatting bar, or the main menu) SHALL show the most common markdown next to what it looks like, in six sections: Text, Headings, Lists, Links and Images, Blocks, and Paragraphs and More.

@@ -135,6 +135,7 @@ pub fn save_recent(uris: &[String]) {
 /// The file in the LeafMD window that was closed last, which is the one to
 /// reopen next time. (Not simply the newest recent file: open README, click a
 /// link to LICENSE, close LICENSE and then README, and README should come back.)
+/// An empty value means there's nothing to reopen; see `file_to_reopen`.
 pub fn load_last_file() -> Option<String> {
     let file = glib::KeyFile::new();
     file.load_from_file(state_path(), glib::KeyFileFlags::NONE)
@@ -142,11 +143,29 @@ pub fn load_last_file() -> Option<String> {
     file.string(RECENT_GROUP, "last")
         .ok()
         .map(|uri| uri.to_string())
-        .filter(|uri| !uri.is_empty())
 }
 
 pub fn save_last_file(uri: &str) {
     update_state_file(|file| file.set_string(RECENT_GROUP, "last", uri));
+}
+
+/// Makes the next start show the "No Document Open" page, by saving an empty
+/// last file. Used by Close Document and Clear Recent Files.
+pub fn forget_last_file() {
+    save_last_file("");
+}
+
+/// Picks the file to open when LeafMD starts, from the saved last file and the
+/// recent list. There are three cases:
+/// - nothing saved (say LeafMD didn't close normally): the newest recent file
+/// - an empty value (the user closed the document or cleared the list): no file
+/// - a file: that file
+pub fn file_to_reopen(saved_last: Option<&str>, recent: &[String]) -> Option<String> {
+    match saved_last {
+        None => recent.first().cloned(),
+        Some("") => None,
+        Some(uri) => Some(uri.to_string()),
+    }
 }
 
 /// Reads the state file, lets `change` edit it, and writes it back, so saving
@@ -162,5 +181,33 @@ fn update_state_file(change: impl FnOnce(&glib::KeyFile)) {
     }
     if let Err(err) = file.save_to_file(&path) {
         eprintln!("LeafMD: could not save settings: {err}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::file_to_reopen;
+
+    fn recent() -> Vec<String> {
+        vec!["file:///newest.md".to_string(), "file:///older.md".to_string()]
+    }
+
+    #[test]
+    fn nothing_saved_uses_the_newest_recent_file() {
+        assert_eq!(file_to_reopen(None, &recent()).as_deref(), Some("file:///newest.md"));
+        assert_eq!(file_to_reopen(None, &[]), None);
+    }
+
+    #[test]
+    fn a_saved_file_wins_over_the_recent_list() {
+        assert_eq!(
+            file_to_reopen(Some("file:///older.md"), &recent()).as_deref(),
+            Some("file:///older.md")
+        );
+    }
+
+    #[test]
+    fn an_empty_value_opens_nothing_even_with_recent_files() {
+        assert_eq!(file_to_reopen(Some(""), &recent()), None);
     }
 }

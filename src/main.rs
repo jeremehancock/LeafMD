@@ -18,6 +18,17 @@ pub const APP_ID: &str = "io.github.jeremehancock.LeafMD";
 /// Every open LeafMD window. Each document gets its own window.
 type Windows = Rc<RefCell<Vec<Rc<Window>>>>;
 
+/// Always draws icons from the Adwaita theme, which comes with the GNOME runtime
+/// the Flatpak runs on, instead of the icon theme the user's system has chosen.
+/// That covers the icons GTK adds by itself too, like the window's close button.
+/// Without this, the same icon looks different from one distro to the next. For
+/// example, the main menu button is three lines on Ubuntu but three dots with Papirus.
+fn use_same_icons_everywhere() {
+    if let Some(settings) = gtk::Settings::default() {
+        settings.set_gtk_icon_theme_name(Some("Adwaita"));
+    }
+}
+
 fn main() -> glib::ExitCode {
     // The view icons built into the program (see build.rs). GTK finds icons
     // under the app's resource path automatically.
@@ -31,6 +42,7 @@ fn main() -> glib::ExitCode {
 
     app.connect_startup(|app| {
         sourceview5::init();
+        use_same_icons_everywhere();
         set_shortcuts(app);
     });
 
