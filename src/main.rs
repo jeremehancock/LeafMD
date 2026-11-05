@@ -7,6 +7,11 @@ mod typing;
 mod window;
 
 use std::cell::RefCell;
+use std::ffi::{OsStr, OsString};
+use std::io::IsTerminal;
+use std::os::unix::ffi::OsStrExt;
+use std::os::unix::process::CommandExt;
+use std::process::{Command, Stdio};
 use std::rc::Rc;
 
 use adw::prelude::*;
@@ -35,7 +40,57 @@ fn use_same_icons_everywhere() {
     }
 }
 
+/// Whether LeafMD should hand over to a copy of itself that isn't tied to the
+/// terminal, so the prompt comes straight back.
+///
+/// Only when the program's input and both of its outputs are all a terminal.
+/// If any of them is something else, LeafMD was started by the app grid or the
+/// file manager, or someone sent its output to a file because they want to keep
+/// it, so it stays as it is.
+///
+/// Also never when an option was given: `--help` has to print before LeafMD
+/// exits, a mistyped option has to show its error, and `--foreground` is an
+/// option that asks to stay, so it doesn't need a rule of its own.
+fn should_detach<A: AsRef<OsStr>>(all_terminals: bool, args: &[A]) -> bool {
+    all_terminals && !args.iter().any(|arg| arg.as_ref().as_bytes().starts_with(b"-"))
+}
+
+/// Starts a copy of LeafMD that carries on after this one exits, with the same
+/// arguments and working folder, so `leafmd notes.md` still finds the file.
+///
+/// The copy's input and outputs go nowhere, so it doesn't see a terminal and
+/// won't try to detach again. An error means no copy started.
+fn start_detached_copy(args: &[OsString]) -> std::io::Result<()> {
+    let mut copy = Command::new(std::env::current_exe()?);
+    copy.args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    // setsid cuts the copy loose from the terminal, so closing the terminal
+    // doesn't close LeafMD. Safe here because it only runs that one system
+    // call, in the new process just before it starts.
+    unsafe {
+        copy.pre_exec(|| {
+            if libc::setsid() == -1 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    copy.spawn().map(|_| ())
+}
+
 fn main() -> glib::ExitCode {
+    // Give the terminal back before anything else starts. If the copy can't be
+    // started, carry on here instead, so LeafMD still opens.
+    let args: Vec<OsString> = std::env::args_os().skip(1).collect();
+    let all_terminals = std::io::stdin().is_terminal()
+        && std::io::stdout().is_terminal()
+        && std::io::stderr().is_terminal();
+    if should_detach(all_terminals, &args) && start_detached_copy(&args).is_ok() {
+        return glib::ExitCode::SUCCESS;
+    }
+
     // The view icons built into the program (see build.rs). GTK finds icons
     // under the app's resource path automatically.
     gio::resources_register_include!("leafmd.gresource").expect("LeafMD's built-in icons load");
@@ -45,6 +100,17 @@ fn main() -> glib::ExitCode {
         // Lets LeafMD be started with a file, e.g. `leafmd notes.md` or a double-click
         .flags(gio::ApplicationFlags::HANDLES_OPEN)
         .build();
+
+    // Nothing reads this option: passing it is enough to stop should_detach above.
+    // Listing it here means GTK accepts it and shows it in `--help`.
+    app.add_main_option(
+        "foreground",
+        glib::Char::from(0),
+        glib::OptionFlags::NONE,
+        glib::OptionArg::None,
+        "Stay attached to the terminal, showing messages there, until LeafMD closes",
+        None,
+    );
 
     app.connect_startup(|app| {
         sourceview5::init();
@@ -164,5 +230,32 @@ fn set_shortcuts(app: &adw::Application) {
     ];
     for &(action, keys) in shortcuts {
         app.set_accels_for_action(action, keys);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_detach;
+
+    #[test]
+    fn detaches_from_a_terminal_with_no_arguments_or_only_files() {
+        assert!(should_detach::<&str>(true, &[]));
+        assert!(should_detach(true, &["notes.md"]));
+        assert!(should_detach(true, &["my notes.md", "/tmp/todo.md"]));
+    }
+
+    #[test]
+    fn stays_when_not_started_from_a_terminal() {
+        // The app grid, the file manager, or output sent to a file
+        assert!(!should_detach::<&str>(false, &[]));
+        assert!(!should_detach(false, &["notes.md"]));
+    }
+
+    #[test]
+    fn stays_when_given_an_option() {
+        assert!(!should_detach(true, &["--foreground"]));
+        assert!(!should_detach(true, &["--foreground", "notes.md"]));
+        assert!(!should_detach(true, &["notes.md", "--help"]));
+        assert!(!should_detach(true, &["--not-a-real-option"]));
     }
 }

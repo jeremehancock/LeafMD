@@ -15,8 +15,10 @@ sudo pacman -S rust gtk4 libadwaita gtksourceview5 webkitgtk-6.0
 Then, from the top folder:
 
 ```
-cargo run -- path/to/file.md
+cargo run -- --foreground path/to/file.md
 ```
+
+`--foreground` keeps LeafMD attached to the terminal, so its messages stay visible. Without it, LeafMD started from a terminal hands over to a detached copy of itself, and exits straight away.
 
 `cargo test` runs the tests for the markdown conversion, the safety filter and the formatting buttons.
 
@@ -80,7 +82,7 @@ With Claude Code, `/ship` walks a change through all of this: the checks, trying
 
 | File | What it does |
 |---|---|
-| `src/main.rs` | Starts the app, sets up keyboard shortcuts, opens files passed on the command line |
+| `src/main.rs` | Starts the app, gives the terminal back when started from one, sets up keyboard shortcuts, opens files passed on the command line |
 | `src/window.rs` | The window: toolbar, formatting bar, raw editor, formatted view, find and replace, Help, cheatsheet and About, opening and saving |
 | `src/file_change.rs` | Noticing when another app changes the open file: what counts as a change, what the banner says, and the banner's widgets, with tests |
 | `src/find.rs` | The find and replace bar's buttons and boxes |

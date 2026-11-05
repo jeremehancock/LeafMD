@@ -2360,6 +2360,8 @@ impl Window {
 
     /// A short guide to how LeafMD works.
     fn show_help(&self) {
+        const TERMINAL_ROW: &str = "From a terminal";
+        const TERMINAL_SETUP_URL: &str = "https://leafmd.app/#terminal";
         let page = adw::PreferencesPage::new();
         let sections: [(&str, &[(&str, &str)]); 5] = [
             (
@@ -2402,6 +2404,7 @@ impl Window {
                 "Files and Links",
                 &[
                     ("Opening files", "Use Open, drop a file onto the window, or double-click a markdown file in your file manager."),
+                    (TERMINAL_ROW, "Type leafmd notes.md in a terminal to open a file. It takes a one-time setup, and Setup shows you how."),
                     ("Recent files", "The arrow next to Open lists the files you opened recently. When you start LeafMD, it reopens the last file you had open. Clear Recent Files empties the list, and LeafMD then forgets the last file too."),
                     ("Closing a document", "Close Document in the main menu closes the file but keeps the window open, and LeafMD starts with no document next time. Closing the window instead (Ctrl+W) brings the file back next time."),
                     ("Changes from other apps", "If another app changes or deletes the open file, a banner appears across the top of the window, and nothing changes until you choose. Reload brings in the new version, and Ignore keeps what you have. If you save a file that changed without you noticing, LeafMD asks first."),
@@ -2413,12 +2416,22 @@ impl Window {
         for (title, rows) in sections {
             let group = adw::PreferencesGroup::builder().title(title).build();
             for (row_title, row_text) in rows {
-                group.add(
-                    &adw::ActionRow::builder()
-                        .title(*row_title)
-                        .subtitle(*row_text)
-                        .build(),
-                );
+                let row = adw::ActionRow::builder()
+                    .title(*row_title)
+                    .subtitle(*row_text)
+                    .build();
+                // The steps live on the website, so that they only ever need
+                // updating in one place, even for copies of LeafMD already installed.
+                if *row_title == TERMINAL_ROW {
+                    row.add_suffix(
+                        &gtk::LinkButton::builder()
+                            .uri(TERMINAL_SETUP_URL)
+                            .label("Setup")
+                            .valign(gtk::Align::Center)
+                            .build(),
+                    );
+                }
+                group.add(&row);
             }
             page.add(&group);
         }

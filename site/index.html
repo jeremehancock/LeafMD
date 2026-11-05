@@ -130,11 +130,6 @@
           <p>Bold, links, lists, headings and tables, added for you. A built-in cheatsheet shows the syntax.</p>
         </li>
         <li>
-          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 5h3v3H4zm5 0.5h11v2H9zM4 10.5h3v3H4zm5 .5h11v2H9zM4 16h3v3H4zm5 .5h7v2H9z"/></svg>
-          <h3>Smart typing</h3>
-          <p>Lists carry on when you press Enter, and pasting a web address over some text turns it into a link.</p>
-        </li>
-        <li>
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M10 3a7 7 0 0 1 5.6 11.2l5.6 5.6-1.4 1.4-5.6-5.6A7 7 0 1 1 10 3zm0 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10z"/></svg>
           <h3>Find and replace</h3>
           <p>Search the raw or formatted text, with a count of every match. Replace one, or all at once.</p>
@@ -211,7 +206,43 @@
         </ol>
         <p class="setup-more"><a href="https://flatpak.org/setup/Ubuntu">More about Flatpak on Ubuntu</a></p>
       </details>
-      <p class="note">If the file opens in a text editor, Flatpak isn't set up yet: on Ubuntu, see the steps above, and for other systems, see <a href="https://flatpak.org/setup/">flatpak.org/setup</a>. Install works with app stores that support Flatpak, like GNOME Software and KDE Discover. LeafMD needs a Linux computer with Flatpak set up, on a 64-bit Intel or AMD processor (x86_64). The GNOME parts it needs come from Flathub, which is added for you if it isn't already. Everything LeafMD installs is signed, so updates can only come from its developer.</p>
+      <ul class="notes">
+        <li><strong>Did the file open in a text editor?</strong> Flatpak isn't set up yet. On Ubuntu, see the steps above. For other systems, see <a href="https://flatpak.org/setup/">flatpak.org/setup</a>.</li>
+        <li><strong>Which app stores work?</strong> Any that support Flatpak, like GNOME Software and KDE Discover.</li>
+        <li><strong>What you need</strong> A Linux computer with Flatpak set up, on a 64-bit Intel or AMD processor (x86_64). The GNOME parts LeafMD needs come from Flathub, which is added for you if it isn't already.</li>
+        <li><strong>Signed updates</strong> Everything LeafMD installs is signed, so updates can only come from its developer.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="terminal" aria-labelledby="terminal-title">
+    <div class="wrap">
+      <h2 id="terminal-title">Use LeafMD from a terminal</h2>
+      <p class="section-lede">Flatpak apps don't come with a short command, but one line adds it. After that, typing <code>leafmd notes.md</code> opens that file in LeafMD.</p>
+      <div class="install">
+        <article class="card">
+          <h3>For everyone on this computer</h3>
+          <p>Asks for your admin password, and works straight away on most systems:</p>
+          <div class="command">
+            <code id="terminal-system">sudo sh -c 'set -C; printf "%s\n" "#!/bin/sh" "exec flatpak run <span class="nowrap">--file-forwarding</span> io.<wbr>github.<wbr>jeremehancock.<wbr>LeafMD @@ \"\$@\" @@" &gt; /usr/<wbr>local/<wbr>bin/<wbr>leafmd &amp;&amp; chmod 755 /usr/<wbr>local/<wbr>bin/<wbr>leafmd'</code>
+            <button type="button" class="copy" data-copy="terminal-system" hidden>Copy</button>
+          </div>
+        </article>
+        <article class="card">
+          <h3>Just for you</h3>
+          <p>No admin password needed:</p>
+          <div class="command">
+            <code id="terminal-home">sh -c 'set -C; mkdir -p ~/.local/bin; printf "%s\n" "#!/bin/sh" "exec flatpak run <span class="nowrap">--file-forwarding</span> io.<wbr>github.<wbr>jeremehancock.<wbr>LeafMD @@ \"\$@\" @@" &gt; ~/.local/<wbr>bin/<wbr>leafmd &amp;&amp; chmod 755 ~/.local/<wbr>bin/<wbr>leafmd'</code>
+            <button type="button" class="copy" data-copy="terminal-home" hidden>Copy</button>
+          </div>
+        </article>
+      </div>
+      <ul class="notes">
+        <li><strong>Works with every version</strong> It works best with the latest, which gives your terminal back as soon as LeafMD opens. On older versions, files open the same way, but the terminal stays busy until LeafMD closes.</li>
+        <li><strong>Already have a <code>leafmd</code>?</strong> Neither line replaces it. You'll see an error, and nothing changes.</li>
+        <li><strong>Is <code>leafmd</code> not found?</strong> After using the "Just for you" line, log out and back in. If it still isn't found, add <code>~/.local/bin</code> to your <code>PATH</code>.</li>
+        <li><strong>To undo the setup</strong> Delete the file the line created: <code>/usr/local/bin/leafmd</code> (with <code>sudo rm</code>) or <code>~/.local/bin/leafmd</code>.</li>
+      </ul>
     </div>
   </section>
 
@@ -242,7 +273,7 @@
     <div class="footer-brand">
       <img src="icon.svg" alt="" width="40" height="40">
       <div>
-        <p><strong>LeafMD</strong> is free software, made by <a href="https://jeremehancock.com">Jereme Hancock</a>.</p>
+        <p>Free software by <a href="https://jeremehancock.com">Jereme Hancock</a>.</p>
         <p>This project was created with the help of AI.</p>
       </div>
     </div>

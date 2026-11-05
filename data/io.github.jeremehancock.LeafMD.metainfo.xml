@@ -32,6 +32,7 @@
       <li>A banner tells you when another app changes your file, and nothing is overwritten without asking</li>
       <li>In split view, both sides scroll together</li>
       <li>Supports tables, task lists, footnotes and other GitHub-style markdown</li>
+      <li>Open files from a terminal with an optional short leafmd command</li>
       <li>Follows your system's light or dark style</li>
     </ul>
   </description>

@@ -58,7 +58,7 @@ a:hover { text-decoration-thickness: 2px; }
 h1, h2, h3 { line-height: 1.2; margin: 0; }
 /* Spreads short text evenly over its lines, so no line ends up with a single
    word on it. Browsers that don't know it just wrap as usual. */
-h1, h2, h3, .tagline, .lede, .section-lede, .hint, .facts, .note,
+h1, h2, h3, .tagline, .lede, .section-lede, .hint, .facts,
 .gallery figcaption { text-wrap: balance; }
 h2 { font-size: clamp(1.6rem, 4vw, 2.1rem); font-weight: 800; letter-spacing: -0.01em; text-align: center; }
 h3 { font-size: 1.1rem; font-weight: 700; }
@@ -173,8 +173,11 @@ h3 { font-size: 1.1rem; font-weight: 700; }
 
 .features {
   list-style: none; margin: 0; padding: 0;
-  display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  display: grid; gap: 16px;
 }
+/* Six cards divide evenly at each of these widths, so none is left alone on a row */
+@media (min-width: 600px) { .features { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 900px) { .features { grid-template-columns: repeat(3, 1fr); } }
 .features li, .card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -193,6 +196,11 @@ h3 { font-size: 1.1rem; font-weight: 700; }
 .install .card { display: flex; flex-direction: column; }
 .install .card .button { margin-top: auto; align-self: flex-start; }
 .install .card p { margin-bottom: 18px; }
+/* At the width where three cards make a row of two and one left over, the
+   last one takes the full row instead of sitting alone */
+@media (min-width: 640px) and (max-width: 935px) {
+  .install > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
 .command {
   margin-top: auto;
   display: flex; align-items: stretch; gap: 8px;
@@ -261,14 +269,22 @@ code { font-family: var(--mono); font-size: 0.92em; }
 }
 .setup-more { padding: 18px 22px 22px 66px; margin: 0 !important; font-size: 0.95rem; }
 
-.note { color: var(--muted); font-size: 0.92rem; max-width: 760px; margin: 24px auto 0; text-align: center; }
+/* The small print under the install and terminal cards: short notes, each
+   with its own heading, so nobody has to read a whole paragraph to find one */
+.notes {
+  list-style: none; margin: 28px 0 0; padding: 0;
+  display: grid; gap: 20px 32px;
+  color: var(--muted); font-size: 0.92rem; text-wrap: pretty;
+}
+.notes li { padding-left: 14px; border-left: 3px solid var(--border); }
+.notes strong { display: block; margin-bottom: 2px; color: var(--fg); font-weight: 600; }
+@media (min-width: 700px) { .notes { grid-template-columns: 1fr 1fr; } }
 
 /* Footer */
 .footer { border-top: 1px solid var(--border); padding: 32px 0 40px; font-size: 0.92rem; color: var(--muted); }
 .footer-inner { display: grid; gap: 16px; }
 .footer-brand { display: flex; gap: 14px; align-items: center; }
 .footer-brand p { margin: 0; }
-.footer-brand strong { color: var(--fg); }
 .footer-links { display: flex; flex-wrap: wrap; gap: 8px 20px; list-style: none; margin: 0; padding: 0; }
 .privacy { margin: 0; }
 @media (min-width: 800px) {
