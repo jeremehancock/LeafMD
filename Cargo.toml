@@ -1,6 +1,6 @@
 [package]
 name = "leafmd"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/jeremehancock/LeafMD"
@@ -20,6 +20,8 @@ comrak = { version = "0.59", default-features = false }
 ammonia = "4"
 # Safely wraps the HTML in a JavaScript string when updating the preview
 serde_json = "1"
+# The one system call (setsid) that frees the terminal LeafMD was started from
+libc = "0.2"
 
 [build-dependencies]
 # Builds the icons in data/resources into the program
