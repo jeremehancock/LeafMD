@@ -93,6 +93,17 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.2.0" date="2026-11-04">
+      <description>
+        <ul>
+          <li>New Close Document item in the main menu takes you back to the "No Document Open" page, and LeafMD starts there next time too</li>
+          <li>Clear Recent Files now also forgets your last file, and is available even when the only recent file is the one you have open</li>
+          <li>Icons now look the same on every Linux distribution, including a floppy disk for Save</li>
+          <li>The Keyboard Shortcuts window is simpler, with no search box, and now also lists Ctrl+Q</li>
+          <li>Saving a file now moves it to the top of your recent files</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.1.1" date="2026-11-04">
       <description>
         <p>LeafMD's page in your app store now shows screenshots of the formatted, raw and split views. Nothing else changes.</p>
