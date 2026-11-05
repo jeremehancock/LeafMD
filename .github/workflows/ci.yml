@@ -1,11 +1,17 @@
 name: Build
 
 # Every push to any branch is checked and built as a Flatpak, in the same
-# GNOME 51 environment the app is built in on the owner's laptop.
+# GNOME 51 environment the app is built in on the owner's laptop. The one
+# exception is below: a merge commit coming back to dev, which main has built.
 #
 #   push to any branch -> checks (including Flathub's), then a test .flatpak
 #                         kept for 7 days (Actions tab -> the run -> Artifacts)
-#   push to main       -> the same, and if the version is a finished release
+#   push to dev that's -> nothing is built. After a merge, /ship moves dev up
+#   only a pull             to main's merge commit. That's the same commit
+#   request's merge         main's run has just built, so building it again
+#   commit from dev         could only repeat the answer. Look at main's run
+#                           for that commit's result and test .flatpak.
+#   push to main       -> the same as any branch, and if the version is a finished release
 #                         (its <release> in the metainfo file isn't marked
 #                         type="development") and has no v<version> tag yet,
 #                         it's a release:
@@ -43,8 +49,16 @@ permissions:
 jobs:
   build:
     name: Check · Build Flatpak
-    # A republish builds nothing (on a push there's no input, which counts as false)
-    if: ${{ !inputs.republish }}
+    # A republish builds nothing (on a push there's no input, which counts as
+    # false). Neither does a pull request's merge commit arriving on dev, see
+    # the top of this file. GitHub writes that commit's message as "Merge pull
+    # request #8 from <owner>/dev". If new work is pushed along with it, the
+    # newest commit is that work instead, so the build still runs. GitHub counts
+    # a skipped job as passing, so this can't hold up a later pull request.
+    if: >-
+      ${{ !inputs.republish && !(github.ref == 'refs/heads/dev'
+      && startsWith(github.event.head_commit.message, 'Merge pull request #')
+      && contains(github.event.head_commit.message, format(' from {0}/dev', github.repository_owner))) }}
     runs-on: ubuntu-latest
     # Flathub's own build image: Fedora with flatpak, flatpak-builder and the
     # GNOME 51 SDK already installed. "privileged" lets it run the sandbox.
@@ -88,6 +102,38 @@ jobs:
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
           flatpak-builder --user --install-deps-from=flathub --install-deps-only \
             flatpak-build build-aux/io.github.jeremehancock.LeafMD.json
+
+      # The cache below is only good for the same Rust and GNOME SDK, so its
+      # name includes the exact versions (their commit IDs) of the two.
+      - name: Find which Rust and SDK this run uses
+        id: toolchain
+        if: steps.release.outputs.release != 'true'
+        run: |
+          id=$(flatpak list --runtime --columns=ref,active |
+            grep -E '^org\.gnome\.Sdk/|rust-stable' | sort | sha256sum | cut -c1-16)
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
+      # Keeps the checks from recompiling every Rust library each time, which
+      # is most of their two minutes. LeafMD's own code still gets checked and
+      # tested every run, because a fresh checkout makes Cargo see it as changed.
+      #
+      # This only touches target/sdk, which the checks use. The Flatpak step
+      # below never sees it (the recipe skips ./target), so what people install
+      # is never built from cached files. A release skips the cache altogether,
+      # so its checks run from scratch too, before the signing key is loaded.
+      #
+      # If Cargo.lock changed, the newest cache for this Rust and SDK is the
+      # starting point, so only the libraries that changed are recompiled. GitHub
+      # saves a cache only when the whole job passes, and deletes it after 7
+      # days unused. A branch can read its own caches and main's, but main can't
+      # read dev's, so main's first non-release run after a change starts fresh.
+      - name: Restore compiled Rust libraries
+        if: steps.release.outputs.release != 'true'
+        uses: actions/cache@v6
+        with:
+          path: target/sdk
+          key: sdk-check-${{ steps.toolchain.outputs.id }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: sdk-check-${{ steps.toolchain.outputs.id }}-
 
       - name: Clippy, tests, app store and .desktop checks
         run: build-aux/sdk-check.sh
