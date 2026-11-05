@@ -28,7 +28,7 @@ Each feature is planned in detail with [OpenSpec](https://github.com/Fission-AI/
 
 - [ ] **Distraction-free mode:** one switch that hides the formatting bar, the Cheatsheet button and anything else that isn't your document, leaving just the text. Turned on and off from the main menu or a keyboard shortcut, and remembered. Going full screen (F11) hides the title bar too
 - [ ] **Font and text size:** choose the font and size for the raw text and for the formatted view, in a small Preferences window. LeafMD's description promises "no settings to tune", so that wording changes with this
-- [ ] **Reload when the file changes:** if another app changes the open file, LeafMD shows the new version. If there are unsaved changes too, it asks which to keep instead of overwriting anything
+- [x] **Reload when the file changes:** if another app changes the open file, LeafMD shows the new version. If there are unsaved changes too, it asks which to keep instead of overwriting anything
 - [ ] **Zoom:** Ctrl+plus, Ctrl+minus and Ctrl+0 make the text bigger, smaller or back to normal in both views, for a quick change without opening Preferences
 - [ ] **Word count:** the number of words (and reading time) shown somewhere unobtrusive
 
