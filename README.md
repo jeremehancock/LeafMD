@@ -35,7 +35,7 @@ Each [release](https://github.com/jeremehancock/LeafMD/releases) also has a `Lea
 
 ## Using LeafMD
 
-LeafMD has three views. Switch between them with the icons in the header bar, or Ctrl+1, 2 and 3.
+LeafMD has three views. Switch between them with the icons in the header bar, or Ctrl+1, 2 and 3. In a narrow window, those icons and the New, Save and Find buttons move to a bar along the bottom, so LeafMD fits windows as small as 360 by 300 pixels.
 
 - **Formatted:** the rendered document, full window. Just for reading.
 - **Raw:** the markdown text, full window. Type here to edit.

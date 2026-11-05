@@ -9,6 +9,14 @@ use sourceview5::prelude::*;
 pub struct FindBar {
     /// GTK's sliding search bar. It has the close button and handles Escape.
     pub bar: gtk::SearchBar,
+    /// The bar's contents: the find row, then the replace row
+    rows: gtk::Box,
+    /// The find box, then the count and buttons
+    find_row: gtk::Box,
+    /// Takes over from the bar's own close button in a narrow window
+    compact_close: gtk::Button,
+    /// Keeps the find and replace boxes the same width
+    sizes: gtk::SizeGroup,
     pub entry: gtk::SearchEntry,
     /// "3 of 12", "No matches" and so on
     pub count: gtk::Label,
@@ -77,12 +85,30 @@ impl FindBar {
             .menu_model(&options)
             .build();
 
+        // Everything after the find box, kept together so that it can wrap onto
+        // a row of its own in a narrow window
+        let tools = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+        tools.append(&count);
+        tools.append(&nav);
+        tools.append(&replace_toggle);
+        tools.append(&options_button);
+
+        // Only shown in a narrow window. The bar's own close button keeps a whole
+        // column to itself, which would leave the replace box too little room, so
+        // there it's swapped for this one, sharing the find box's row.
+        let compact_close = gtk::Button::builder()
+            .icon_name("window-close-symbolic")
+            .tooltip_text("Close (Esc)")
+            .css_classes(["flat"])
+            .visible(false)
+            .build();
+        let entry_row = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+        entry_row.append(&entry);
+        entry_row.append(&compact_close);
+
         let find_row = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-        find_row.append(&entry);
-        find_row.append(&count);
-        find_row.append(&nav);
-        find_row.append(&replace_toggle);
-        find_row.append(&options_button);
+        find_row.append(&entry_row);
+        find_row.append(&tools);
 
         // ---- Second row: what to replace it with ----
         let replace_entry = gtk::Entry::builder()
@@ -124,8 +150,15 @@ impl FindBar {
         let row = replace_row.clone();
         replace_toggle.connect_toggled(move |toggle| row.set_visible(toggle.is_active()));
 
+        let closing = bar.clone();
+        compact_close.connect_clicked(move |_| closing.set_search_mode(false));
+
         Self {
             bar,
+            rows,
+            find_row,
+            compact_close,
+            sizes,
             entry,
             count,
             replace_toggle,
@@ -134,6 +167,33 @@ impl FindBar {
             settings,
             context,
         }
+    }
+
+    /// How the bar changes in a narrow window. It wraps rather than squeezing:
+    /// the count and buttons go on their own row, which leaves the find box a
+    /// whole row, and the replace box gets smaller beside its two buttons.
+    pub fn add_compact_rules(&self, compact: &adw::Breakpoint) {
+        let narrow_box = 8.to_value();
+        compact.add_setter(
+            &self.find_row,
+            "orientation",
+            Some(&gtk::Orientation::Vertical.to_value()),
+        );
+        compact.add_setter(&self.rows, "hexpand", Some(&true.to_value()));
+        compact.add_setter(&self.bar, "show-close-button", Some(&false.to_value()));
+        compact.add_setter(&self.compact_close, "visible", Some(&true.to_value()));
+        compact.add_setter(&self.entry, "hexpand", Some(&true.to_value()));
+        compact.add_setter(&self.entry, "width-chars", Some(&narrow_box));
+        compact.add_setter(&self.replace_entry, "width-chars", Some(&narrow_box));
+        compact.add_setter(&self.replace_entry, "hexpand", Some(&true.to_value()));
+        // Pushes the buttons to the right-hand end of their row
+        compact.add_setter(&self.count, "hexpand", Some(&true.to_value()));
+        // The two boxes don't line up here, so they don't need to match
+        compact.add_setter(
+            &self.sizes,
+            "mode",
+            Some(&gtk::SizeGroupMode::None.to_value()),
+        );
     }
 
     /// The text being looked for, or None if the find box is empty.

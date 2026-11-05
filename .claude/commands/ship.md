@@ -55,7 +55,9 @@ those commands.
   a test `.flatpak` (kept 7 days under the run's Artifacts), and runs
   `build-aux/flathub-lint.sh` (Flathub's checker) on the recipe, the app store
   description and the finished build. Locally, `/ship` runs it on the first
-  two only, since checking a finished build means a second full build.
+  two only, since checking a finished build means a second full build. The
+  one exception is the resync after a merge: `main` has just built that same
+  merge commit, so the run on `dev` shows as skipped, and that's expected.
 
 ## Step 1: Find out where things stand
 

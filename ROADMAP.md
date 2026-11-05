@@ -10,6 +10,7 @@ Each feature is planned in detail with [OpenSpec](https://github.com/Fission-AI/
 
 - [x] Check that clicking a link to a file that's already open brings its window to the front
 - [x] Check that files that no longer exist are left out of the Recent files list
+- [ ] Fix documents sometimes opening scrolled partway down, instead of at the top
 
 ## 2. Find and replace
 
