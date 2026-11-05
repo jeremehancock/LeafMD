@@ -25,7 +25,7 @@
 
 - [x] 4.1 Run `cargo build`, `cargo test`, `cargo clippy --all-targets -- -D warnings` and `./build-aux/sdk-check.sh`, and verify they all pass
 - [x] 4.2 Run `build-aux/take-screenshots.sh` into a temporary folder after installing this build, and verify the four pictures match `data/screenshots/`, which shows wide windows haven't changed
-- [ ] 4.3 Rebuild and install with `./build-aux/flatpak-install.sh`, then ask the owner to close every LeafMD window, reopen it and try the narrow window scenarios (the owner confirms)
+- [x] 4.3 Rebuild and install with `./build-aux/flatpak-install.sh`, then ask the owner to close every LeafMD window, reopen it and try the narrow window scenarios (the owner confirms)
 
 ## Workflow follow-up
 
