@@ -93,6 +93,16 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.3.0" date="2026-11-05" type="development">
+      <description>
+        <ul>
+          <li>A new button next to Open starts a new document with one click</li>
+          <li>Save is now a labelled button, just left of the view switcher</li>
+          <li>Open and its recent files arrow now look like one raised button</li>
+          <li>LeafMD now draws its own icons for the window's buttons, Find, the main menu and more, so they look the same on every Linux distribution</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.2.0" date="2026-11-04">
       <description>
         <ul>

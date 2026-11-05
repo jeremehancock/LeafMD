@@ -11,8 +11,8 @@
 - [x] 2.2 Add the Save word button just left of the view switcher, with the existing tooltip and `win.save` action. Verify that it saves, and is greyed out on the "No Document Open" page
 - [x] 2.3 Check the header bar at the smallest window size with a long file name. Verify that every button shows, nothing is cut off, and the file name shortens with "…"
 - [x] 2.4 Give Open and its recent files arrow a raised look with one shared background. Verify in light and dark styles that both parts are raised and match Save, and that the arrow still opens the recent files list
-- [ ] 2.5 Add LeafMD's small icon theme with new maximize and restore icons, select it in `src/main.rs`, and install it from the Flatpak manifest. Verify that GTK picks LeafMD's two icons, that the theme is in the installed Flatpak, and that the owner sees both icons by maximizing and restoring a window
-- [ ] 2.6 Draw LeafMD's own magnifying glass, main menu, up and down arrows, three dots, page, minimize and close in the same theme. Verify that GTK picks all of them from LeafMD's theme, that they read clearly in light and dark styles, and that the owner sees them in the installed Flatpak
+- [x] 2.5 Add LeafMD's small icon theme with new maximize and restore icons, select it in `src/main.rs`, and install it from the Flatpak manifest. Verify that GTK picks LeafMD's two icons, that the theme is in the installed Flatpak, and that the owner sees both icons by maximizing and restoring a window
+- [x] 2.6 Draw LeafMD's own magnifying glass, main menu, up and down arrows, three dots, page, minimize and close in the same theme. Verify that GTK picks all of them from LeafMD's theme, that they read clearly in light and dark styles, and that the owner sees them in the installed Flatpak
 
 ## 3. Words for users
 
