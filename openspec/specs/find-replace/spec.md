@@ -6,7 +6,7 @@ Finding text in the open document, in whichever view is showing, and replacing i
 ## Requirements
 
 ### Requirement: Opening the find bar
-LeafMD SHALL show a find bar under the toolbar when the user presses Ctrl+F, clicks the magnifying glass button in the header bar (or in the bottom bar, in a window narrower than 640 pixels), or chooses Find… from the main menu. The cursor SHALL go into the find box with its text selected. If a single line of up to 200 characters is selected in the raw text, the find box SHALL start with that text. The magnifying glass button SHALL stay pressed in while the bar is open, and clicking it again SHALL close the bar.
+LeafMD SHALL show a find bar under the toolbar when the user presses Ctrl+F, clicks the magnifying glass button, or chooses Find… from the main menu. The cursor SHALL go into the find box with its text selected. If a single line of up to 200 characters is selected in the raw text, the find box SHALL start with that text. The magnifying glass button SHALL stay pressed in while the bar is open, and clicking it again SHALL close the bar.
 
 #### Scenario: Searching for the selected word
 - **WHEN** "install" is selected in the raw text and the user presses Ctrl+F
