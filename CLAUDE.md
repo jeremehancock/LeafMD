@@ -86,7 +86,8 @@ GNOME SDK.
 - The app store description in `data/io.github.jeremehancock.LeafMD.metainfo.xml`
 - The storefront at leafmd.app (`site/index.html`)
 - The screenshots (`data/screenshots/`), if it changes how a window looks.
-  Only the owner can take them; `data/screenshots/README.md` has the steps
+  `build-aux/take-screenshots.sh` takes them; `data/screenshots/README.md` has
+  what to check afterwards
 - The matching spec in `openspec/specs/`
 
 ## Conventions

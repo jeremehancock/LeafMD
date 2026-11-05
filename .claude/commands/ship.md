@@ -119,7 +119,7 @@ git diff --stat origin/main..HEAD; git diff --stat
 | A change touching... | Re-read and fix... |
 | --- | --- |
 | Anything a user sees or does | Help (`show_help` in `src/window.rs`), README features, the metainfo `<description>`, the storefront's text (`site/index.html`: the feature cards, hero and install cards), the matching spec in `openspec/specs/` |
-| How a window looks (the header bar, formatting bar, views, menus, dialogs or styles) | The screenshots in `data/screenshots/`. They can't be retaken without the owner, so say in the report that they're now out of date. The release check below asks about them. |
+| How a window looks (the header bar, formatting bar, views, menus, dialogs or styles) | The screenshots in `data/screenshots/`. Say in the report that they're now out of date. The release check below asks about them. |
 | A keyboard shortcut | Keyboard Shortcuts (`show_shortcuts`), Help, README shortcuts table |
 | A new or renamed source file | The file table in docs/DEVELOPMENT.md |
 | `.github/workflows/`, `build-aux/`, this file, or how work is released | CLAUDE.md ("How work gets released"), docs/DEVELOPMENT.md or docs/PUBLISHING.md, this file |
@@ -178,9 +178,11 @@ something visible changed, ask the owner with **AskUserQuestion**: retake the
 screenshots now, or release with the old ones. Never release with outdated
 screenshots without asking. A tooltip or menu wording usually doesn't show.
 
-To retake, follow `data/screenshots/README.md` with the owner: give them its
-steps, then check each new picture against its "Checking them" list (look at
-it) before copying it over the old one under the same name.
+To retake, rebuild with `./build-aux/flatpak-install.sh`, then run
+`build-aux/take-screenshots.sh <a temporary folder>`. Check each new picture
+against the "Checking them" list in `data/screenshots/README.md` (look at it)
+before copying it over the old one under the same name. If the script doesn't
+work, give the owner that README's steps for taking them by hand.
 
 **If the work doesn't change the app at all** (only `site/`, `docs/`, README,
 `openspec/`, `.claude/`, CLAUDE.md, the workflow, or `build-aux/` scripts the
