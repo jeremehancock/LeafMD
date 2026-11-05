@@ -209,6 +209,12 @@ before committing.
 Then run the checks gate (it confirms the numbers match) and commit
 ("Version <version>" or "Release notes for <version>").
 
+If the version number changed, run `./build-aux/flatpak-install.sh` again and
+check that `flatpak info --user io.github.jeremehancock.LeafMD` shows the new
+number. The owner's test build was made before the number changed, so it still
+shows the old one. Ask them to close every LeafMD window and reopen it. Only
+the number and notes changed, so this doesn't need another round of testing.
+
 ## Waiting for GitHub's build
 
 ```bash
