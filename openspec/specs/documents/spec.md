@@ -13,7 +13,7 @@ LeafMD SHALL show a "No Document Open" page with an "Open File…" button when n
 - **THEN** the "No Document Open" page is shown
 
 ### Requirement: Open, New and Save buttons
-The left of the header bar SHALL have an Open button with a small arrow beside it that lists recent files, followed by a New button. A Save button SHALL sit just to the left of the view switcher. Open and Save SHALL be words rather than icons, because icons for those actions vary a lot between icon themes. New SHALL use LeafMD's own new document icon. Open and its arrow SHALL look raised, sharing one background, as Save does.
+The left of the header bar SHALL have an Open button with a small arrow beside it that lists recent files, followed by a New button. A Save button SHALL sit just to the left of the view switcher. In a window narrower than 640 pixels, New and Save SHALL be in the bottom bar instead (see the compact layout in the windows spec), and Open SHALL stay in the header bar. Open and Save SHALL be words rather than icons, because icons for those actions vary a lot between icon themes. New SHALL use LeafMD's own new document icon. Open and its arrow SHALL look raised, sharing one background, as Save does.
 
 #### Scenario: Hovering the buttons
 - **WHEN** the user hovers over Open, New or Save
@@ -30,6 +30,10 @@ The left of the header bar SHALL have an Open button with a small arrow beside i
 #### Scenario: The start page
 - **WHEN** the "No Document Open" page is showing
 - **THEN** the New button can be clicked and the Save button is greyed out
+
+#### Scenario: In the bottom bar
+- **WHEN** the window is 500 pixels wide, the "No Document Open" page is showing, and the user clicks New in the bottom bar
+- **THEN** a new document opens, and Save, which was greyed out in the bottom bar, can now be clicked
 
 ### Requirement: Opening files
 LeafMD SHALL open a markdown or text file chosen with Open (Ctrl+O or the Open button), dropped anywhere on the window, double-clicked in the file manager, or given on the command line (`leafmd notes.md`). The Open dialog SHALL offer Markdown (.md, .markdown, .mdown, .mkd), Plain text and All files filters.
