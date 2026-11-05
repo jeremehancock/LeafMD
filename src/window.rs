@@ -10,6 +10,7 @@ use gtk::{gdk, gio, glib};
 use sourceview5::prelude::*;
 use webkit6::prelude::*;
 
+use crate::file_change::{self, Comparison, FileBanner, Version};
 use crate::find::FindBar;
 use crate::format::{self, Inline, LineStyle};
 use crate::render;
@@ -36,6 +37,12 @@ const RENDER_DELAY: Duration = Duration::from_millis(150);
 /// After LeafMD scrolls one side to match the other, scroll events from that
 /// side are ignored for this long, so the two sides don't keep nudging each other.
 const SYNC_QUIET: Duration = Duration::from_millis(250);
+
+/// How long to wait after a sign that the open file changed before reading it.
+/// One save can produce several signs (deleted, created, changed), so waiting
+/// gives one check, and an app that saves by deleting and recreating the file
+/// doesn't look like it deleted it.
+const FILE_CHECK_DELAY: Duration = Duration::from_millis(500);
 
 /// The description in the About window.
 const ABOUT_TEXT: &str = "LeafMD is a markdown viewer and editor that keeps things simple.
@@ -103,6 +110,26 @@ pub struct Window {
     /// True while a file has loaded but its formatted view is still being drawn.
     /// The document is shown once that's done, so it appears all at once.
     reveal_pending: Cell<bool>,
+
+    /// The banner that says another app changed the open file
+    file_banner: FileBanner,
+    /// Tells LeafMD when the open file changes. Dropping it stops the watching.
+    file_monitor: RefCell<Option<gio::FileMonitor>>,
+    /// The version of the open file LeafMD last opened, saved or was told to
+    /// ignore. Anything else on disk counts as another app's change.
+    known_version: RefCell<Option<Version>>,
+    /// The version the banner is telling the user about, or None if it's closed.
+    banner_version: RefCell<Option<Version>>,
+    /// True while waiting out FILE_CHECK_DELAY.
+    file_check_scheduled: Cell<bool>,
+    /// Goes up whenever the window's file changes, so a slow read of the previous
+    /// file can tell its answer is out of date and throw it away.
+    file_generation: Cell<u64>,
+    /// How many saves are being written. While any are, the file on disk is about
+    /// to change because of LeafMD itself, so checks wait.
+    saves_running: Cell<u32>,
+    /// True while "Replace the Other Version?" is open, so saving again can't open a second one.
+    asking_to_replace: Cell<bool>,
 }
 
 impl Window {
@@ -301,6 +328,8 @@ impl Window {
 
         let toolbar_view = adw::ToolbarView::new();
         toolbar_view.add_top_bar(&header);
+        let file_banner = FileBanner::new();
+        toolbar_view.add_top_bar(&file_banner.revealer);
         toolbar_view.add_top_bar(&format_bar);
         toolbar_view.add_top_bar(&find.bar);
         toolbar_view.set_content(Some(&toasts));
@@ -334,6 +363,14 @@ impl Window {
             flash_tag,
             pending_heading: RefCell::new(None),
             reveal_pending: Cell::new(false),
+            file_banner,
+            file_monitor: RefCell::new(None),
+            known_version: RefCell::new(None),
+            banner_version: RefCell::new(None),
+            file_check_scheduled: Cell::new(false),
+            file_generation: Cell::new(0),
+            saves_running: Cell::new(0),
+            asking_to_replace: Cell::new(false),
         });
 
         win.setup_actions(saved.view);
@@ -470,6 +507,24 @@ impl Window {
         self.buffer.connect_modified_changed(move |_| {
             if let Some(win) = weak.upgrade() {
                 win.update_title();
+                // The banner's words depend on whether there are unsaved changes
+                win.update_file_banner();
+            }
+        });
+
+        // The banner's buttons
+        let weak = Rc::downgrade(self);
+        self.file_banner.ignore.connect_clicked(move |_| {
+            if let Some(win) = weak.upgrade() {
+                win.ignore_file_change();
+            }
+        });
+        let weak = Rc::downgrade(self);
+        self.file_banner.action.connect_clicked(move |_| {
+            if let Some(win) = weak.upgrade() {
+                glib::spawn_future_local(async move {
+                    win.banner_action().await;
+                });
             }
         });
 
@@ -561,13 +616,15 @@ impl Window {
         self.window.add_controller(drop);
 
         // Switching to this window: refresh the recent list, which another
-        // LeafMD window may have changed
+        // LeafMD window may have changed, and check the open file, in case it
+        // changed somewhere that doesn't send change notices (like a network drive)
         let weak = Rc::downgrade(self);
         self.window.connect_is_active_notify(move |window| {
             if window.is_active()
                 && let Some(win) = weak.upgrade()
             {
                 win.reload_recent();
+                win.schedule_file_check();
             }
         });
 
@@ -1685,6 +1742,7 @@ impl Window {
             return;
         };
         self.set_text(&text);
+        *self.known_version.borrow_mut() = Some(Version::Contents(text.into_bytes()));
         self.set_file(Some(file.clone()));
         self.show_document();
         self.remember_recent(&file);
@@ -1804,6 +1862,9 @@ impl Window {
         let file = self.file.borrow().clone();
         match file {
             Some(file) => {
+                if !self.ok_to_replace(&file).await {
+                    return false;
+                }
                 let saved = self.write_to(&file).await;
                 // Saving counts as recent use, and puts the file back on the
                 // list if Clear Recent Files emptied it while the file was open
@@ -1836,6 +1897,7 @@ impl Window {
 
     async fn write_to(self: &Rc<Self>, file: &gio::File) -> bool {
         let text = self.text();
+        self.saves_running.set(self.saves_running.get() + 1);
         // GIO writes to a temporary file first and then swaps it in, so a crash
         // or full disk part-way through can't leave a half-written file.
         let result = file
@@ -1846,12 +1908,17 @@ impl Window {
                 gio::FileCreateFlags::NONE,
             )
             .await;
-        match result {
+        self.saves_running.set(self.saves_running.get() - 1);
+        let saved = match result {
             Ok(_) => {
                 // Only mark as saved if nothing was typed while saving
                 if self.text() == text {
                     self.buffer.set_modified(false);
                 }
+                // What was written, not what's in the editor now, which may
+                // have gained more typing during the save
+                *self.known_version.borrow_mut() = Some(Version::Contents(text.into_bytes()));
+                self.close_file_banner();
                 self.toast("Saved");
                 true
             }
@@ -1859,7 +1926,186 @@ impl Window {
                 self.toast(&format!("Could not save: {}", err.message()));
                 false
             }
+        };
+        // Checks wait during a save, so look now in case another app changed
+        // the file during it
+        self.schedule_file_check();
+        saved
+    }
+
+    // =====================================================================
+    // Noticing when another app changes the open file
+    // =====================================================================
+
+    /// Starts watching the window's current file, and forgets anything known
+    /// about the previous one. Fails quietly: on a drive that can't be watched,
+    /// LeafMD still checks when returning to the window and before saving.
+    fn watch_file(self: &Rc<Self>) {
+        self.file_generation.set(self.file_generation.get() + 1);
+        self.close_file_banner();
+        let monitor = self.file.borrow().as_ref().and_then(|file| {
+            file.monitor_file(gio::FileMonitorFlags::NONE, gio::Cancellable::NONE)
+                .ok()
+        });
+        if let Some(monitor) = &monitor {
+            let weak = Rc::downgrade(self);
+            monitor.connect_changed(move |_, _, _, _| {
+                if let Some(win) = weak.upgrade() {
+                    win.schedule_file_check();
+                }
+            });
         }
+        *self.file_monitor.borrow_mut() = monitor;
+    }
+
+    /// Checks the file after FILE_CHECK_DELAY. Calling this again while waiting
+    /// doesn't restart the wait, so an app that writes constantly can't hold the
+    /// check off forever.
+    fn schedule_file_check(self: &Rc<Self>) {
+        if self.file_check_scheduled.replace(true) {
+            return;
+        }
+        let weak = Rc::downgrade(self);
+        glib::timeout_add_local_once(FILE_CHECK_DELAY, move || {
+            if let Some(win) = weak.upgrade() {
+                win.file_check_scheduled.set(false);
+                glib::spawn_future_local(async move {
+                    win.check_file().await;
+                });
+            }
+        });
+    }
+
+    /// Reads the open file, and opens or closes the banner to match.
+    async fn check_file(self: &Rc<Self>) {
+        // write_to runs another check when it finishes
+        if self.saves_running.get() > 0 {
+            return;
+        }
+        let Some(file) = self.file.borrow().clone() else {
+            return;
+        };
+        let generation = self.file_generation.get();
+        let on_disk = read_version(&file).await;
+        // While reading, the window may have moved to another file or started a save
+        if generation != self.file_generation.get() || self.saves_running.get() > 0 {
+            return;
+        }
+        let comparison = match self.known_version.borrow().as_ref() {
+            Some(known) => file_change::compare(known, on_disk.as_ref()),
+            None => return,
+        };
+        match comparison {
+            Comparison::Same => self.close_file_banner(),
+            Comparison::Changed | Comparison::Deleted => {
+                *self.banner_version.borrow_mut() = on_disk;
+                self.update_file_banner();
+            }
+            Comparison::Unknown => {}
+        }
+    }
+
+    /// Makes the banner match what it's telling the user about and whether there
+    /// are unsaved changes.
+    fn update_file_banner(&self) {
+        match self.banner_version.borrow().as_ref() {
+            Some(version) => {
+                let (message, action, loses_work) = file_change::banner_text(
+                    &self.display_name(),
+                    version,
+                    self.buffer.is_modified(),
+                );
+                self.file_banner.show(&message, action, loses_work);
+            }
+            None => self.file_banner.hide(),
+        }
+    }
+
+    fn close_file_banner(&self) {
+        *self.banner_version.borrow_mut() = None;
+        self.update_file_banner();
+    }
+
+    /// Ignore: the version the banner was about now counts as seen, so it isn't
+    /// mentioned again and saving replaces it without asking. Using that version
+    /// rather than reading the file again means a newer change still gets a banner.
+    fn ignore_file_change(self: &Rc<Self>) {
+        if let Some(version) = self.banner_version.borrow_mut().take() {
+            *self.known_version.borrow_mut() = Some(version);
+        }
+        self.update_file_banner();
+        self.schedule_file_check();
+    }
+
+    /// Reload, Discard and Reload, or Save Again.
+    async fn banner_action(self: &Rc<Self>) {
+        let deleted = self.banner_version.borrow().as_ref() == Some(&Version::Missing);
+        if deleted {
+            self.save().await;
+        } else {
+            self.reload_file().await;
+        }
+    }
+
+    /// Replaces the document with the newest version of the file. If that can't be
+    /// done, the document and the banner stay and a message says why.
+    async fn reload_file(self: &Rc<Self>) {
+        let Some(file) = self.file.borrow().clone() else {
+            return;
+        };
+        let generation = self.file_generation.get();
+        let result = file.load_contents_future().await;
+        if generation != self.file_generation.get() {
+            return;
+        }
+        let bytes = match result {
+            Ok((bytes, _)) => bytes.to_vec(),
+            Err(err) => {
+                self.toast(&format!("Could not reload the file: {}", err.message()));
+                self.schedule_file_check();
+                return;
+            }
+        };
+        let Ok(text) = String::from_utf8(bytes) else {
+            self.toast("This file isn't plain text, so LeafMD can't open it");
+            return;
+        };
+        self.replace_text_keeping_place(&text);
+        *self.known_version.borrow_mut() = Some(Version::Contents(text.into_bytes()));
+        self.close_file_banner();
+    }
+
+    /// Before saving: if another app changed the file and the user hasn't chosen
+    /// to ignore that, asks before replacing it. Returns true if it's fine to save.
+    /// A deleted file has nothing to replace, and if the file can't be read, the
+    /// save itself will report any problem.
+    async fn ok_to_replace(self: &Rc<Self>, file: &gio::File) -> bool {
+        if self.asking_to_replace.get() {
+            return false;
+        }
+        let on_disk = read_version(file).await;
+        let changed = match self.known_version.borrow().as_ref() {
+            Some(known) => file_change::compare(known, on_disk.as_ref()) == Comparison::Changed,
+            None => false,
+        };
+        if !changed {
+            return true;
+        }
+        let dialog = adw::AlertDialog::new(
+            Some("Replace the Other Version?"),
+            Some(&format!(
+                "“{}” was changed by another app since LeafMD last opened or saved it. Saving will replace that version.",
+                self.display_name()
+            )),
+        );
+        dialog.add_responses(&[("cancel", "_Cancel"), ("save", "_Save Anyway")]);
+        dialog.set_response_appearance("save", adw::ResponseAppearance::Destructive);
+        dialog.set_default_response(Some("cancel"));
+        dialog.set_close_response("cancel");
+        self.asking_to_replace.set(true);
+        let response = dialog.choose_future(Some(&self.window)).await;
+        self.asking_to_replace.set(false);
+        response.as_str() == "save"
     }
 
     /// Runs `then` straight away if there are no unsaved changes. Otherwise asks
@@ -1897,10 +2143,14 @@ impl Window {
         });
     }
 
-    fn set_file(&self, file: Option<gio::File>) {
+    fn set_file(self: &Rc<Self>, file: Option<gio::File>) {
+        if file.is_none() {
+            *self.known_version.borrow_mut() = None;
+        }
         *self.file.borrow_mut() = file;
         self.update_title();
         self.reload_preview();
+        self.watch_file();
     }
 
     /// Replaces the editor text without adding it to the undo history.
@@ -1912,6 +2162,43 @@ impl Window {
         self.buffer.place_cursor(&self.buffer.start_iter());
         self.source_view
             .scroll_to_iter(&mut self.buffer.start_iter(), 0.0, false, 0.0, 0.0);
+    }
+
+    /// Like set_text, but for reloading the same document: the cursor and scroll
+    /// position stay where they were instead of going back to the top. The
+    /// formatted view redraws through its normal update, which keeps its position.
+    fn replace_text_keeping_place(self: &Rc<Self>, text: &str) {
+        let cursor = self.buffer.iter_at_mark(&self.buffer.get_insert());
+        let (line, column) = (cursor.line(), cursor.line_offset());
+        let scroll = self.source_scroll.vadjustment().value();
+
+        self.buffer.begin_irreversible_action();
+        self.buffer.set_text(text);
+        self.buffer.end_irreversible_action();
+        self.buffer.set_modified(false);
+
+        // If the file got shorter, the cursor goes to the end of the document or line
+        let place = match self.buffer.iter_at_line(line) {
+            Some(mut place) => {
+                let mut line_end = place;
+                if !line_end.ends_line() {
+                    line_end.forward_to_line_end();
+                }
+                place.set_line_offset(column.min(line_end.line_offset()));
+                place
+            }
+            None => self.buffer.end_iter(),
+        };
+        self.buffer.place_cursor(&place);
+
+        // GTK works out the new text's height over the next moments, and until
+        // it has, the scroll position would be cut short
+        let weak = Rc::downgrade(self);
+        glib::timeout_add_local_once(Duration::from_millis(50), move || {
+            if let Some(win) = weak.upgrade() {
+                win.source_scroll.vadjustment().set_value(scroll);
+            }
+        });
     }
 
     fn text(&self) -> String {
@@ -2045,6 +2332,7 @@ impl Window {
                     ("Opening files", "Use Open, drop a file onto the window, or double-click a markdown file in your file manager."),
                     ("Recent files", "The arrow next to Open lists the files you opened recently. When you start LeafMD, it reopens the last file you had open. Clear Recent Files empties the list, and LeafMD then forgets the last file too."),
                     ("Closing a document", "Close Document in the main menu closes the file but keeps the window open, and LeafMD starts with no document next time. Closing the window instead (Ctrl+W) brings the file back next time."),
+                    ("Changes from other apps", "If another app changes or deletes the open file, a banner appears across the top of the window, and nothing changes until you choose. Reload brings in the new version, and Ignore keeps what you have. If you save a file that changed without you noticing, LeafMD asks first."),
                     ("Links", "Web links open in your browser. Links to other markdown or text files open them in a new LeafMD window, and links to headings scroll to them."),
                     ("Images", "Images next to the file and images online are shown in the formatted view."),
                 ],
@@ -2464,4 +2752,14 @@ fn file_filters() -> gio::ListStore {
     filters.append(&text);
     filters.append(&all);
     filters
+}
+
+/// Reads a file as it is on disk now. None means it couldn't be read for some
+/// reason other than not being there.
+async fn read_version(file: &gio::File) -> Option<Version> {
+    match file.load_contents_future().await {
+        Ok((bytes, _)) => Some(Version::Contents(bytes.to_vec())),
+        Err(err) if err.matches(gio::IOErrorEnum::NotFound) => Some(Version::Missing),
+        Err(_) => None,
+    }
 }
