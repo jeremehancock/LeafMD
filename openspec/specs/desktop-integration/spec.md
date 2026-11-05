@@ -13,11 +13,15 @@ LeafMD SHALL appear in the app grid as "LeafMD" (described as a Markdown Viewer)
 - **THEN** LeafMD is offered
 
 ### Requirement: Same icons on every distro
-LeafMD SHALL look the same whatever icon theme the system has chosen: its buttons and window controls SHALL use LeafMD's own icons or the Adwaita icons from the GNOME runtime, never the system's icon theme.
+LeafMD SHALL look the same whatever icon theme the system has chosen: its buttons and window controls SHALL use LeafMD's own icons, never the system's icon theme. Small icons GTK adds by itself, like the arrow beside Open, SHALL use the Adwaita icons from the GNOME runtime.
 
 #### Scenario: A system with a different icon theme
 - **WHEN** LeafMD runs on a system set to another icon theme, such as Papirus or Ubuntu's Yaru
 - **THEN** the main menu button shows three lines, and every other icon matches what LeafMD shows on any other distro
+
+#### Scenario: Maximizing a window
+- **WHEN** the window isn't maximized
+- **THEN** the maximize button shows two arrows pointing out to opposite corners, and once the user maximizes the window it shows a rounded square
 
 ### Requirement: Markdown files open in LeafMD
 LeafMD SHALL register itself for markdown files (`text/markdown` and `text/x-markdown`), so it can be chosen to open them from the file manager, and SHALL accept several files at once.

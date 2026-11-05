@@ -93,7 +93,7 @@ With Claude Code, `/ship` walks a change through all of this: the checks, trying
 | `site/` | The storefront at leafmd.app: the page, its styles, its three small scripts (the Copy buttons, the viewer that shows screenshots full size, and the Ubuntu setup help in `install-help.js`), and the templates for the install files |
 | `data/screenshots/` | The screenshots used on leafmd.app, in app stores and in the README, the sample document they show, and how to take them again |
 | `.github/workflows/ci.yml` | GitHub's build: checks and builds every push, and when a new version reaches `main`, signs it, publishes a GitHub Release and publishes leafmd.app. Also republishes leafmd.app on request |
-| `data/resources/` | Files built into the program: the view icons, formatting bar icons, replace icon and save icon. Every other icon comes from the Adwaita theme, which LeafMD always uses so icons look the same on every distro (see `src/main.rs`). LeafMD's own icons are drawn with filled shapes only, because GTK doesn't paint outlined lines in these icons |
+| `data/resources/` | Files built into the program: the view icons, formatting bar icons, replace icon and new document icon. LeafMD always uses its own theme in `data/icon-theme/`, so icons look the same on every distro (see `src/main.rs`). LeafMD's own icons are drawn with filled shapes only, because GTK doesn't paint outlined lines in these icons |
 | `openspec/specs/` | How LeafMD behaves, written as rules with examples, one folder per area |
 | `openspec/changes/` | Features being planned or built, and finished ones under `archive/` |
 | `openspec/config.yaml` | Guidance for writing proposals and specs in this project |
@@ -102,6 +102,7 @@ With Claude Code, `/ship` walks a change through all of this: the checks, trying
 | `CLAUDE.md` | How to work on LeafMD with Claude Code |
 | `build.rs` | Packs `data/resources` into the program when it's compiled, and notes the Rust version for the About window |
 | `data/icons/` | The app icon, plus a one-colour version GNOME uses in some places |
+| `data/icon-theme/` | LeafMD's own small icon theme, for icons known by a standard name, like the window's buttons, the main menu and Find. Anything drawn here replaces Adwaita's icon of the same name, and everything else (mostly small icons GTK adds by itself) still comes from Adwaita. Icons bundled in `data/resources/` can't do this. New icons here are installed automatically, using the same filled-shapes rule |
 
 ### Safety in the formatted view
 
