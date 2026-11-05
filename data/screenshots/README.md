@@ -39,6 +39,27 @@ stores:
 
 ## Taking them
 
+Rebuild so the pictures show the current code, then run the script:
+
+```
+./build-aux/flatpak-install.sh
+build-aux/take-screenshots.sh
+```
+
+It takes about a minute and replaces the four pictures in this folder once
+all four have worked, so `git diff` shows whether they changed and `git
+restore` puts the old ones back. Nothing shows on screen and any LeafMD you
+have open can stay open. It needs GNOME Shell installed, because it runs a
+real one with no visible screen, and it can't be run on GitHub for now. The
+top of the script explains how it keeps away from your real desktop.
+
+If you change the height of the header bar or formatting bar, check that its
+click positions (near the end of the script) still land where they should.
+
+## Taking them by hand
+
+If the script stops working, these steps give the same result.
+
 1. Close every LeafMD window.
 2. Rebuild so the pictures show the current code:
    `./build-aux/flatpak-install.sh`

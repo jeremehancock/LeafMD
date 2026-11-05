@@ -170,13 +170,12 @@ impl Window {
         );
         // Starts a new document. Uses LeafMD's own icon, so it can't change with
         // the icon theme or a GNOME update.
-        header.pack_start(
-            &gtk::Button::builder()
-                .icon_name("leafmd-new-symbolic")
-                .tooltip_text("New document (Ctrl+N)")
-                .action_name("win.new")
-                .build(),
-        );
+        let new_button = gtk::Button::builder()
+            .icon_name("leafmd-new-symbolic")
+            .tooltip_text("New document (Ctrl+N)")
+            .action_name("win.new")
+            .build();
+        header.pack_start(&new_button);
 
         // pack_end fills from the right edge inwards: the menu, then the view buttons.
         // The menu is grouped into sections (shown with dividers); shortcuts appear automatically.
@@ -235,13 +234,12 @@ impl Window {
         header.pack_end(&view_switcher);
         // Added after the view switcher, so it lands just to the switcher's left.
         // A word rather than an icon, like Open.
-        header.pack_end(
-            &gtk::Button::builder()
-                .label("Save")
-                .tooltip_text("Save (Ctrl+S)")
-                .action_name("win.save")
-                .build(),
-        );
+        let save_button = gtk::Button::builder()
+            .label("Save")
+            .tooltip_text("Save (Ctrl+S)")
+            .action_name("win.save")
+            .build();
+        header.pack_end(&save_button);
 
         // ---- Raw editor ----
         let buffer = sourceview5::Buffer::new(None);
@@ -334,6 +332,79 @@ impl Window {
         toolbar_view.add_top_bar(&find.bar);
         toolbar_view.set_content(Some(&toasts));
         window.set_content(Some(&toolbar_view));
+
+        // ---- Compact layout for narrow windows ----
+        // Below 640 pixels the header bar can't hold everything, so these buttons
+        // move to a bar along the bottom. "sp" grows with GNOME's Large Text
+        // setting, because the wide layout's words get wider with it too.
+        //
+        // Having a breakpoint also means the window's smallest size comes from
+        // width_request above, rather than from what's inside it. So the wide
+        // layout has to fit in 640 pixels or its edges get cut off. It needs
+        // about 614 on a desktop with minimize and maximize buttons. Anything
+        // added to the header bar eats into that, and also needs moving here.
+        let bottom_bar = gtk::ActionBar::new();
+        bottom_bar.set_visible(false);
+        toolbar_view.add_bottom_bar(&bottom_bar);
+        let compact = adw::Breakpoint::new(
+            adw::BreakpointCondition::parse("max-width: 639sp")
+                .expect("the width rule is written correctly"),
+        );
+        compact.add_setter(&bottom_bar, "visible", Some(&true.to_value()));
+        find.add_compact_rules(&compact);
+        {
+            // The real buttons move, rather than there being a copy in each place,
+            // so they keep their state: pressed in, greyed out, which view is active.
+            let header = header.clone();
+            let bottom_bar = bottom_bar.clone();
+            let new_button = new_button.clone();
+            let save_button = save_button.clone();
+            let find_button = find_button.clone();
+            let view_switcher = view_switcher.clone();
+            let window = window.clone();
+            compact.connect_apply(move |_| {
+                // Moving buttons makes the window forget where typing was going,
+                // which would stop someone typing mid-word as they cross the width
+                let focus = gtk::prelude::GtkWindowExt::focus(&window);
+                header.remove(&new_button);
+                header.remove(&save_button);
+                header.remove(&find_button);
+                header.remove(&view_switcher);
+                bottom_bar.pack_start(&new_button);
+                bottom_bar.pack_start(&save_button);
+                bottom_bar.pack_start(&find_button);
+                bottom_bar.pack_end(&view_switcher);
+                if let Some(focus) = focus {
+                    focus.grab_focus();
+                }
+            });
+        }
+        {
+            let header = header.clone();
+            let bottom_bar = bottom_bar.clone();
+            let new_button = new_button.clone();
+            let save_button = save_button.clone();
+            let find_button = find_button.clone();
+            let view_switcher = view_switcher.clone();
+            let window = window.clone();
+            compact.connect_unapply(move |_| {
+                let focus = gtk::prelude::GtkWindowExt::focus(&window);
+                bottom_bar.remove(&new_button);
+                bottom_bar.remove(&save_button);
+                bottom_bar.remove(&find_button);
+                bottom_bar.remove(&view_switcher);
+                // New was the last on the left. The other three fill in from
+                // the menu inwards, as they did when the header bar was built.
+                header.pack_start(&new_button);
+                header.pack_end(&find_button);
+                header.pack_end(&view_switcher);
+                header.pack_end(&save_button);
+                if let Some(focus) = focus {
+                    focus.grab_focus();
+                }
+            });
+        }
+        window.add_breakpoint(compact);
 
         let win = Rc::new(Self {
             window,
@@ -2297,6 +2368,7 @@ impl Window {
                     ("Formatted", "The document as it looks when rendered. Just for reading, with nothing to edit by accident."),
                     ("Raw", "The markdown text itself. Type here to make changes."),
                     ("Split", "Raw text on the left, formatted on the right. The formatted side updates as you type, and both sides scroll together."),
+                    ("Narrow windows", "When the window is narrow, the New, Save and Find buttons and the view buttons move to a bar along the bottom. They work the same way there, and move back when the window is wider."),
                 ],
             ),
             (
@@ -2321,7 +2393,7 @@ impl Window {
             (
                 "Find and Replace",
                 &[
-                    ("Find", "Press Ctrl+F, click the magnifying glass at the top of the window, or choose Find from the main menu, then type. Every match is highlighted, and Enter and Shift+Enter move between them. In Raw and Split view the raw text is searched; in Formatted view, the formatted text is."),
+                    ("Find", "Press Ctrl+F, click the magnifying glass, or choose Find from the main menu, then type. Every match is highlighted, and Enter and Shift+Enter move between them. In Raw and Split view the raw text is searched; in Formatted view, the formatted text is."),
                     ("Replace", "Press Ctrl+H, or the replace button in the find bar, to replace one match at a time or all of them at once. One Ctrl+Z undoes Replace All. Replacing works in Raw and Split view."),
                     ("Options", "The menu at the end of the find bar has Match Case and Whole Words Only."),
                 ],
