@@ -13,7 +13,7 @@ LeafMD SHALL show a "No Document Open" page with an "Open File…" button when n
 - **THEN** the "No Document Open" page is shown
 
 ### Requirement: Open, New and Save buttons
-The left of the header bar SHALL have an Open button with a small arrow beside it that lists recent files, followed by a New button. A Save button SHALL sit just to the left of the view switcher. In a window narrower than 640 pixels, New and Save SHALL be in the bottom bar. Open and Save SHALL be words rather than icons, because icons for those actions vary a lot between icon themes. New SHALL use LeafMD's own new document icon. Open and its arrow SHALL look raised, sharing one background, as Save does.
+The left of the header bar SHALL have an Open button with a small arrow beside it that lists recent files, followed by a New button. A Save button SHALL sit just to the left of the view switcher. Below 640 pixels wide, New and Save SHALL be in the bottom bar. Open and Save SHALL be words rather than icons, because icons for those actions vary a lot between icon themes. New SHALL use LeafMD's own new document icon. Open and its arrow SHALL look raised, sharing one background, as Save does.
 
 #### Scenario: Hovering the buttons
 - **WHEN** the user hovers over Open, New or Save
