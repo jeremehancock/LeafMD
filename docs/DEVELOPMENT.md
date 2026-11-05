@@ -80,6 +80,7 @@ With Claude Code, `/ship` walks a change through all of this: the checks, trying
 |---|---|
 | `src/main.rs` | Starts the app, sets up keyboard shortcuts, opens files passed on the command line |
 | `src/window.rs` | The window: toolbar, formatting bar, raw editor, formatted view, find and replace, Help, cheatsheet and About, opening and saving |
+| `src/file_change.rs` | Noticing when another app changes the open file: what counts as a change, what the banner says, and the banner's widgets, with tests |
 | `src/find.rs` | The find and replace bar's buttons and boxes |
 | `src/format.rs` | What each formatting button does to the text (bold, lists, headings, tables and so on), with tests |
 | `src/typing.rs` | Help while typing: what Enter does in a list, spotting code blocks, and spotting a pasted web address, with tests |

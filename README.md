@@ -53,6 +53,7 @@ The raw text can always be edited in Raw and Split view, and changes are only wr
 - **Links** to websites open in your browser. Links to other markdown or text files (like `LICENSE`) open them in a new LeafMD window, scrolled to the heading if the link names one.
 - **Find and replace** (Ctrl+F, Ctrl+H, the magnifying glass button, or the main menu): highlights every match with a count like "3 of 12". It searches the raw text in Raw and Split view, and the formatted text in Formatted view. Replace one match or all of them, and undo Replace All with one Ctrl+Z. Options: match case, and whole words only.
 - **Recent files:** the arrow next to **Open** lists the files you opened recently, and LeafMD reopens your last file when you start it. **Clear Recent Files** empties the list and forgets the last file too.
+- **Changes from other apps:** if another app changes or deletes the open file, a banner offers to reload it or ignore the change. Nothing changes until you choose, and Save asks before replacing a version you haven't seen.
 - **Close Document** (in the main menu) closes the file but keeps the window open, and LeafMD starts with no document next time.
 - **Help** (F1) explains all of this inside the app, and **Keyboard Shortcuts** (Ctrl+?) lists every shortcut.
 

@@ -29,6 +29,7 @@
       <li>Lists continue themselves when you press Enter, and pasting a web address over text makes a link</li>
       <li>A built-in markdown cheatsheet shows the common syntax at a glance</li>
       <li>Find and replace, in the raw text or the formatted document</li>
+      <li>A banner tells you when another app changes your file, and nothing is overwritten without asking</li>
       <li>In split view, both sides scroll together</li>
       <li>Supports tables, task lists, footnotes and other GitHub-style markdown</li>
       <li>Follows your system's light or dark style</li>
@@ -93,9 +94,10 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
-    <release version="0.3.0" date="2026-11-05" type="development">
+    <release version="0.3.0" date="2026-11-05">
       <description>
         <ul>
+          <li>A banner now tells you when another app changes or deletes your open file, so you can reload it or keep what you have. Save also asks before replacing a version you haven't seen</li>
           <li>A new button next to Open starts a new document with one click</li>
           <li>Save is now a labelled button, just left of the view switcher</li>
           <li>Open and its recent files arrow now look like one raised button</li>

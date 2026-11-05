@@ -1,3 +1,4 @@
+mod file_change;
 mod find;
 mod format;
 mod render;
