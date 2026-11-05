@@ -212,6 +212,9 @@ h3 { font-size: 1.1rem; font-weight: 700; }
   font: 600 0.85rem var(--font); color: var(--fg);
   background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
   padding: 6px 12px; cursor: pointer;
+  /* Wide enough for "Copied" as well as "Copy", so that the button doesn't
+     grow when clicked and push the command beside it onto different lines */
+  min-width: 4.75rem;
 }
 .copy:hover { filter: brightness(0.96); }
 code { font-family: var(--mono); font-size: 0.92em; }

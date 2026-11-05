@@ -95,6 +95,16 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.5.0" date="2026-11-05">
+      <description>
+        <p>LeafMD is now easier to use from a terminal.</p>
+        <ul>
+          <li>Starting LeafMD from a terminal now gives the terminal back straight away, and LeafMD stays open if you close the terminal</li>
+          <li>A one-time setup adds a short leafmd command, so leafmd notes.md opens a file. Help links to the steps</li>
+          <li>The new --foreground option keeps LeafMD attached to the terminal, to show its messages when something goes wrong</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.4.0" date="2026-11-05">
       <description>
         <p>LeafMD now fits windows as small as 360 by 300 pixels. In a narrow window, the New, Save and Find buttons and the view buttons move to a bar along the bottom, and the find bar wraps onto extra rows.</p>
