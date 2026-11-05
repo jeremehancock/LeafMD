@@ -50,10 +50,15 @@ stores:
    1. Press the view's keys: Ctrl+1, Ctrl+2 or Ctrl+3 (the numbers, not the
       letter I, which is Italic). Leave both sides scrolled to the top.
       Then click once in the document, so no button is left with a blue
-      focus outline from the key press: in Raw and Split, at the start of
-      "Our plan" (the text cursor sits there, with nothing selected); in
-      Formatted, on a blank part of the page.
-   2. Keep the mouse still for two seconds, so the scrollbar fades away.
+      focus outline from the key press: in Raw and Split, just before the "O"
+      in "Our plan" on line 3 (the text cursor sits there, with nothing
+      selected, and line 3 lights up instead of line 1); in Formatted, on a
+      blank part of the page.
+   2. Move the mouse onto the header bar's empty space, beside the file name,
+      and leave it there, because scrollbars stay visible while the mouse
+      moves over the document. Wait a slow count of three, until the right
+      edge is clear of any scrollbar. If one shows up during the capture,
+      wait for it to fade.
    3. Press **Print Screen**, choose **Window** at the bottom of the
       screenshot bar, click the LeafMD window, then the round capture button.
       GNOME saves it in `~/Pictures/Screenshots/`.
