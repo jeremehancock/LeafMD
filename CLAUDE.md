@@ -93,9 +93,13 @@ GNOME SDK.
 
 - Code comments explain what and why in plain English, for someone who knows
   programming but not this codebase.
-- Icons LeafMD draws itself live in `data/resources/icons` and are listed in
-  `data/resources/resources.gresource.xml`. Draw them with filled shapes only,
-  because GTK doesn't paint outlined lines in symbolic icons.
+- Icons LeafMD draws itself live in one of two places. Icons with LeafMD's own
+  names (`leafmd-...`) are in `data/resources/icons` and listed in
+  `data/resources/resources.gresource.xml`. Icons with a standard name that
+  replace Adwaita's, including ones GTK asks for itself like the window's
+  buttons, are in `data/icon-theme/LeafMD`, because bundled icons can't replace
+  Adwaita's. Draw them all with filled shapes only, because GTK doesn't paint
+  outlined lines in symbolic icons.
 - Nothing in a document may run scripts or navigate the formatted view away;
   see `openspec/specs/formatted-view` and `openspec/specs/links`.
 - Commit to `dev`, only when the owner asks. Running `/ship` counts as asking.

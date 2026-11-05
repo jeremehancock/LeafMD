@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <!-- Maximize: two triangles pointing out to opposite corners, meaning "grow". Named after GTK's own icon so it replaces it in the window's title bar -->
+  <path d="M8 3H12A1 1 0 0 1 13 4V8ZM3 8V12A1 1 0 0 0 4 13H8Z" fill="#2e3436"/>
+</svg>

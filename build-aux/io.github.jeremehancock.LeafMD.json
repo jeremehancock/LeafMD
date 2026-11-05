@@ -31,7 +31,9 @@
                 "install -Dm644 data/io.github.jeremehancock.LeafMD.desktop /app/share/applications/io.github.jeremehancock.LeafMD.desktop",
                 "install -Dm644 data/io.github.jeremehancock.LeafMD.metainfo.xml /app/share/metainfo/io.github.jeremehancock.LeafMD.metainfo.xml",
                 "install -Dm644 data/icons/hicolor/scalable/apps/io.github.jeremehancock.LeafMD.svg /app/share/icons/hicolor/scalable/apps/io.github.jeremehancock.LeafMD.svg",
-                "install -Dm644 data/icons/hicolor/symbolic/apps/io.github.jeremehancock.LeafMD-symbolic.svg /app/share/icons/hicolor/symbolic/apps/io.github.jeremehancock.LeafMD-symbolic.svg"
+                "install -Dm644 data/icons/hicolor/symbolic/apps/io.github.jeremehancock.LeafMD-symbolic.svg /app/share/icons/hicolor/symbolic/apps/io.github.jeremehancock.LeafMD-symbolic.svg",
+                "install -Dm644 data/icon-theme/LeafMD/index.theme /app/share/icons/LeafMD/index.theme",
+                "install -Dm644 -t /app/share/icons/LeafMD/scalable/actions data/icon-theme/LeafMD/scalable/actions/*.svg"
             ],
             "sources": [
                 {

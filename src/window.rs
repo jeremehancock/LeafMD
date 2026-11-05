@@ -136,15 +136,18 @@ impl Window {
                 .dropdown_tooltip("Recent files")
                 .action_name("win.open")
                 .menu_model(&recent_menu)
+                // Header bar buttons are flat by default. Raised gives Open and
+                // its arrow one shared background, so they read as one button.
+                .css_classes(["raised"])
                 .build(),
         );
-        // LeafMD's own floppy disk icon, because the Adwaita theme LeafMD uses
-        // (see main.rs) draws Save as a downward arrow.
+        // Starts a new document. Uses LeafMD's own icon, so it can't change with
+        // the icon theme or a GNOME update.
         header.pack_start(
             &gtk::Button::builder()
-                .icon_name("leafmd-save-symbolic")
-                .tooltip_text("Save (Ctrl+S)")
-                .action_name("win.save")
+                .icon_name("leafmd-new-symbolic")
+                .tooltip_text("New document (Ctrl+N)")
+                .action_name("win.new")
                 .build(),
         );
 
@@ -203,6 +206,15 @@ impl Window {
             .build();
         header.pack_end(&find_button);
         header.pack_end(&view_switcher);
+        // Added after the view switcher, so it lands just to the switcher's left.
+        // A word rather than an icon, like Open.
+        header.pack_end(
+            &gtk::Button::builder()
+                .label("Save")
+                .tooltip_text("Save (Ctrl+S)")
+                .action_name("win.save")
+                .build(),
+        );
 
         // ---- Raw editor ----
         let buffer = sourceview5::Buffer::new(None);

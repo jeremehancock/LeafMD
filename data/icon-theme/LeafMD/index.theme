@@ -1,0 +1,16 @@
+# LeafMD's own small icon theme. Any icon drawn here is used in place of
+# Adwaita's icon of the same name. Everything else still comes from Adwaita.
+# See use_same_icons_everywhere in src/main.rs.
+[Icon Theme]
+Name=LeafMD
+Comment=LeafMD's own window button icons
+Inherits=Adwaita
+Hidden=true
+Directories=scalable/actions
+
+[scalable/actions]
+Context=Actions
+Size=16
+MinSize=8
+MaxSize=512
+Type=Scalable

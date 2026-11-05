@@ -169,7 +169,7 @@ interface changes since they were last updated:
 
 ```bash
 last=$(git log -1 --format=%H -- data/screenshots/*.png)
-git log --oneline "$last"..HEAD -- src/ data/resources/
+git log --oneline "$last"..HEAD -- src/ data/resources/ data/icon-theme/
 ```
 
 Read those commits for anything a screenshot shows (`data/screenshots/README.md`
