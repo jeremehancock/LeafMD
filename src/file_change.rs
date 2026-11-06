@@ -2,7 +2,7 @@
 //! a change, and the banner that appears across the top of the window.
 //!
 //! This file only decides what a difference means and builds the banner's widgets.
-//! Watching the file and what the buttons do is in window.rs, because it needs
+//! Watching the file and what the buttons do is in document.rs, because it needs
 //! the editor.
 
 use std::sync::Once;

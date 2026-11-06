@@ -1,28 +1,27 @@
+mod dialog;
+mod document;
 mod file_change;
 mod find;
 mod format;
+mod opening;
 mod render;
 mod state;
 mod typing;
 mod window;
 
-use std::cell::RefCell;
 use std::ffi::{OsStr, OsString};
 use std::io::IsTerminal;
+use std::ops::ControlFlow;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::process::CommandExt;
 use std::process::{Command, Stdio};
-use std::rc::Rc;
 
 use adw::prelude::*;
 use gtk::{gio, glib};
 
-use window::Window;
+use window::{Window, Windows};
 
 pub const APP_ID: &str = "io.github.jeremehancock.LeafMD";
-
-/// Every open LeafMD window. Each document gets its own window.
-type Windows = Rc<RefCell<Vec<Rc<Window>>>>;
 
 /// Always draws icons from LeafMD's own small theme (data/icon-theme, installed
 /// with the Flatpak) instead of the icon theme the user's system has chosen.
@@ -50,9 +49,15 @@ fn use_same_icons_everywhere() {
 ///
 /// Also never when an option was given: `--help` has to print before LeafMD
 /// exits, a mistyped option has to show its error, and `--foreground` is an
-/// option that asks to stay, so it doesn't need a rule of its own.
+/// option that asks to stay, so it doesn't need a rule of its own. The exception
+/// is `--new-window`, which has nothing to print and gives the prompt back like
+/// opening a file does.
 fn should_detach<A: AsRef<OsStr>>(all_terminals: bool, args: &[A]) -> bool {
-    all_terminals && !args.iter().any(|arg| arg.as_ref().as_bytes().starts_with(b"-"))
+    all_terminals
+        && !args.iter().any(|arg| {
+            let arg = arg.as_ref().as_bytes();
+            arg.starts_with(b"-") && arg != b"--new-window"
+        })
 }
 
 /// Starts a copy of LeafMD that carries on after this one exits, with the same
@@ -112,6 +117,31 @@ fn main() -> glib::ExitCode {
         None,
     );
 
+    app.add_main_option(
+        "new-window",
+        glib::Char::from(0),
+        glib::OptionFlags::NONE,
+        glib::OptionArg::None,
+        "Open a new window",
+        None,
+    );
+
+    // This runs before the rest of startup, and works out whether another copy of
+    // LeafMD is already running. Registering is what finds that out. Either way
+    // the action below then runs in whichever copy is in charge, and startup
+    // carries on as normal. So with no file, the usual "activate" step finds the
+    // new window and just shows it, rather than reopening the last file.
+    app.connect_handle_local_options(|app, options| {
+        if options.contains("new-window") {
+            if let Err(err) = app.register(gio::Cancellable::NONE) {
+                eprintln!("LeafMD: could not start: {err}");
+                return ControlFlow::Break(glib::ExitCode::FAILURE);
+            }
+            app.activate_action("new-window", None);
+        }
+        ControlFlow::Continue(())
+    });
+
     app.connect_startup(|app| {
         sourceview5::init();
         use_same_icons_everywhere();
@@ -119,6 +149,17 @@ fn main() -> glib::ExitCode {
     });
 
     let windows = Windows::default();
+
+    // New Window from the app launcher or `leafmd --new-window`. Inside LeafMD,
+    // Ctrl+N uses the window's own action instead, to carry its view across.
+    let new_window = gio::SimpleAction::new("new-window", None);
+    let (w, weak_app) = (windows.clone(), app.downgrade());
+    new_window.connect_activate(move |_, _| {
+        if let Some(app) = weak_app.upgrade() {
+            Window::open_new(&app, &w).window.present();
+        }
+    });
+    app.add_action(&new_window);
 
     let w = windows.clone();
     app.connect_activate(move |app| {
@@ -128,83 +169,29 @@ fn main() -> glib::ExitCode {
         match existing {
             Some(win) => win.window.present(),
             None => {
-                let win = new_window(app, &w);
-                win.window.present();
+                // Told about its files before it appears, so it starts blank. Once
+                // it's on screen, leaving "No Document Open" would be a visible fade.
+                let win = Window::open_new(app, &w);
                 win.open_last_file();
+                win.window.present();
             }
         }
     });
 
     // Files opened from the file manager or command line
-    let w = windows.clone();
     app.connect_open(move |app, files, _hint| {
         for file in files {
-            open_in_window(app, &w, file.clone(), None);
+            window::open_file(app, &windows, file.clone(), None, None);
         }
     });
-
-    // Links to other text files ask for this, with the file's address
-    // (optionally ending in #heading)
-    let open_link = gio::SimpleAction::new("open-in-new-window", Some(glib::VariantTy::STRING));
-    let w = windows.clone();
-    let app_ref = app.downgrade();
-    open_link.connect_activate(move |_, param| {
-        let (Some(app), Some(uri)) = (app_ref.upgrade(), param.and_then(|p| p.str())) else {
-            return;
-        };
-        let (file_uri, heading) = match uri.split_once('#') {
-            Some((file_uri, heading)) => (file_uri, Some(heading)),
-            None => (uri, None),
-        };
-        // "#My%20Heading" in a link means the heading id "My Heading"
-        let heading = heading.map(|h| {
-            glib::Uri::unescape_string(h, None::<&str>)
-                .map(|s| s.to_string())
-                .unwrap_or_else(|| h.to_string())
-        });
-        open_in_window(&app, &w, gio::File::for_uri(file_uri), heading);
-    });
-    app.add_action(&open_link);
 
     app.run()
 }
 
-fn new_window(app: &adw::Application, windows: &Windows) -> Rc<Window> {
-    let win = Window::new(app);
-    let w = windows.clone();
-    win.window.connect_destroy(move |closed| {
-        w.borrow_mut().retain(|win| win.window != *closed);
-    });
-    windows.borrow_mut().push(win.clone());
-    win
-}
-
-/// Shows a file: brings its window forward if it's already open, otherwise
-/// uses an empty LeafMD window or opens a new one.
-fn open_in_window(app: &adw::Application, windows: &Windows, file: gio::File, heading: Option<String>) {
-    let uri = file.uri().to_string();
-    let (already_open, empty) = {
-        let list = windows.borrow();
-        (
-            list.iter().find(|win| win.file_uri().as_deref() == Some(uri.as_str())).cloned(),
-            list.iter().find(|win| !win.has_document()).cloned(),
-        )
-    };
-    if let Some(win) = already_open {
-        win.window.present();
-        if let Some(heading) = heading {
-            win.scroll_to_heading(&heading);
-        }
-        return;
-    }
-    let win = empty.unwrap_or_else(|| new_window(app, windows));
-    win.window.present();
-    win.open_file_at(file, heading);
-}
-
 fn set_shortcuts(app: &adw::Application) {
     let shortcuts: &[(&str, &[&str])] = &[
-        ("win.new", &["<Control>n"]),
+        ("win.new", &["<Control>t"]),
+        ("win.new-window", &["<Control>n"]),
         ("win.open", &["<Control>o"]),
         ("win.save", &["<Control>s"]),
         ("win.save-as", &["<Control><Shift>s"]),
@@ -225,8 +212,9 @@ fn set_shortcuts(app: &adw::Application) {
         ("win.find-replace", &["<Control>h"]),
         ("win.find-next", &["F3"]),
         ("win.find-previous", &["<Shift>F3"]),
+        ("win.close-tab", &["<Control>w"]),
         // "window.close" is built into GTK and goes through the unsaved-changes check
-        ("window.close", &["<Control>w", "<Control>q"]),
+        ("window.close", &["<Control>q"]),
     ];
     for &(action, keys) in shortcuts {
         app.set_accels_for_action(action, keys);
@@ -242,6 +230,15 @@ mod tests {
         assert!(should_detach::<&str>(true, &[]));
         assert!(should_detach(true, &["notes.md"]));
         assert!(should_detach(true, &["my notes.md", "/tmp/todo.md"]));
+    }
+
+    #[test]
+    fn detaches_for_a_new_window() {
+        assert!(should_detach(true, &["--new-window"]));
+        assert!(should_detach(true, &["--new-window", "notes.md"]));
+        // Only the terminal decides that, and other options still stay
+        assert!(!should_detach(false, &["--new-window"]));
+        assert!(!should_detach(true, &["--new-window", "--foreground"]));
     }
 
     #[test]

@@ -8,7 +8,7 @@ file does, and docs/PUBLISHING.md covers releases and leafmd.app.
 ## How changes are planned: OpenSpec
 
 `openspec/specs/` describes how LeafMD behaves today, one folder per area
-(views, documents, recent-files, windows, links, formatted-view,
+(views, documents, recent-files, windows, tabs, links, formatted-view,
 formatting-bar, find-replace, smart-typing, help-and-about, distribution,
 desktop-integration). Read the relevant spec before
 changing behaviour, and don't change behaviour a spec describes without

@@ -43,6 +43,8 @@ LeafMD has three views. Switch between them with the icons in the header bar, or
 
 The raw text can always be edited in Raw and Split view, and changes are only written to the file when you save.
 
+- **Tabs:** a window can hold several documents, and the tab bar appears once there are two. New (Ctrl+T) opens an empty one, and any file you open gets its own tab, including from your file manager and from links. A file that's already open isn't opened twice: LeafMD shows its tab. Each tab keeps its own text, view, undo history, find bar and banner. Drag a tab to reorder it, drop it on another LeafMD window, or pull it out into a window of its own. Right-clicking a tab offers the same moves.
+- **Windows:** Ctrl+N, New Window in the main menu, or right-clicking LeafMD's icon opens another window. A file from outside LeafMD opens in an empty window if there is one, otherwise as a tab in the window you used last.
 - **Formatting bar:** in Raw and Split view, a row of buttons above the text adds the markdown for you: bold, italic, strikethrough, inline code, links, headings, bulleted, numbered and check lists, quotes, code blocks and tables. Select some text and press a button, or press it with nothing selected to format the word or line the cursor is on. Press it again to take the formatting off.
 - **Markdown cheatsheet** (Shift+F1, or the Cheatsheet button) shows the most common markdown next to what it looks like.
 - **Lists continue as you type:** press Enter in a list and the next bullet, number or unticked checkbox is added for you. Enter on an empty item ends the list, and Shift+Enter starts a plain line instead.
@@ -50,11 +52,11 @@ The raw text can always be edited in Raw and Split view, and changes are only wr
 
 - In split view, **scrolling either side** scrolls the other to the same spot.
 - In split view, **double-click** a word on the formatted side to select that same word in the raw text. Its line lights up briefly so you can spot it.
-- **Links** to websites open in your browser. Links to other markdown or text files (like `LICENSE`) open them in a new LeafMD window, scrolled to the heading if the link names one.
+- **Links** to websites open in your browser. Links to other markdown or text files (like `LICENSE`) open them in a new tab, scrolled to the heading if the link names one.
 - **Find and replace** (Ctrl+F, Ctrl+H, the magnifying glass button, or the main menu): highlights every match with a count like "3 of 12". It searches the raw text in Raw and Split view, and the formatted text in Formatted view. Replace one match or all of them, and undo Replace All with one Ctrl+Z. Options: match case, and whole words only.
-- **Recent files:** the arrow next to **Open** lists the files you opened recently, and LeafMD reopens your last file when you start it. **Clear Recent Files** empties the list and forgets the last file too.
+- **Recent files:** the arrow next to **Open** lists the 10 files you opened most recently. When you start LeafMD, it reopens the saved files from the window you closed last, in the same tabs, as long as they're still on that list. **Clear Recent Files** empties the list, and LeafMD then has nothing to reopen.
 - **Changes from other apps:** if another app changes or deletes the open file, a banner offers to reload it or ignore the change. Nothing changes until you choose, and Save asks before replacing a version you haven't seen.
-- **Close Document** (in the main menu) closes the file but keeps the window open, and LeafMD starts with no document next time.
+- **Close Document** (in the main menu) closes the selected tab. If it's the last one, the window stays open and LeafMD starts with no document next time.
 - **Help** (F1) explains all of this inside the app, and **Keyboard Shortcuts** (Ctrl+?) lists every shortcut.
 
 ## Keyboard shortcuts
@@ -62,11 +64,16 @@ The raw text can always be edited in Raw and Split view, and changes are only wr
 | Keys | Action |
 |---|---|
 | Ctrl+1 / Ctrl+2 / Ctrl+3 | Formatted / Raw / Split view |
-| Ctrl+N | New document |
+| Ctrl+T | New document, in a new tab |
+| Ctrl+N | New window |
 | Ctrl+O | Open |
 | Ctrl+S | Save |
 | Ctrl+Shift+S | Save as |
-| Ctrl+W or Ctrl+Q | Close window (asks first if there are unsaved changes) |
+| Ctrl+W | Close tab, or the window if it's the last tab (asks first if there are unsaved changes) |
+| Ctrl+Q | Close window with all its tabs (asks first if there are unsaved changes) |
+| Ctrl+Tab, Ctrl+Page Down or Ctrl+Alt+Page Down | Next tab |
+| Ctrl+Shift+Tab, Ctrl+Page Up or Ctrl+Alt+Page Up | Previous tab |
+| Alt+1 to Alt+9 | Go to a tab by its position |
 | Ctrl+B / Ctrl+I | Bold / italic |
 | Ctrl+Shift+X | Strikethrough |
 | Ctrl+E | Inline code |
@@ -83,23 +90,24 @@ You can also open a file by dropping it on the window, or by typing `leafmd file
 
 ## From a terminal
 
-Flatpak apps don't come with a short command, but one line adds it. After that, typing `leafmd notes.md` opens that file in LeafMD.
+Flatpak apps don't come with a short command, but one line adds it. After that, typing `leafmd notes.md` opens that file in LeafMD, `leafmd a.md b.md` opens both as tabs in one window, and `leafmd --new-window` opens a new window.
 
 For everyone on this computer (asks for your admin password, and works straight away on most systems):
 
 ```
-sudo sh -c 'set -C; printf "%s\n" "#!/bin/sh" "exec flatpak run --file-forwarding io.github.jeremehancock.LeafMD @@ \"\$@\" @@" > /usr/local/bin/leafmd && chmod 755 /usr/local/bin/leafmd'
+sudo sh -c 'set -C; printf "%s\n" "#!/bin/sh" "while case \"\$1\" in -*) ;; *) false ;; esac; do o=\"\$o \$1\"; shift; done" "exec flatpak run --file-forwarding io.github.jeremehancock.LeafMD \$o @@ \"\$@\" @@" > /usr/local/bin/leafmd && chmod 755 /usr/local/bin/leafmd'
 ```
 
 Or just for you (no admin password needed):
 
 ```
-sh -c 'set -C; mkdir -p ~/.local/bin; printf "%s\n" "#!/bin/sh" "exec flatpak run --file-forwarding io.github.jeremehancock.LeafMD @@ \"\$@\" @@" > ~/.local/bin/leafmd && chmod 755 ~/.local/bin/leafmd'
+sh -c 'set -C; mkdir -p ~/.local/bin; printf "%s\n" "#!/bin/sh" "while case \"\$1\" in -*) ;; *) false ;; esac; do o=\"\$o \$1\"; shift; done" "exec flatpak run --file-forwarding io.github.jeremehancock.LeafMD \$o @@ \"\$@\" @@" > ~/.local/bin/leafmd && chmod 755 ~/.local/bin/leafmd'
 ```
 
 The `leafmd` command works with every version of LeafMD, and works best with the latest, which gives your terminal back as soon as LeafMD opens. On older versions, files open the same way, but the terminal stays busy until LeafMD closes.
 
 - Neither line replaces a `leafmd` that's already there: you'll see an error, and nothing changes.
+- If you set this up before and options like `leafmd --new-window` say "Failed to open" in folders outside your home folder, delete the old file (see below) and use the line again. Opening files works either way.
 - If `leafmd` isn't found after using the second line, log out and back in. If it still isn't found, add `~/.local/bin` to your `PATH`.
 - To see LeafMD's messages when something goes wrong, run `leafmd --foreground`, which keeps it attached to the terminal.
 - To undo the setup, delete the file the line created: `/usr/local/bin/leafmd` (with `sudo rm`) or `~/.local/bin/leafmd`.

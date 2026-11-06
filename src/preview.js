@@ -212,14 +212,25 @@
     post({ kind: "find", position: findCurrent + 1, count: findRanges.length });
   }
 
+  function sameFind(query) {
+    return findQuery && findQuery.text === query.text &&
+      findQuery.matchCase === query.matchCase && findQuery.wholeWords === query.wholeWords;
+  }
+
+  // This document's tab was selected again. The highlights are still here, so
+  // only the find bar needs telling the count. Going through find() would move
+  // to the first match on screen and could scroll the page.
+  function resumeFind(text, matchCase, wholeWords) {
+    if (sameFind({ text, matchCase, wholeWords })) reportFind();
+    else find(text, matchCase, wholeWords, 0);
+  }
+
   // step 0: a new search, starting at the first match on screen.
   // step 1 or -1: the next or previous match, wrapping round at the ends.
   function find(text, matchCase, wholeWords, step) {
     const query = { text, matchCase, wholeWords };
-    const same = findQuery && findQuery.text === text &&
-      findQuery.matchCase === matchCase && findQuery.wholeWords === wholeWords;
     const count = findRanges.length;
-    if (same && step !== 0 && count) {
+    if (sameFind(query) && step !== 0 && count) {
       findCurrent = (findCurrent + step + count) % count;
     } else {
       findQuery = query;
@@ -256,6 +267,7 @@
     scrollToLine,
     setSplitView(on) { jumpOnDoubleClick = on; },
     find,
+    resumeFind,
     findAgain,
     clearFind,
   };

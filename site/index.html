@@ -117,12 +117,12 @@
         <li>
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 4h18v16H3zm2 2v12h6V6zm8 0v12h6V6z"/></svg>
           <h3>Three views</h3>
-          <p>Formatted for distraction-free reading, raw for writing, or both side by side. Switch with one click.</p>
+          <p>Formatted for distraction-free reading, raw for writing, or both side by side, updating as you type and scrolling together.</p>
         </li>
         <li>
-          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>
-          <h3>Live preview</h3>
-          <p>The formatted side updates as you type, and both sides scroll together so you never lose your place.</p>
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M2 5h9v3h2V5h9v15H2zM4 10v8h16v-8z"/></svg>
+          <h3>Tabs</h3>
+          <p>Keep several documents in one window, and pick up where you left off next time. Links and opened files get a tab of their own.</p>
         </li>
         <li>
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 3h7a5 5 0 0 1 3.6 8.4A5 5 0 0 1 13 21H5zm3 3v4h4a2 2 0 0 0 0-4zm0 7v5h5a2.5 2.5 0 0 0 0-5z"/></svg>
@@ -224,7 +224,7 @@
           <h3>For everyone on this computer</h3>
           <p>Asks for your admin password, and works straight away on most systems:</p>
           <div class="command">
-            <code id="terminal-system">sudo sh -c 'set -C; printf "%s\n" "#!/bin/sh" "exec flatpak run <span class="nowrap">--file-forwarding</span> io.<wbr>github.<wbr>jeremehancock.<wbr>LeafMD @@ \"\$@\" @@" &gt; /usr/<wbr>local/<wbr>bin/<wbr>leafmd &amp;&amp; chmod 755 /usr/<wbr>local/<wbr>bin/<wbr>leafmd'</code>
+            <code id="terminal-system">sudo sh -c 'set -C; printf "%s\n" "#!/bin/sh" "while case \"\$1\" in -*) ;; *) false ;; esac; do o=\"\$o \$1\"; shift; done" "exec flatpak run <span class="nowrap">--file-forwarding</span> io.<wbr>github.<wbr>jeremehancock.<wbr>LeafMD \$o @@ \"\$@\" @@" &gt; /usr/<wbr>local/<wbr>bin/<wbr>leafmd &amp;&amp; chmod 755 /usr/<wbr>local/<wbr>bin/<wbr>leafmd'</code>
             <button type="button" class="copy" data-copy="terminal-system" hidden>Copy</button>
           </div>
         </article>
@@ -232,7 +232,7 @@
           <h3>Just for you</h3>
           <p>No admin password needed:</p>
           <div class="command">
-            <code id="terminal-home">sh -c 'set -C; mkdir -p ~/.local/bin; printf "%s\n" "#!/bin/sh" "exec flatpak run <span class="nowrap">--file-forwarding</span> io.<wbr>github.<wbr>jeremehancock.<wbr>LeafMD @@ \"\$@\" @@" &gt; ~/.local/<wbr>bin/<wbr>leafmd &amp;&amp; chmod 755 ~/.local/<wbr>bin/<wbr>leafmd'</code>
+            <code id="terminal-home">sh -c 'set -C; mkdir -p ~/.local/bin; printf "%s\n" "#!/bin/sh" "while case \"\$1\" in -*) ;; *) false ;; esac; do o=\"\$o \$1\"; shift; done" "exec flatpak run <span class="nowrap">--file-forwarding</span> io.<wbr>github.<wbr>jeremehancock.<wbr>LeafMD \$o @@ \"\$@\" @@" &gt; ~/.local/<wbr>bin/<wbr>leafmd &amp;&amp; chmod 755 ~/.local/<wbr>bin/<wbr>leafmd'</code>
             <button type="button" class="copy" data-copy="terminal-home" hidden>Copy</button>
           </div>
         </article>
@@ -240,6 +240,7 @@
       <ul class="notes">
         <li><strong>Works with every version</strong> It works best with the latest, which gives your terminal back as soon as LeafMD opens. On older versions, files open the same way, but the terminal stays busy until LeafMD closes.</li>
         <li><strong>Already have a <code>leafmd</code>?</strong> Neither line replaces it. You'll see an error, and nothing changes.</li>
+        <li><strong>Set this up before?</strong> If options like <code>leafmd --new-window</code> say "Failed to open" in folders outside your home folder, delete the old file and use the line again. Opening files works either way.</li>
         <li><strong>Is <code>leafmd</code> not found?</strong> After using the "Just for you" line, log out and back in. If it still isn't found, add <code>~/.local/bin</code> to your <code>PATH</code>.</li>
         <li><strong>To undo the setup</strong> Delete the file the line created: <code>/usr/local/bin/leafmd</code> (with <code>sudo rm</code>) or <code>~/.local/bin/leafmd</code>.</li>
       </ul>

@@ -1,48 +1,24 @@
-//! The LeafMD window: the toolbar, the formatting bar, the raw editor, the
-//! formatted view, and opening and saving files.
+//! The LeafMD window: the toolbar, the formatting bar, find and replace, Help,
+//! the cheatsheet and About. The document it shows is in document.rs.
 
 use std::cell::{Cell, RefCell};
-use std::rc::Rc;
-use std::time::{Duration, Instant};
+use std::collections::VecDeque;
+use std::rc::{Rc, Weak};
+use std::time::Duration;
 
 use adw::prelude::*;
 use gtk::{gdk, gio, glib};
 use sourceview5::prelude::*;
-use webkit6::prelude::*;
 
-use crate::file_change::{self, Comparison, FileBanner, Version};
+use crate::document::{self, Document};
+use crate::file_change::FileBanner;
 use crate::find::FindBar;
-use crate::format::{self, Inline, LineStyle};
-use crate::render;
-use crate::typing;
+use crate::opening::{self, Target, WindowFacts};
 use crate::state::{self, SavedState, ViewMode};
-
-/// The empty page (styles only) that the formatted view is drawn into.
-const PREVIEW_PAGE: &str = include_str!("preview.html");
-
-/// Helpers for click-to-jump and synced scrolling, run inside the formatted view.
-const PREVIEW_SCRIPT: &str = include_str!("preview.js");
-
-/// LeafMD's private script "world" in the formatted view. Code and messages here
-/// are kept apart from the document itself.
-const SCRIPT_WORLD: &str = "leafmd";
 
 /// When a file is opening, the longest LeafMD waits for the formatted view to
 /// finish drawing before showing the document anyway.
 const REVEAL_TIMEOUT: Duration = Duration::from_secs(1);
-
-/// How long to wait after the last keystroke before updating the formatted view.
-const RENDER_DELAY: Duration = Duration::from_millis(150);
-
-/// After LeafMD scrolls one side to match the other, scroll events from that
-/// side are ignored for this long, so the two sides don't keep nudging each other.
-const SYNC_QUIET: Duration = Duration::from_millis(250);
-
-/// How long to wait after a sign that the open file changed before reading it.
-/// One save can produce several signs (deleted, created, changed), so waiting
-/// gives one check, and an app that saves by deleting and recreating the file
-/// doesn't look like it deleted it.
-const FILE_CHECK_DELAY: Duration = Duration::from_millis(500);
 
 /// The description in the About window.
 const ABOUT_TEXT: &str = "LeafMD is a markdown viewer and editor that keeps things simple.
@@ -65,75 +41,129 @@ const DOCUMENT_ACTIONS: [&str; 8] = [
     "find-previous",
 ];
 
+/// Every open LeafMD window, used longest ago first, so the last one is the
+/// most recently used.
+pub type Windows = Rc<RefCell<Vec<Rc<Window>>>>;
+
+/// A file waiting to be read and shown in a tab, with a heading to scroll to.
+struct WaitingFile {
+    file: gio::File,
+    heading: Option<String>,
+}
+
+/// Opens a file, wherever it should go (see opening.rs). `asked_from` is the
+/// window that asked, or None for a file from outside LeafMD.
+pub fn open_file(
+    app: &adw::Application,
+    windows: &Windows,
+    file: gio::File,
+    heading: Option<String>,
+    asked_from: Option<&Rc<Window>>,
+) {
+    let uri = file.uri().to_string();
+    // A copy, because presenting a window can change the order of the list
+    let list = windows.borrow().clone();
+    let facts: Vec<WindowFacts> = list
+        .iter()
+        .map(|win| WindowFacts { has_file: win.has_file(&uri), is_empty: win.is_empty() })
+        .collect();
+    let asked = asked_from.and_then(|asked| list.iter().position(|win| Rc::ptr_eq(win, asked)));
+    match opening::choose_window(&facts, asked) {
+        Target::AlreadyOpen(position) => {
+            let win = &list[position];
+            win.window.present();
+            win.select_file(&uri, heading.as_deref());
+        }
+        Target::Use(position) => {
+            let win = &list[position];
+            win.window.present();
+            win.queue_file(file, heading);
+        }
+        Target::NewWindow => {
+            // Told about the file before it appears, so it starts blank. Once it's
+            // on screen, leaving "No Document Open" would be a visible fade.
+            let win = Window::open_new(app, windows);
+            win.queue_file(file, heading);
+            win.window.present();
+        }
+    }
+}
+
 pub struct Window {
     pub window: adw::ApplicationWindow,
+    /// Every window, including this one, so this one can open files and find
+    /// them in the others. Each window leaves the list when it closes.
+    windows: Windows,
+    /// Files waiting to be read, in order. They're read one at a time so their
+    /// tabs land in that order, whichever takes longest to read. A file stays
+    /// here while it's being read, so opening it again doesn't read it twice.
+    waiting_files: RefCell<VecDeque<WaitingFile>>,
+    /// True while the waiting files are being read
+    reading_files: Cell<bool>,
+    /// The order of the tabs being brought back at startup, as they were saved
+    restored_order: RefCell<Vec<String>>,
+    /// The tabs still to come back at startup, apart from the selected one, which
+    /// comes back first. A file stays here while it's being read, so opening it
+    /// again doesn't read it twice.
+    restoring_files: RefCell<Vec<String>>,
+    /// True until those files have started being read
+    restoring_not_started: Cell<bool>,
     title: adw::WindowTitle,
     toasts: adw::ToastOverlay,
     stack: gtk::Stack,
-    paned: gtk::Paned,
     view_switcher: adw::ToggleGroup,
     /// The row of formatting buttons above the raw text (Raw and Split view only)
     format_bar: gtk::ScrolledWindow,
     /// The find and replace bar (Ctrl+F, Ctrl+H)
-    find: FindBar,
+    pub find: FindBar,
     /// The magnifying glass in the header bar that opens the find bar
     find_button: gtk::ToggleButton,
     /// The list under the arrow next to Open
     recent_menu: gio::Menu,
     /// Recently opened files as file:// addresses, newest first
     recent: RefCell<Vec<String>>,
-    source_scroll: gtk::ScrolledWindow,
-    source_view: sourceview5::View,
-    buffer: sourceview5::Buffer,
-    webview: webkit6::WebView,
-
-    /// The file being shown, or None for a new, unsaved document.
-    file: RefCell<Option<gio::File>>,
-    view_mode: Cell<ViewMode>,
-    /// True once the empty preview page has loaded and can receive content.
-    preview_ready: Cell<bool>,
-    /// True while LeafMD itself is loading the preview page, so that load is allowed through.
-    preview_loading: Cell<bool>,
-    render_scheduled: Cell<bool>,
+    /// The open documents, one page per tab
+    tab_view: adw::TabView,
+    /// The document whose state the find bar is showing, kept so that state
+    /// can be saved when another tab is selected
+    shown_document: RefCell<Weak<Document>>,
+    /// True while a tab's saved state is being put into the find bar, so that
+    /// doesn't count as the user closing the bar
+    loading_find: Cell<bool>,
+    /// True while LeafMD itself is closing a tab or the window, as opposed to
+    /// a tab being dragged to another window
+    closing_tab: Cell<bool>,
+    /// The tab whose right-click menu was opened last, which is the one the
+    /// menu's items act on. It may not be the selected tab.
+    menu_page: glib::WeakRef<adw::TabPage>,
+    /// The view last chosen in this window, which new tabs start in
+    last_view: Cell<ViewMode>,
     /// Set after the user has answered "discard" or "save" when closing.
     close_confirmed: Cell<bool>,
-    /// True while an input method (for typing Chinese, Japanese and so on) is
-    /// part-way through composing text in the raw text. Enter then belongs
-    /// to the input method, so lists leave it alone.
-    composing: Cell<bool>,
-    ignore_editor_scroll_until: Cell<Instant>,
-    ignore_preview_scroll_until: Cell<Instant>,
-    /// Briefly highlights the line you jumped to
-    flash_tag: gtk::TextTag,
-    /// A heading to scroll to once the next file has loaded (from a link like other.md#intro)
-    pending_heading: RefCell<Option<String>>,
-    /// True while a file has loaded but its formatted view is still being drawn.
-    /// The document is shown once that's done, so it appears all at once.
-    reveal_pending: Cell<bool>,
-
     /// The banner that says another app changed the open file
-    file_banner: FileBanner,
-    /// Tells LeafMD when the open file changes. Dropping it stops the watching.
-    file_monitor: RefCell<Option<gio::FileMonitor>>,
-    /// The version of the open file LeafMD last opened, saved or was told to
-    /// ignore. Anything else on disk counts as another app's change.
-    known_version: RefCell<Option<Version>>,
-    /// The version the banner is telling the user about, or None if it's closed.
-    banner_version: RefCell<Option<Version>>,
-    /// True while waiting out FILE_CHECK_DELAY.
-    file_check_scheduled: Cell<bool>,
-    /// Goes up whenever the window's file changes, so a slow read of the previous
-    /// file can tell its answer is out of date and throw it away.
-    file_generation: Cell<u64>,
-    /// How many saves are being written. While any are, the file on disk is about
-    /// to change because of LeafMD itself, so checks wait.
-    saves_running: Cell<u32>,
-    /// True while "Replace the Other Version?" is open, so saving again can't open a second one.
-    asking_to_replace: Cell<bool>,
+    pub file_banner: FileBanner,
 }
 
 impl Window {
-    pub fn new(app: &adw::Application) -> Rc<Self> {
+    /// A new window, added to the list of windows.
+    pub fn open_new(app: &adw::Application, windows: &Windows) -> Rc<Self> {
+        let win = Self::new(app, windows.clone());
+        let list = windows.clone();
+        win.window.connect_destroy(move |closed| {
+            let leaving = {
+                let mut list = list.borrow_mut();
+                list.iter()
+                    .position(|win| win.window == *closed)
+                    .map(|position| list.remove(position))
+            };
+            // Let go of it only now, once the list is free for anything that needs it
+            drop(leaving);
+        });
+        windows.borrow_mut().push(win.clone());
+        win
+    }
+
+    fn new(app: &adw::Application, windows: Windows) -> Rc<Self> {
         let saved = SavedState::load();
 
         let window = adw::ApplicationWindow::builder()
@@ -172,7 +202,7 @@ impl Window {
         // the icon theme or a GNOME update.
         let new_button = gtk::Button::builder()
             .icon_name("leafmd-new-symbolic")
-            .tooltip_text("New document (Ctrl+N)")
+            .tooltip_text("New document (Ctrl+T)")
             .action_name("win.new")
             .build();
         header.pack_start(&new_button);
@@ -181,6 +211,7 @@ impl Window {
         // The menu is grouped into sections (shown with dividers); shortcuts appear automatically.
         let file_section = gio::Menu::new();
         file_section.append(Some("New"), Some("win.new"));
+        file_section.append(Some("New Window"), Some("win.new-window"));
         file_section.append(Some("Open…"), Some("win.open"));
         file_section.append(Some("Close Document"), Some("win.close-document"));
         let save_section = gio::Menu::new();
@@ -241,60 +272,40 @@ impl Window {
             .build();
         header.pack_end(&save_button);
 
-        // ---- Raw editor ----
-        let buffer = sourceview5::Buffer::new(None);
-        if let Some(language) = sourceview5::LanguageManager::default().language("markdown") {
-            buffer.set_language(Some(&language));
-        }
-        buffer.set_highlight_syntax(true);
-        let flash_tag = gtk::TextTag::new(Some("leafmd-flash"));
-        buffer.tag_table().add(&flash_tag);
-
-        let source_view = sourceview5::View::with_buffer(&buffer);
-        source_view.set_show_line_numbers(true);
-        source_view.set_monospace(true);
-        source_view.set_wrap_mode(gtk::WrapMode::WordChar);
-        source_view.set_tab_width(4);
-        source_view.set_auto_indent(true);
-        source_view.set_top_margin(12);
-        source_view.set_bottom_margin(12);
-        source_view.set_left_margin(8);
-        source_view.set_right_margin(12);
-        source_view.set_highlight_current_line(true);
-
-        let source_scroll = gtk::ScrolledWindow::builder()
-            .child(&source_view)
-            .hexpand(true)
-            .vexpand(true)
-            .build();
-
-        // ---- Formatted view ----
-        let webview = webkit6::WebView::new();
-        webview.set_hexpand(true);
-        webview.set_vexpand(true);
-        if let Some(settings) = WebViewExt::settings(&webview) {
-            // Scripts inside documents never run. LeafMD can still update the page itself.
-            settings.set_enable_javascript_markup(false);
-            settings.set_enable_developer_extras(false);
-        }
-        // Lets LeafMD's own helper script (and only that) send messages back to the app
-        if let Some(content_manager) = webview.user_content_manager() {
-            content_manager.register_script_message_handler("leafmd", Some(SCRIPT_WORLD));
-        }
-
         // ---- Formatting bar ----
         let format_bar = build_format_bar();
 
         // ---- Find and replace ----
-        let find = FindBar::new(&buffer);
+        let find = FindBar::new();
 
         // ---- Layout ----
-        let paned = gtk::Paned::builder()
-            .orientation(gtk::Orientation::Horizontal)
-            .start_child(&source_scroll)
-            .end_child(&webview)
-            .shrink_start_child(false)
-            .shrink_end_child(false)
+        // The tab bar shows itself only with two or more tabs, like gedit. It
+        // handles tabs getting narrower and scrolling sideways by itself.
+        let tab_view = adw::TabView::new();
+        // Not all of the built-in shortcuts: Ctrl+Home and Ctrl+End belong to the
+        // raw text. Ctrl+Page Up and Down are in setup_tab_signals, because these
+        // built-in ones stop at the ends.
+        tab_view.set_shortcuts(
+            adw::TabViewShortcuts::CONTROL_TAB
+                | adw::TabViewShortcuts::CONTROL_SHIFT_TAB
+                | adw::TabViewShortcuts::ALT_DIGITS,
+        );
+        // What right-clicking a tab shows
+        let moves = gio::Menu::new();
+        moves.append(Some("Move Left"), Some("win.tab-move-left"));
+        moves.append(Some("Move Right"), Some("win.tab-move-right"));
+        moves.append(Some("Move to New Window"), Some("win.tab-move-to-new-window"));
+        let closes = gio::Menu::new();
+        closes.append(Some("Close"), Some("win.tab-close"));
+        let tab_menu = gio::Menu::new();
+        tab_menu.append_section(None, &moves);
+        tab_menu.append_section(None, &closes);
+        tab_view.set_menu_model(Some(&tab_menu));
+
+        let tab_bar = adw::TabBar::builder()
+            .view(&tab_view)
+            .autohide(true)
+            .expand_tabs(true)
             .build();
 
         let open_button = gtk::Button::builder()
@@ -319,13 +330,14 @@ impl Window {
             .build();
         stack.add_named(&empty_page, Some("empty"));
         stack.add_named(&adw::Bin::new(), Some("loading"));
-        stack.add_named(&paned, Some("document"));
+        stack.add_named(&tab_view, Some("document"));
 
         let toasts = adw::ToastOverlay::new();
         toasts.set_child(Some(&stack));
 
         let toolbar_view = adw::ToolbarView::new();
         toolbar_view.add_top_bar(&header);
+        toolbar_view.add_top_bar(&tab_bar);
         let file_banner = FileBanner::new();
         toolbar_view.add_top_bar(&file_banner.revealer);
         toolbar_view.add_top_bar(&format_bar);
@@ -408,46 +420,34 @@ impl Window {
 
         let win = Rc::new(Self {
             window,
+            windows,
+            waiting_files: RefCell::new(VecDeque::new()),
+            reading_files: Cell::new(false),
+            restored_order: RefCell::new(Vec::new()),
+            restoring_files: RefCell::new(Vec::new()),
+            restoring_not_started: Cell::new(false),
             title,
             toasts,
             stack,
-            paned,
             view_switcher,
             format_bar,
             find,
             find_button,
             recent_menu,
             recent: RefCell::new(state::load_recent()),
-            source_scroll,
-            source_view,
-            buffer,
-            webview,
-            file: RefCell::new(None),
-            view_mode: Cell::new(saved.view),
-            preview_ready: Cell::new(false),
-            preview_loading: Cell::new(false),
-            render_scheduled: Cell::new(false),
+            tab_view,
+            shown_document: RefCell::new(Weak::new()),
+            loading_find: Cell::new(false),
+            closing_tab: Cell::new(false),
+            menu_page: glib::WeakRef::new(),
+            last_view: Cell::new(saved.view),
             close_confirmed: Cell::new(false),
-            composing: Cell::new(false),
-            ignore_editor_scroll_until: Cell::new(Instant::now()),
-            ignore_preview_scroll_until: Cell::new(Instant::now()),
-            flash_tag,
-            pending_heading: RefCell::new(None),
-            reveal_pending: Cell::new(false),
             file_banner,
-            file_monitor: RefCell::new(None),
-            known_version: RefCell::new(None),
-            banner_version: RefCell::new(None),
-            file_check_scheduled: Cell::new(false),
-            file_generation: Cell::new(0),
-            saves_running: Cell::new(0),
-            asking_to_replace: Cell::new(false),
         });
 
         win.setup_actions(saved.view);
         win.setup_signals();
         win.set_document_actions_enabled(false);
-        win.apply_view(saved.view);
         win.update_style();
         win.update_title();
         win.update_recent_menu();
@@ -470,30 +470,54 @@ impl Window {
             self.window.add_action(&action);
         };
         add("new", |win| win.ask_new());
+        add("new-window", |win| {
+            win.new_sibling_window();
+        });
         add("open", |win| win.ask_open());
         add("close-document", |win| win.ask_close_document());
+        add("close-tab", |win| win.close_tab());
         add("clear-recent", |win| win.clear_recent());
+
+        // The right-click menu on a tab
+        add("tab-move-left", |win| {
+            if let Some(page) = win.menu_page.upgrade() {
+                win.tab_view.reorder_backward(&page);
+            }
+        });
+        add("tab-move-right", |win| {
+            if let Some(page) = win.menu_page.upgrade() {
+                win.tab_view.reorder_forward(&page);
+            }
+        });
+        add("tab-move-to-new-window", |win| win.move_menu_tab_to_new_window());
+        add("tab-close", |win| {
+            if let Some(page) = win.menu_page.upgrade() {
+                win.tab_view.close_page(&page);
+            }
+        });
 
         // Opening a recent file: the menu item carries the file's address
         let open_recent = gio::SimpleAction::new("open-recent", Some(glib::VariantTy::STRING));
         let weak = Rc::downgrade(self);
         open_recent.connect_activate(move |_, param| {
             if let (Some(win), Some(uri)) = (weak.upgrade(), param.and_then(|p| p.str())) {
-                win.ask_open_file(gio::File::for_uri(uri));
+                win.open_file_here(gio::File::for_uri(uri), None);
             }
         });
         self.window.add_action(&open_recent);
         add("save", |win| {
-            let win = win.clone();
-            glib::spawn_future_local(async move {
-                win.save().await;
-            });
+            if let Some(doc) = win.current() {
+                glib::spawn_future_local(async move {
+                    doc.save().await;
+                });
+            }
         });
         add("save-as", |win| {
-            let win = win.clone();
-            glib::spawn_future_local(async move {
-                win.save_as().await;
-            });
+            if let Some(doc) = win.current() {
+                glib::spawn_future_local(async move {
+                    doc.save_as().await;
+                });
+            }
         });
         add("help", |win| win.show_help());
         add("cheatsheet", |win| win.show_cheatsheet());
@@ -502,8 +526,10 @@ impl Window {
         let format = gio::SimpleAction::new("format", Some(glib::VariantTy::STRING));
         let weak = Rc::downgrade(self);
         format.connect_activate(move |_, param| {
-            if let (Some(win), Some(name)) = (weak.upgrade(), param.and_then(|p| p.str())) {
-                win.apply_format(name);
+            if let (Some(doc), Some(name)) =
+                (weak.upgrade().and_then(|win| win.current()), param.and_then(|p| p.str()))
+            {
+                doc.apply_format(name);
             }
         });
         self.window.add_action(&format);
@@ -558,113 +584,30 @@ impl Window {
             let (Some(win), Some(name)) = (weak.upgrade(), switcher.active_name()) else {
                 return;
             };
-            if Some(win.view_mode.get()) != ViewMode::parse(&name) {
+            if win.current().map(|doc| doc.view_mode.get()) != ViewMode::parse(&name) {
                 win.action("view").activate(Some(&name.to_variant()));
             }
         });
     }
 
     fn setup_signals(self: &Rc<Self>) {
-        // Typing updates the formatted view after a short pause
-        let weak = Rc::downgrade(self);
-        self.buffer.connect_changed(move |_| {
-            if let Some(win) = weak.upgrade() {
-                win.schedule_render();
-            }
-        });
+        self.setup_tab_signals();
 
-        // Show a dot in the title when there are unsaved changes
-        let weak = Rc::downgrade(self);
-        self.buffer.connect_modified_changed(move |_| {
-            if let Some(win) = weak.upgrade() {
-                win.update_title();
-                // The banner's words depend on whether there are unsaved changes
-                win.update_file_banner();
-            }
-        });
-
-        // The banner's buttons
+        // The banner's buttons act on the document it's showing
         let weak = Rc::downgrade(self);
         self.file_banner.ignore.connect_clicked(move |_| {
-            if let Some(win) = weak.upgrade() {
-                win.ignore_file_change();
+            if let Some(doc) = weak.upgrade().and_then(|win| win.current()) {
+                doc.ignore_file_change();
             }
         });
         let weak = Rc::downgrade(self);
         self.file_banner.action.connect_clicked(move |_| {
-            if let Some(win) = weak.upgrade() {
+            if let Some(doc) = weak.upgrade().and_then(|win| win.current()) {
                 glib::spawn_future_local(async move {
-                    win.banner_action().await;
+                    doc.banner_action().await;
                 });
             }
         });
-
-        // Once the preview page has loaded, fill it in
-        let weak = Rc::downgrade(self);
-        self.webview.connect_load_changed(move |_, event| {
-            if event == webkit6::LoadEvent::Finished
-                && let Some(win) = weak.upgrade()
-            {
-                win.preview_ready.set(true);
-                win.run_js(PREVIEW_SCRIPT);
-                win.tell_preview_view_mode();
-                win.update_style();
-                win.render_now();
-                // A new file opened while the find bar is open: search it too
-                if win.find.bar.is_search_mode() {
-                    win.refresh_find();
-                }
-                // Opened from a link like other.md#part-two: scroll to that heading
-                if let Some(heading) = win.pending_heading.take() {
-                    win.scroll_to_heading(&heading);
-                }
-                // A file just opened: show it once the formatted view has its
-                // content. Scripts run in order, so when this empty one finishes,
-                // the document is already in the page.
-                if win.reveal_pending.get() {
-                    let weak = Rc::downgrade(&win);
-                    win.webview.evaluate_javascript(
-                        "true",
-                        Some(SCRIPT_WORLD),
-                        None,
-                        gio::Cancellable::NONE,
-                        move |_| {
-                            if let Some(win) = weak.upgrade() {
-                                win.reveal_document();
-                            }
-                        },
-                    );
-                }
-            }
-        });
-
-        // Messages from the formatted view: a double-click (jump) or a scroll
-        if let Some(content_manager) = self.webview.user_content_manager() {
-            let weak = Rc::downgrade(self);
-            content_manager.connect_script_message_received(Some("leafmd"), move |_, value| {
-                if let (Some(win), Some(json)) = (weak.upgrade(), value.to_json(0)) {
-                    win.handle_preview_message(&json);
-                }
-            });
-        }
-
-        // Scrolling the raw text scrolls the formatted view to match (split view only)
-        let weak = Rc::downgrade(self);
-        self.source_scroll.vadjustment().connect_value_changed(move |_| {
-            if let Some(win) = weak.upgrade() {
-                win.sync_preview_to_editor();
-            }
-        });
-
-        // Stop the formatted view from ever leaving LeafMD's own page
-        let weak = Rc::downgrade(self);
-        self.webview
-            .connect_decide_policy(move |webview, decision, kind| {
-                let Some(win) = weak.upgrade() else {
-                    return false;
-                };
-                win.decide_navigation(webview, decision, kind)
-            });
 
         // Follow the system's light or dark style
         let weak = Rc::downgrade(self);
@@ -681,7 +624,7 @@ impl Window {
             let (Some(win), Ok(file)) = (weak.upgrade(), value.get::<gio::File>()) else {
                 return false;
             };
-            win.ask_open_file(file);
+            win.open_file_here(file, None);
             true
         });
         self.window.add_controller(drop);
@@ -694,13 +637,15 @@ impl Window {
             if window.is_active()
                 && let Some(win) = weak.upgrade()
             {
+                win.became_most_recent();
                 win.reload_recent();
-                win.schedule_file_check();
+                if let Some(doc) = win.current() {
+                    doc.schedule_file_check();
+                }
             }
         });
 
         self.setup_find_signals();
-        self.setup_typing_signals();
 
         // Ask before closing with unsaved changes
         let weak = Rc::downgrade(self);
@@ -708,198 +653,518 @@ impl Window {
             let Some(win) = weak.upgrade() else {
                 return glib::Propagation::Proceed;
             };
-            if win.buffer.is_modified() && !win.close_confirmed.get() {
-                win.confirm_discard(|win| {
-                    win.close_confirmed.set(true);
-                    win.window.close();
-                });
-                return glib::Propagation::Stop;
+            if !win.close_confirmed.get() {
+                let unsaved: Vec<_> = win
+                    .documents()
+                    .into_iter()
+                    .filter(|doc| doc.buffer.is_modified())
+                    .collect();
+                match unsaved.as_slice() {
+                    [] => {}
+                    [only] => {
+                        win.select_document(only);
+                        let closing = win.clone();
+                        only.confirm_discard(move |_| {
+                            closing.close_confirmed.set(true);
+                            closing.window.close();
+                        });
+                        return glib::Propagation::Stop;
+                    }
+                    _ => {
+                        win.ask_about_unsaved_documents(unsaved);
+                        return glib::Propagation::Stop;
+                    }
+                }
             }
             win.save_state();
-            // Each window records its file as it closes, so the window closed
-            // last decides what opens next time. A window with no saved file
-            // (start page or a new, never-saved document) leaves it unchanged.
-            // So does a file that isn't on the recent list: after Clear Recent
-            // Files, closing a file that's still open shouldn't bring it back.
-            // This reads the saved list because another window may have cleared it.
-            if let Some(uri) = win.file_uri()
-                && state::load_recent().contains(&uri)
-            {
-                state::save_last_file(&uri);
+            // Each window records its tabs as it closes, so the window closed last
+            // decides what opens next time. A window with no saved file (start
+            // page or a new, never-saved document) leaves that unchanged. This
+            // reads the saved recent list because another window may have cleared it.
+            let tabs: Vec<_> = win.documents().iter().map(|doc| doc.file_uri()).collect();
+            let selected = win
+                .tab_view
+                .selected_page()
+                .map(|page| win.tab_view.page_position(&page) as usize);
+            if let Some(tabs) = state::tabs_to_save(&tabs, selected, &state::load_recent()) {
+                state::save_tabs(&tabs);
+            }
+            // The tabs go with the window, so this doesn't count as them being
+            // dragged away
+            win.closing_tab.set(true);
+            for doc in win.documents() {
+                doc.forget();
             }
             glib::Propagation::Proceed
         });
     }
 
     // =====================================================================
-    // Smarter typing: lists on Enter, pasting a link over text
+    // Tabs
     // =====================================================================
 
-    /// Lists continue when Enter is pressed and end on an empty item, and
-    /// pasting a web address over selected text makes a link. The rules for
-    /// what to type are in typing.rs; this wires them to the raw text.
-    fn setup_typing_signals(self: &Rc<Self>) {
-        // Enter in a list item. This watches key presses rather than text
-        // being inserted, so it only reacts to someone pressing Enter: pasted
-        // text with new lines in it, and undo and redo, never gain markers.
-        // The capture phase means it sees the key before the editor does, so
-        // it can make the edit itself and stop the editor's ordinary new line.
+    fn setup_tab_signals(self: &Rc<Self>) {
+        // Next and previous tab with Ctrl+Page Down and Up, and gedit's
+        // Ctrl+Alt+Page Down and Up. The capture phase means the window sees these
+        // first, because the raw text has its own use for Ctrl+Page Down: moving
+        // the cursor sideways, which it would do instead of changing tabs.
         let keys = gtk::EventControllerKey::new();
         keys.set_propagation_phase(gtk::PropagationPhase::Capture);
         let weak = Rc::downgrade(self);
         keys.connect_key_pressed(move |_, key, _, modifiers| {
-            let enter = matches!(key, gdk::Key::Return | gdk::Key::KP_Enter);
-            // Shift+Enter (a plain new line) and Ctrl or Alt combinations go
-            // to the editor as usual
-            let held = gdk::ModifierType::SHIFT_MASK
-                | gdk::ModifierType::CONTROL_MASK
-                | gdk::ModifierType::ALT_MASK;
-            if enter
-                && !modifiers.intersects(held)
-                && let Some(win) = weak.upgrade()
-                && win.enter_in_list()
+            let step = match key {
+                gdk::Key::Page_Down | gdk::Key::KP_Page_Down => 1,
+                gdk::Key::Page_Up | gdk::Key::KP_Page_Up => -1,
+                _ => return glib::Propagation::Proceed,
+            };
+            if !modifiers.contains(gdk::ModifierType::CONTROL_MASK)
+                || modifiers.contains(gdk::ModifierType::SHIFT_MASK)
             {
-                return glib::Propagation::Stop;
+                return glib::Propagation::Proceed;
             }
-            glib::Propagation::Proceed
+            let Some(win) = weak.upgrade() else {
+                return glib::Propagation::Proceed;
+            };
+            // Tabs don't change behind an open dialog
+            if win.window.visible_dialog().is_some() {
+                return glib::Propagation::Proceed;
+            }
+            win.select_neighbour_tab(step);
+            glib::Propagation::Stop
         });
-        self.source_view.add_controller(keys);
+        self.window.add_controller(keys);
 
-        // While an input method is composing, the editor shows the unfinished
-        // text (the "preedit"), and Enter is how the user accepts it
+        // Selecting a tab: the bars around the document switch over to it
         let weak = Rc::downgrade(self);
-        self.source_view.connect_preedit_changed(move |_, preedit| {
+        self.tab_view.connect_selected_page_notify(move |_| {
             if let Some(win) = weak.upgrade() {
-                win.composing.set(!preedit.is_empty());
+                win.selected_tab_changed();
             }
         });
 
-        // Ctrl+V, Shift+Insert and the right-click menu's Paste all come
-        // through this signal. Stopping it skips the editor's own paste, for
-        // when LeafMD pastes the link itself.
+        // Closing a tab, by any route, comes through here. A tab with unsaved
+        // changes only closes once the user has answered.
         let weak = Rc::downgrade(self);
-        self.source_view.connect_paste_clipboard(move |view| {
-            if let Some(win) = weak.upgrade()
-                && win.paste_over_selection()
-            {
-                view.stop_signal_emission_by_name("paste-clipboard");
+        self.tab_view.connect_close_page(move |_, page| {
+            if let Some(win) = weak.upgrade() {
+                win.close_page(page.clone());
+            }
+            glib::Propagation::Stop
+        });
+
+        // A tab has been dragged out of the tab bar and dropped away from any
+        // other window: this makes the window it lands in
+        let weak = Rc::downgrade(self);
+        self.tab_view.connect_create_window(move |_| {
+            weak.upgrade()?.new_sibling_window().map(|win| win.tab_view.clone())
+        });
+
+        // Right-clicking a tab: note which one, and what can be done with it.
+        // The menu closing also comes through here, with no tab. That's ignored,
+        // because it can happen just before the chosen item runs.
+        let weak = Rc::downgrade(self);
+        self.tab_view.connect_setup_menu(move |view, page| {
+            if let (Some(win), Some(page)) = (weak.upgrade(), page) {
+                win.menu_page.set(Some(page));
+                let position = view.page_position(page);
+                win.action("tab-move-left").set_enabled(position > 0);
+                win.action("tab-move-right").set_enabled(position < view.n_pages() - 1);
             }
         });
-    }
 
-    /// Enter in the raw text. In a list item it starts the next item, or on
-    /// an empty item ends the list, as one undo step. Returns false when
-    /// Enter should just insert an ordinary new line.
-    fn enter_in_list(&self) -> bool {
-        let buffer = &self.buffer;
-        if self.composing.get() || buffer.has_selection() {
-            return false;
-        }
-        let cursor = buffer.iter_at_mark(&buffer.get_insert());
-        let mut line_start = cursor;
-        line_start.set_line_offset(0);
-        let mut line_end = cursor;
-        if !line_end.ends_line() {
-            line_end.forward_to_line_end();
-        }
-        let line = buffer.text(&line_start, &line_end, true);
-        let action = typing::on_enter(&line, cursor.line_offset() as usize);
-        if action == typing::Enter::Normal {
-            return false;
-        }
-        // Lines in a code block are code, not markdown. Checked only now,
-        // once the line looks like a list item, because it reads the whole
-        // document above the cursor.
-        let before = buffer.text(&buffer.start_iter(), &line_start, true);
-        if typing::in_code_block(&before) {
-            return false;
-        }
-
-        buffer.begin_user_action();
-        match action {
-            // Inserting at the cursor moves the cursor along with the text,
-            // so it ends up after the new marker, ready to type
-            typing::Enter::Continue(text) => buffer.insert_at_cursor(&text),
-            // Clearing the line leaves the cursor on the now empty line
-            typing::Enter::EndList => buffer.delete(&mut line_start, &mut line_end),
-            typing::Enter::Normal => {}
-        }
-        buffer.end_user_action();
-        self.source_view.scroll_mark_onscreen(&buffer.get_insert());
-        true
-    }
-
-    /// A paste with text on one line selected: if the clipboard holds a web
-    /// address, the selection becomes `[selection](address)`; anything else
-    /// is pasted as usual. Returns true when LeafMD takes over the paste.
-    fn paste_over_selection(self: &Rc<Self>) -> bool {
-        let Some((start, end)) = self.buffer.selection_bounds() else {
-            return false;
-        };
-        if start.line() != end.line() {
-            return false;
-        }
-        let selected_range = (start.offset(), end.offset());
-        let clipboard = WidgetExt::clipboard(&self.source_view);
-        let win = self.clone();
-        // The clipboard may belong to another app, so its text arrives a
-        // moment later rather than straight away
-        glib::spawn_future_local(async move {
-            let pasted = clipboard.read_text_future().await.ok().flatten();
-            let buffer = &win.buffer;
-            // Only make the link if the same text is still selected
-            let selection = buffer
-                .selection_bounds()
-                .filter(|(s, e)| (s.offset(), e.offset()) == selected_range);
-            match (pasted, selection) {
-                (Some(address), Some((mut s, mut e))) if typing::is_web_address(&address) => {
-                    let selected = buffer.text(&s, &e, true);
-                    let link = format!("[{selected}]({})", address.trim());
-                    // Grouped so one Ctrl+Z brings back the selected text
-                    buffer.begin_user_action();
-                    buffer.delete(&mut s, &mut e);
-                    buffer.insert(&mut s, &link);
-                    buffer.end_user_action();
-                    // After inserting, `s` points just past the link
-                    buffer.place_cursor(&s);
+        // Adding a tab comes through here too, but only a tab arriving from
+        // another window needs anything done: it now belongs to this window, and
+        // the bars around it have to show what it remembers. The window it landed
+        // in may also have been on the "No Document Open" page.
+        let weak = Rc::downgrade(self);
+        self.tab_view.connect_page_attached(move |_, page, _| {
+            let (Some(win), Some(doc)) = (weak.upgrade(), Document::for_widget(&page.child()))
+            else {
+                return;
+            };
+            if doc.window().is_some_and(|window| Rc::ptr_eq(&window, &win)) {
+                return;
+            }
+            doc.set_window(Rc::downgrade(&win));
+            win.update_tab(&doc);
+            win.reveal_document();
+            win.selected_tab_changed();
+            win.update_recent_menu();
+            // Typing and Ctrl+Z should reach the document that just moved. This
+            // waits until the move has finished, because a window that has only
+            // just opened picks its own focus first.
+            let weak = Rc::downgrade(&win);
+            glib::idle_add_local_once(move || {
+                if let Some(win) = weak.upgrade()
+                    && win.is_current(&doc)
+                {
+                    win.focus_document(&doc);
                 }
-                // Not a web address (or the selection changed while
-                // waiting): paste exactly as the editor would have
-                _ => buffer.paste_clipboard(&clipboard, None, win.source_view.is_editable()),
-            }
-            win.source_view.scroll_mark_onscreen(&buffer.get_insert());
+            });
         });
-        true
+
+        // A tab left for another window. If it was the only one, there's nothing
+        // left in this window, so it closes. Otherwise that file can now be
+        // offered in this window's recent files.
+        let weak = Rc::downgrade(self);
+        self.tab_view.connect_page_detached(move |view, _, _| {
+            let Some(win) = weak.upgrade().filter(|win| !win.closing_tab.get()) else {
+                return;
+            };
+            if view.n_pages() == 0 {
+                win.window.close();
+            } else {
+                win.update_recent_menu();
+            }
+        });
     }
+
+    /// Opens another window on the "No Document Open" page, starting in the view
+    /// last chosen in this one.
+    fn new_sibling_window(&self) -> Option<Rc<Window>> {
+        let app = self.window.application().and_downcast::<adw::Application>()?;
+        let win = Window::open_new(&app, &self.windows);
+        win.start_in_view(self.last_view.get());
+        win.window.present();
+        Some(win)
+    }
+
+    /// Sets the view for a window that has no tabs yet.
+    fn start_in_view(&self, view: ViewMode) {
+        self.last_view.set(view);
+        self.action("view").set_state(&view.as_str().to_variant());
+        self.view_switcher.set_active_name(Some(view.as_str()));
+    }
+
+    /// Move to New Window in a tab's right-click menu.
+    fn move_menu_tab_to_new_window(&self) {
+        if let (Some(page), Some(win)) = (self.menu_page.upgrade(), self.new_sibling_window()) {
+            self.tab_view.transfer_page(&page, &win.tab_view, 0);
+        }
+    }
+
+    /// Every document in this window, in tab order.
+    fn documents(&self) -> Vec<Rc<Document>> {
+        (0..self.tab_view.n_pages())
+            .filter_map(|position| Document::for_widget(&self.tab_view.nth_page(position).child()))
+            .collect()
+    }
+
+    /// Selects a document's tab.
+    fn select_document(&self, doc: &Document) {
+        self.tab_view.set_selected_page(&self.tab_view.page(&doc.paned));
+    }
+
+    /// A new, empty document that belongs to this window, not in a tab yet.
+    fn new_document(self: &Rc<Self>, view: ViewMode) -> Rc<Document> {
+        let doc = Document::new(view);
+        doc.set_window(Rc::downgrade(self));
+        doc.apply_view(view);
+        doc.update_style();
+        doc
+    }
+
+    /// Adds a tab with a new, empty document and selects it.
+    fn add_tab(self: &Rc<Self>, view: ViewMode) -> Rc<Document> {
+        let doc = self.new_document(view);
+        // Selected straight away, so the tab bar never shows it unselected. The
+        // first tab in a window is selected by this too.
+        let page = self.tab_view.append(&doc.paned);
+        self.update_tab(&doc);
+        self.tab_view.set_selected_page(&page);
+        doc
+    }
+
+    /// Shows a document's name and location on its tab.
+    pub fn update_tab(&self, doc: &Document) {
+        let page = self.tab_view.page(&doc.paned);
+        let dot = if doc.buffer.is_modified() { "• " } else { "" };
+        page.set_title(&format!("{dot}{}", doc.display_name()));
+        // A tab's tooltip is read as markup, so a name like "R&D.md" needs escaping
+        let location = match doc.folder().as_str() {
+            "" => doc.display_name(),
+            folder => format!("{}/{}", folder.trim_end_matches('/'), doc.display_name()),
+        };
+        page.set_tooltip(&glib::markup_escape_text(&location));
+    }
+
+    /// Another tab was selected: everything around the document follows it.
+    fn selected_tab_changed(&self) {
+        let doc = self.current();
+        // Keep what the find bar was showing with the tab it belonged to
+        if let Some(previous) = self.shown_document.borrow().upgrade() {
+            let same = doc.as_ref().is_some_and(|doc| Rc::ptr_eq(doc, &previous));
+            if !same {
+                self.save_find_state(&previous);
+            }
+        }
+        *self.shown_document.borrow_mut() = doc.as_ref().map_or_else(Weak::new, Rc::downgrade);
+
+        let Some(doc) = doc else { return };
+        doc.draw_preview_if_waiting();
+        self.show_view_of(&doc);
+        self.load_find_state(&doc);
+        self.update_format_bar();
+        self.update_title();
+        doc.update_file_banner();
+        // In case the file changed somewhere that doesn't send change notices
+        doc.schedule_file_check();
+    }
+
+    /// Makes the view switcher show this document's view. Doesn't change the view
+    /// again, because the document is already in it.
+    fn show_view_of(&self, doc: &Document) {
+        let view = doc.view_mode.get();
+        self.action("view").set_state(&view.as_str().to_variant());
+        self.view_switcher.set_active_name(Some(view.as_str()));
+    }
+
+    fn save_find_state(&self, doc: &Document) {
+        let mut state = doc.find_state.borrow_mut();
+        state.open = self.find.bar.is_search_mode();
+        state.query = self.find.entry.text().to_string();
+        state.replace_open = self.find.replace_toggle.is_active();
+        state.replace_text = self.find.replace_entry.text().to_string();
+        let focus = gtk::prelude::GtkWindowExt::focus(&self.window);
+        state.focus_in_bar = focus.as_ref().is_some_and(|focus| focus.is_ancestor(&self.find.bar));
+        state.focus_in_replace =
+            focus.is_some_and(|focus| focus.is_ancestor(&self.find.replace_entry));
+    }
+
+    /// Puts a tab's find state into the find bar, without moving its cursor.
+    fn load_find_state(&self, doc: &Document) {
+        let (open, query, replace_open, replace_text) = {
+            let state = doc.find_state.borrow();
+            (state.open, state.query.clone(), state.replace_open, state.replace_text.clone())
+        };
+        // Normally the tab is searching for this already, and setting it again
+        // does nothing. It differs if the tab was left within a moment of typing,
+        // before the search had started.
+        if open {
+            doc.search_settings
+                .set_search_text(Some(query.as_str()).filter(|query| !query.is_empty()));
+        }
+        self.loading_find.set(true);
+        // Setting the text empties the box first, even to the same text
+        if self.find.entry.text() != query {
+            self.find.entry.set_text(&query);
+        }
+        self.find.replace_entry.set_text(&replace_text);
+        self.find.replace_toggle.set_active(replace_open);
+        self.find.bar.set_search_mode(open);
+        self.loading_find.set(false);
+
+        // Match Case and Whole Words Only apply to every tab in the window
+        doc.search_settings
+            .set_case_sensitive(self.find_option("find-match-case"));
+        doc.search_settings
+            .set_at_word_boundaries(self.find_option("find-whole-words"));
+        if !open {
+            self.find.show_count(0, 0);
+        } else if doc.searching_preview() {
+            self.preview_resume_find();
+        } else {
+            self.update_raw_find_count();
+        }
+
+        // GTK puts the focus in the find box whenever the bar opens. Someone who
+        // was typing in the document should carry on there, or their next letters
+        // would change the search. Not while a dialog is asking something, because
+        // the focus belongs in that.
+        if open && self.window.visible_dialog().is_none() {
+            let (in_bar, in_replace) = {
+                let state = doc.find_state.borrow();
+                (state.focus_in_bar, state.focus_in_replace)
+            };
+            // The formatted view has no replace box
+            if in_replace && !doc.searching_preview() {
+                self.find.replace_entry.grab_focus();
+            } else if in_bar {
+                self.find.entry.grab_focus();
+            } else {
+                self.focus_document(doc);
+            }
+        }
+    }
+
+    /// Goes to the next (`step` 1) or previous (`step` -1) tab, wrapping round.
+    fn select_neighbour_tab(&self, step: i32) {
+        let count = self.tab_view.n_pages();
+        let Some(selected) = self.tab_view.selected_page().filter(|_| count > 1) else {
+            return;
+        };
+        let position = (self.tab_view.page_position(&selected) + step).rem_euclid(count);
+        self.tab_view.set_selected_page(&self.tab_view.nth_page(position));
+    }
+
+    /// Ctrl+W: closes the selected tab, or the window if that's the last tab.
+    fn close_tab(&self) {
+        if self.tab_view.n_pages() <= 1 {
+            self.window.close();
+        } else if let Some(page) = self.tab_view.selected_page() {
+            self.tab_view.close_page(&page);
+        }
+    }
+
+    /// Asks about unsaved changes, then closes the tab if the user agrees.
+    fn close_page(self: &Rc<Self>, page: adw::TabPage) {
+        let Some(doc) = Document::for_widget(&page.child()) else {
+            self.finish_closing_page(&page, true);
+            return;
+        };
+        if !doc.buffer.is_modified() {
+            self.finish_closing_page(&page, true);
+            doc.forget();
+            return;
+        }
+        // So it's clear which document the question is about
+        self.tab_view.set_selected_page(&page);
+        let win = self.clone();
+        glib::spawn_future_local(async move {
+            let close = doc.ask_to_save().await;
+            win.finish_closing_page(&page, close);
+            if close {
+                doc.forget();
+            }
+        });
+    }
+
+    fn finish_closing_page(&self, page: &adw::TabPage, close: bool) {
+        self.closing_tab.set(true);
+        self.tab_view.close_page_finish(page, close);
+        self.closing_tab.set(false);
+        if close && self.tab_view.n_pages() == 0 {
+            self.show_start_page();
+        } else if close {
+            self.update_recent_menu();
+        }
+    }
+
+    /// The last tab was closed but the window stays: back to "No Document Open".
+    /// LeafMD starts on that page next time too.
+    fn show_start_page(&self) {
+        self.loading_find.set(true);
+        self.find.bar.set_search_mode(false);
+        self.loading_find.set(false);
+        self.file_banner.hide();
+        self.stack.set_visible_child_name("empty");
+        self.set_document_actions_enabled(false);
+        // After switching page, so the title goes back to "LeafMD"
+        self.update_title();
+        // The closed file was left out of the list while open; show it again
+        self.update_recent_menu();
+        state::forget_last_file();
+    }
+
+    /// The question when closing a window with two or more unsaved tabs: one
+    /// dialog listing them, with a tick box for each, like gedit's.
+    fn ask_about_unsaved_documents(self: &Rc<Self>, unsaved: Vec<Rc<Document>>) {
+        let question = document::save_changes_question(
+            &format!(
+                "There are {} documents with unsaved changes. Save changes before closing?",
+                unsaved.len()
+            ),
+            "Select the documents you want to save:",
+            "_Save",
+        );
+
+        // One line for each document: its tick box and name, with its folder to
+        // tell apart two files with the same name. The whole line can be clicked,
+        // because the name is inside the tick box. Scrolls if there are many.
+        let list = gtk::ListBox::builder()
+            .selection_mode(gtk::SelectionMode::None)
+            .build();
+        let mut ticks = Vec::new();
+        for doc in &unsaved {
+            let name = gtk::Label::builder()
+                .label(doc.display_name())
+                .ellipsize(gtk::pango::EllipsizeMode::Middle)
+                .xalign(0.0)
+                .build();
+            let folder = gtk::Label::builder()
+                .label(doc.folder())
+                .ellipsize(gtk::pango::EllipsizeMode::Start)
+                .xalign(1.0)
+                .hexpand(true)
+                .css_classes(["dim-label", "caption"])
+                .build();
+            let line = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+            line.append(&name);
+            line.append(&folder);
+            let tick = gtk::CheckButton::builder()
+                .active(true)
+                .child(&line)
+                .margin_top(3)
+                .margin_bottom(3)
+                .margin_start(6)
+                .margin_end(9)
+                .build();
+            list.append(
+                &gtk::ListBoxRow::builder()
+                    .child(&tick)
+                    .activatable(false)
+                    .focusable(false)
+                    .build(),
+            );
+            ticks.push(tick);
+        }
+        for tick in &ticks {
+            // Discarding everything is always the clearly labelled button
+            let (save, all) = (question.button("save"), ticks.clone());
+            tick.connect_toggled(move |_| {
+                if let Some(save) = &save {
+                    save.set_sensitive(all.iter().any(|tick| tick.is_active()));
+                }
+            });
+        }
+        let warning = gtk::Label::builder()
+            .label("If you don't save, all your changes will be permanently lost.")
+            .wrap(true)
+            .justify(gtk::Justification::Center)
+            .build();
+        question.add_extra(
+            &gtk::ScrolledWindow::builder()
+                .child(&list)
+                .has_frame(true)
+                .hscrollbar_policy(gtk::PolicyType::Never)
+                .propagate_natural_height(true)
+                .max_content_height(200)
+                .build(),
+        );
+        question.add_extra(&warning);
+
+        let win = self.clone();
+        glib::spawn_future_local(async move {
+            match question.ask(Some(&win.window)).await.as_str() {
+                "discard" => {}
+                "save" => {
+                    let chosen = unsaved.iter().zip(&ticks).filter(|(_, tick)| tick.is_active());
+                    for (doc, _) in chosen {
+                        // So any further question is clearly about this document
+                        win.select_document(doc);
+                        // Stopping here keeps the window open, so nothing is
+                        // lost, including the documents that weren't ticked
+                        if !doc.save().await {
+                            return;
+                        }
+                    }
+                }
+                _ => return,
+            }
+            win.close_confirmed.set(true);
+            win.window.close();
+        });
+    }
+
 
     // =====================================================================
     // Views and editing
     // =====================================================================
 
     fn apply_view(&self, mode: ViewMode) {
-        self.view_mode.set(mode);
-        let (show_source, show_preview) = match mode {
-            ViewMode::Preview => (false, true),
-            ViewMode::Source => (true, false),
-            ViewMode::Split => (true, true),
-        };
-        self.source_scroll.set_visible(show_source);
-        self.webview.set_visible(show_preview);
-
-        if mode == ViewMode::Split {
-            // Split down the middle. Before the window is drawn its width is 0,
-            // so fall back to the window's planned width.
-            let width = match self.paned.width() {
-                0 => self.window.default_size().0,
-                w => w,
-            };
-            self.paned.set_position(width / 2);
-        }
-        if show_preview {
-            // The preview isn't updated while hidden, so catch it up now
-            self.render_now();
-        }
-        self.tell_preview_view_mode();
+        let Some(doc) = self.current() else { return };
+        doc.apply_view(mode);
+        self.last_view.set(mode);
         self.update_format_bar();
         // An open find bar now searches whichever text is showing
         if self.find.bar.is_search_mode() {
@@ -910,7 +1175,7 @@ impl Window {
     /// The formatting bar (and its shortcuts) only work where the raw text can be edited.
     fn update_format_bar(&self) {
         let editable = self.stack.visible_child_name().as_deref() == Some("document")
-            && self.view_mode.get() != ViewMode::Preview;
+            && self.current().is_some_and(|doc| !doc.searching_preview());
         self.format_bar.set_visible(editable);
         self.action("format").set_enabled(editable);
         // Replacing changes the raw text, so it isn't offered in the formatted view
@@ -920,21 +1185,6 @@ impl Window {
         self.find
             .replace_row
             .set_visible(editable && self.find.replace_toggle.is_active());
-    }
-
-    /// Double-click on the formatted side only jumps to the raw text in split view.
-    fn tell_preview_view_mode(&self) {
-        if self.preview_ready.get() {
-            let split = self.view_mode.get() == ViewMode::Split;
-            self.run_js(&format!(
-                "window.leafmd && window.leafmd.setSplitView({split});"
-            ));
-        }
-    }
-
-    fn set_view(&self, mode: ViewMode) {
-        WidgetExt::activate_action(&self.window, "win.view", Some(&mode.as_str().to_variant()))
-            .ok();
     }
 
     fn set_document_actions_enabled(&self, enabled: bool) {
@@ -955,8 +1205,20 @@ impl Window {
 
         // Typing in the find box: jump to the first match from where you are
         let weak = Rc::downgrade(self);
-        find.entry.connect_search_changed(move |_| {
-            if let Some(win) = weak.upgrade() {
+        find.entry.connect_search_changed(move |entry| {
+            let Some(win) = weak.upgrade() else { return };
+            // The box also changes when another tab is selected. That tab has
+            // already searched for this, and its cursor should stay where it is.
+            // The box being emptied on the way arrives straight away, while the
+            // tab's text is being put in. The text itself arrives a moment later,
+            // when it matches what the tab remembers.
+            if win.loading_find.get() {
+                return;
+            }
+            let unchanged = win
+                .current()
+                .is_some_and(|doc| doc.find_state.borrow().query == entry.text());
+            if !unchanged {
                 win.refresh_find();
             }
         });
@@ -1031,47 +1293,28 @@ impl Window {
         find.bar.connect_search_mode_enabled_notify(move |bar| {
             if !bar.is_search_mode()
                 && let Some(win) = weak.upgrade()
+                && !win.loading_find.get()
             {
                 win.close_find();
             }
         });
 
-        // The count ("3 of 12") follows the cursor and changes to the text
-        let weak = Rc::downgrade(self);
-        find.context.connect_occurrences_count_notify(move |_| {
-            if let Some(win) = weak.upgrade() {
-                win.update_raw_find_count();
-            }
-        });
-        let weak = Rc::downgrade(self);
-        self.buffer.connect_mark_set(move |buffer, _, mark| {
-            if *mark == buffer.get_insert()
-                && let Some(win) = weak.upgrade()
-            {
-                win.update_raw_find_count();
-            }
-        });
-    }
-
-    /// True when the formatted view is the only thing showing, so that's what
-    /// gets searched. In Raw and Split view the raw text is searched.
-    fn searching_preview(&self) -> bool {
-        self.view_mode.get() == ViewMode::Preview
     }
 
     /// Ctrl+F (or Ctrl+H with `replace`): shows the find bar and puts the
     /// cursor in it, starting with the selected text if there is some.
     fn open_find(self: &Rc<Self>, replace: bool) {
+        let Some(doc) = self.current() else { return };
         let find = &self.find;
-        if !self.searching_preview()
-            && let Some((start, end)) = self.buffer.selection_bounds()
+        if !doc.searching_preview()
+            && let Some((start, end)) = doc.buffer.selection_bounds()
         {
-            let selected = self.buffer.text(&start, &end, false);
+            let selected = doc.buffer.text(&start, &end, false);
             if !selected.contains('\n') && selected.chars().count() <= 200 {
                 find.entry.set_text(&selected);
             }
         }
-        if replace && !self.searching_preview() {
+        if replace && !doc.searching_preview() {
             find.replace_toggle.set_active(true);
         }
         let was_open = find.bar.is_search_mode();
@@ -1090,36 +1333,44 @@ impl Window {
 
     /// The find bar was closed: clear the highlights and go back to the text.
     fn close_find(&self) {
-        self.find.settings.set_search_text(None);
-        self.run_js("window.leafmd && window.leafmd.clearFind();");
-        if self.searching_preview() {
-            self.webview.grab_focus();
+        let Some(doc) = self.current() else { return };
+        doc.search_settings.set_search_text(None);
+        doc.run_js("window.leafmd && window.leafmd.clearFind();");
+        self.focus_document(&doc);
+    }
+
+    /// Puts the keyboard's focus in whichever text this document is showing.
+    fn focus_document(&self, doc: &Document) {
+        if doc.searching_preview() {
+            doc.webview.grab_focus();
         } else {
-            self.source_view.grab_focus();
+            doc.source_view.grab_focus();
         }
     }
 
     /// The search text, an option or the view changed: search again from the
     /// current spot, so typing more letters keeps the same match where it can.
-    fn refresh_find(&self) {
+    pub fn refresh_find(&self) {
+        let Some(doc) = self.current() else { return };
         let find = &self.find;
         let query = find.query();
-        find.settings
+        doc.find_state.borrow_mut().query = query.clone().unwrap_or_default();
+        doc.search_settings
             .set_case_sensitive(self.find_option("find-match-case"));
-        find.settings
+        doc.search_settings
             .set_at_word_boundaries(self.find_option("find-whole-words"));
-        find.settings.set_search_text(query.as_deref());
+        doc.search_settings.set_search_text(query.as_deref());
 
-        if self.searching_preview() {
+        if doc.searching_preview() {
             self.preview_find(0);
             return;
         }
         // Only one side shows highlights at a time
-        self.run_js("window.leafmd && window.leafmd.clearFind();");
+        doc.run_js("window.leafmd && window.leafmd.clearFind();");
         if query.is_some() {
-            let from = match self.buffer.selection_bounds() {
+            let from = match doc.buffer.selection_bounds() {
                 Some((start, _)) => start,
-                None => self.buffer.iter_at_mark(&self.buffer.get_insert()),
+                None => doc.buffer.iter_at_mark(&doc.buffer.get_insert()),
             };
             self.raw_find_from(&from, false);
         }
@@ -1142,15 +1393,16 @@ impl Window {
     /// Goes to the next match (`step` 1) or the previous one (`step` -1).
     /// Opens the find bar first if it's closed (F3 with nothing searched yet).
     fn find_step(self: &Rc<Self>, step: i32) {
+        let Some(doc) = self.current() else { return };
         if !self.find.bar.is_search_mode() || self.find.query().is_none() {
             self.open_find(false);
             return;
         }
-        if self.searching_preview() {
+        if doc.searching_preview() {
             self.preview_find(step);
             return;
         }
-        let from = match self.buffer.selection_bounds() {
+        let from = match doc.buffer.selection_bounds() {
             Some((start, end)) => {
                 if step > 0 {
                     end
@@ -1158,7 +1410,7 @@ impl Window {
                     start
                 }
             }
-            None => self.buffer.iter_at_mark(&self.buffer.get_insert()),
+            None => doc.buffer.iter_at_mark(&doc.buffer.get_insert()),
         };
         self.raw_find_from(&from, step < 0);
     }
@@ -1166,28 +1418,30 @@ impl Window {
     /// Selects the first match after (or before) `from` in the raw text and
     /// scrolls it into view. Wraps around at the end of the document.
     fn raw_find_from(&self, from: &gtk::TextIter, backward: bool) {
-        let context = &self.find.context;
+        let Some(doc) = self.current() else { return };
+        let context = &doc.search_context;
         let found = if backward {
             context.backward(from)
         } else {
             context.forward(from)
         };
         if let Some((start, end, _wrapped)) = found {
-            self.buffer.select_range(&start, &end);
+            doc.buffer.select_range(&start, &end);
             // Leave some room above and below, rather than at the very edge
-            self.source_view
-                .scroll_to_mark(&self.buffer.get_insert(), 0.15, false, 0.0, 0.0);
+            doc.source_view
+                .scroll_to_mark(&doc.buffer.get_insert(), 0.15, false, 0.0, 0.0);
         }
         self.update_raw_find_count();
     }
 
     /// Updates "3 of 12" for the raw text.
-    fn update_raw_find_count(&self) {
-        if !self.find.bar.is_search_mode() || self.searching_preview() {
+    pub fn update_raw_find_count(&self) {
+        let Some(doc) = self.current() else { return };
+        if !self.find.bar.is_search_mode() || doc.searching_preview() {
             return;
         }
-        let context = &self.find.context;
-        let position = self
+        let context = &doc.search_context;
+        let position = doc
             .buffer
             .selection_bounds()
             .map(|(start, end)| context.occurrence_position(&start, &end))
@@ -1199,32 +1453,52 @@ impl Window {
     /// move to the next or previous match. The page answers with a "find"
     /// message carrying the count.
     fn preview_find(&self, step: i32) {
+        let Some(doc) = self.current() else { return };
         let Some(query) = self.find.query() else {
-            self.run_js("window.leafmd && window.leafmd.clearFind();");
+            doc.run_js("window.leafmd && window.leafmd.clearFind();");
             self.find.show_count(0, 0);
             return;
         };
         let query = serde_json::to_string(&query).unwrap_or_default();
         let match_case = self.find_option("find-match-case");
         let whole_words = self.find_option("find-whole-words");
-        self.run_js(&format!(
+        doc.run_js(&format!(
             "window.leafmd && window.leafmd.find({query}, {match_case}, {whole_words}, {step});"
+        ));
+    }
+
+    /// A tab showing the formatted view was selected with its find bar open. Its
+    /// page remembers the search, so this only gets the count back for the find
+    /// bar, without moving to another match or scrolling. If the search options
+    /// changed while the tab was away, it searches again.
+    fn preview_resume_find(&self) {
+        let Some(doc) = self.current() else { return };
+        let Some(query) = self.find.query() else {
+            self.preview_find(0);
+            return;
+        };
+        let query = serde_json::to_string(&query).unwrap_or_default();
+        let match_case = self.find_option("find-match-case");
+        let whole_words = self.find_option("find-whole-words");
+        doc.run_js(&format!(
+            "window.leafmd && window.leafmd.resumeFind({query}, {match_case}, {whole_words});"
         ));
     }
 
     /// Replaces the selected match, then moves to the next one. If no match is
     /// selected yet, it just goes to the next one, so you see what will change.
     fn replace_one(self: &Rc<Self>) {
-        if self.searching_preview() || self.find.query().is_none() {
+        let Some(doc) = self.current() else { return };
+        if doc.searching_preview() || self.find.query().is_none() {
             return;
         }
         let replacement = self.find.replace_entry.text();
-        if let Some((mut start, mut end)) = self.buffer.selection_bounds()
-            && self.find.context.occurrence_position(&start, &end) > 0
+        if let Some((mut start, mut end)) = doc.buffer.selection_bounds()
+            && doc.search_context.occurrence_position(&start, &end) > 0
         {
-            self.buffer.begin_user_action();
-            let replaced = self.find.context.replace(&mut start, &mut end, &replacement);
-            self.buffer.end_user_action();
+            doc.buffer.begin_user_action();
+            let replaced = doc.search_context.replace(&mut start, &mut end, &replacement);
+            doc.buffer.end_user_action();
             if replaced.is_ok() {
                 // Carry on from just after the new text
                 self.raw_find_from(&end, false);
@@ -1236,14 +1510,20 @@ impl Window {
 
     /// Replaces every match. One Ctrl+Z puts them all back.
     fn replace_all(&self) {
-        if self.searching_preview() || self.find.query().is_none() {
+        let Some(doc) = self.current() else { return };
+        if doc.searching_preview() || self.find.query().is_none() {
             return;
         }
-        let count = self.find.context.occurrences_count();
+        let count = doc.search_context.occurrences_count();
         let replacement = self.find.replace_entry.text();
-        self.buffer.begin_user_action();
-        let result = self.find.context.replace_all(&replacement);
-        self.buffer.end_user_action();
+        doc.buffer.begin_user_action();
+        let result = doc.search_context.replace_all(&replacement);
+        doc.buffer.end_user_action();
+        // Clicking the button left the focus on it, where Ctrl+Z does nothing.
+        // Only the raw text can undo, so that's where the focus goes.
+        if result.is_ok() && count > 0 {
+            doc.source_view.grab_focus();
+        }
         match result {
             Ok(()) if count == 1 => self.toast("Replaced 1 match"),
             Ok(()) if count > 1 => self.toast(&format!("Replaced {count} matches")),
@@ -1253,84 +1533,19 @@ impl Window {
         self.update_raw_find_count();
     }
 
-    // =====================================================================
-    // Formatting bar
-    // =====================================================================
-
-    /// Applies a formatting button (bold, bullet list, ...) to the selection,
-    /// or to the word or line the cursor is on. One Ctrl+Z undoes it.
-    fn apply_format(&self, name: &str) {
-        let buffer = &self.buffer;
-        let (sel_start, mut sel_end) = buffer.selection_bounds().unwrap_or_else(|| {
-            let cursor = buffer.iter_at_mark(&buffer.get_insert());
-            (cursor, cursor)
-        });
-        // Selecting whole lines usually ends at the very start of the next
-        // line. Leave that next line out.
-        if sel_end.line_offset() == 0 && sel_end.offset() > sel_start.offset() {
-            sel_end.backward_char();
-        }
-        // The formatting code is given the whole lines the selection touches
-        let mut block_start = sel_start;
-        block_start.set_line_offset(0);
-        let mut block_end = sel_end;
-        if !block_end.ends_line() {
-            block_end.forward_to_line_end();
-        }
-        let block = buffer.text(&block_start, &block_end, true).to_string();
-        let base = block_start.offset();
-        let start = (sel_start.offset() - base) as usize;
-        let end = (sel_end.offset() - base) as usize;
-
-        let edit = match name {
-            "bold" => format::toggle_inline(&block, start, end, Inline::Bold),
-            "italic" => format::toggle_inline(&block, start, end, Inline::Italic),
-            "strikethrough" => format::toggle_inline(&block, start, end, Inline::Strikethrough),
-            "code" => format::toggle_inline(&block, start, end, Inline::Code),
-            "link" => format::link(&block, start, end),
-            "heading-1" => format::toggle_line_style(&block, start, end, LineStyle::Heading(1)),
-            "heading-2" => format::toggle_line_style(&block, start, end, LineStyle::Heading(2)),
-            "heading-3" => format::toggle_line_style(&block, start, end, LineStyle::Heading(3)),
-            "bullet-list" => format::toggle_line_style(&block, start, end, LineStyle::Bullet),
-            "numbered-list" => format::toggle_line_style(&block, start, end, LineStyle::Numbered),
-            "task-list" => format::toggle_line_style(&block, start, end, LineStyle::Task),
-            "quote" => format::toggle_quote(&block, start, end),
-            "code-block" => format::toggle_code_block(&block),
-            "table" => {
-                let mut before = block_start;
-                let before_blank = !before.backward_line() || line_is_blank(&before);
-                let mut after = block_end;
-                let after_blank = !after.forward_line() || line_is_blank(&after);
-                format::table(&block, before_blank, after_blank)
-            }
-            _ => return,
-        };
-
-        if edit.text != block {
-            // Grouped so a single undo puts everything back
-            buffer.begin_user_action();
-            buffer.delete(&mut block_start, &mut block_end);
-            buffer.insert(&mut block_start, &edit.text);
-            buffer.end_user_action();
-        }
-        let new_start = buffer.iter_at_offset(base + edit.start as i32);
-        let new_end = buffer.iter_at_offset(base + edit.end as i32);
-        buffer.select_range(&new_end, &new_start);
-        self.source_view.scroll_mark_onscreen(&buffer.get_insert());
-        self.source_view.grab_focus();
-    }
 
     /// Shows the open document. If it has just been loaded into an empty
     /// window and the formatted view is still drawing it, waits for that first
     /// (at most REVEAL_TIMEOUT), so the document appears all at once.
     fn show_document(self: &Rc<Self>) {
+        let Some(doc) = self.current() else { return };
         let opening = self.stack.visible_child_name().as_deref() == Some("loading");
-        if opening && self.webview.is_visible() && !self.preview_ready.get() {
-            self.reveal_pending.set(true);
+        if opening && doc.webview.is_visible() && !doc.preview_ready.get() {
+            doc.reveal_pending.set(true);
             let weak = Rc::downgrade(self);
             glib::timeout_add_local_once(REVEAL_TIMEOUT, move || {
                 if let Some(win) = weak.upgrade()
-                    && win.reveal_pending.get()
+                    && win.current().is_some_and(|doc| doc.reveal_pending.get())
                 {
                     win.reveal_document();
                 }
@@ -1340,8 +1555,10 @@ impl Window {
         self.reveal_document();
     }
 
-    fn reveal_document(&self) {
-        self.reveal_pending.set(false);
+    pub fn reveal_document(&self) {
+        for doc in self.documents() {
+            doc.reveal_pending.set(false);
+        }
         self.stack.set_visible_child_name("document");
         self.set_document_actions_enabled(true);
         self.update_title();
@@ -1361,481 +1578,236 @@ impl Window {
         }
     }
 
-    // =====================================================================
-    // Formatted view
-    // =====================================================================
 
-    /// Loads the empty preview page. Its base address is the document's folder,
-    /// so relative image paths like `images/photo.png` work.
-    fn reload_preview(&self) {
-        let base = self
-            .file
-            .borrow()
-            .as_ref()
-            .and_then(|file| file.parent())
-            .map(|dir| {
-                let mut uri = dir.uri().to_string();
-                if !uri.ends_with('/') {
-                    uri.push('/');
-                }
-                uri
-            });
-        self.preview_ready.set(false);
-        self.preview_loading.set(true);
-        self.webview.load_html(PREVIEW_PAGE, base.as_deref());
-    }
-
-    fn schedule_render(self: &Rc<Self>) {
-        if self.render_scheduled.replace(true) {
-            return;
-        }
-        let weak = Rc::downgrade(self);
-        glib::timeout_add_local_once(RENDER_DELAY, move || {
-            if let Some(win) = weak.upgrade() {
-                win.render_scheduled.set(false);
-                win.render_now();
-            }
-        });
-    }
-
-    /// Converts the current text and swaps it into the preview page.
-    /// Only the page's contents change, so the scroll position is kept.
-    fn render_now(&self) {
-        if !self.preview_ready.get() || !self.webview.is_visible() {
-            return;
-        }
-        let html = render::markdown_to_safe_html(&self.text());
-        let html_as_js_string = serde_json::to_string(&html).unwrap_or_default();
-        // The new content replaces any find highlights, so they're redrawn after
-        self.run_js(&format!(
-            "document.getElementById('content').innerHTML = {html_as_js_string};
-             window.leafmd && window.leafmd.findAgain();"
-        ));
-    }
-
-    fn run_js(&self, script: &str) {
-        self.webview.evaluate_javascript(
-            script,
-            Some(SCRIPT_WORLD),
-            None,
-            gio::Cancellable::NONE,
-            |result| {
-                if let Err(err) = result {
-                    eprintln!("LeafMD: could not update the formatted view: {err}");
-                }
-            },
-        );
-    }
-
-    fn handle_preview_message(&self, json: &str) {
-        let Ok(message) = serde_json::from_str::<serde_json::Value>(json) else {
-            return;
-        };
-        match message["kind"].as_str() {
-            Some("jump") => {
-                if let (Some(start), Some(end)) = (message["start"].as_i64(), message["end"].as_i64()) {
-                    self.jump_to(
-                        start as i32,
-                        end as i32,
-                        message["word"].as_str().unwrap_or(""),
-                        message["occurrence"].as_u64().unwrap_or(0) as usize,
-                    );
-                }
-            }
-            Some("scroll") => {
-                let now = Instant::now();
-                if self.view_mode.get() != ViewMode::Split
-                    || now < self.ignore_preview_scroll_until.get()
-                {
-                    return;
-                }
-                // About to scroll the editor: ignore the scroll events that causes
-                self.ignore_editor_scroll_until.set(now + SYNC_QUIET);
-                if message["bottom"].as_bool() == Some(true) {
-                    let adjustment = self.source_scroll.vadjustment();
-                    adjustment.set_value(adjustment.upper() - adjustment.page_size());
-                } else if let Some(line) = message["line"].as_f64() {
-                    self.scroll_editor_to_line(line);
-                }
-            }
-            // The result of searching the formatted view
-            Some("find") if self.searching_preview() => {
-                self.find.show_count(
-                    message["position"].as_i64().unwrap_or(0) as i32,
-                    message["count"].as_i64().unwrap_or(0) as i32,
-                );
-            }
-            _ => {}
-        }
-    }
-
-    /// Double-clicking a word on the formatted side of split view: select that same
-    /// word in the raw text and briefly highlight its line. In the formatted-only
-    /// view, double-click just selects the word like in any reader.
-    ///
-    /// `start` and `end` are the source lines of the block that was clicked, and
-    /// `occurrence` says which copy of the word it was (0 = first) within that block.
-    fn jump_to(&self, start: i32, end: i32, word: &str, occurrence: usize) {
-        if self.view_mode.get() != ViewMode::Split {
-            return;
-        }
-        self.source_view.grab_focus();
-        let Some(block_start) = self.buffer.iter_at_line((start - 1).max(0)) else {
-            return;
-        };
-        let block_end = self
-            .buffer
-            .iter_at_line(end)
-            .unwrap_or_else(|| self.buffer.end_iter());
-
-        // Find the same copy of the word within the block's lines
-        let mut found = None;
-        if !word.is_empty() {
-            let mut from = block_start;
-            for _ in 0..=occurrence {
-                match from.forward_search(word, gtk::TextSearchFlags::TEXT_ONLY, Some(&block_end)) {
-                    Some((match_start, match_end)) => {
-                        from = match_end;
-                        found = Some((match_start, match_end));
-                    }
-                    None => break,
-                }
-            }
-        }
-        let cursor = match found {
-            Some((match_start, match_end)) => {
-                self.buffer.select_range(&match_start, &match_end);
-                match_start
-            }
-            None => {
-                self.buffer.place_cursor(&block_start);
-                block_start
-            }
-        };
-        self.flash_line(&cursor);
-
-        // Wait until the split view has been laid out, then bring the spot into view
-        let view = self.source_view.clone();
-        let mark = self.buffer.get_insert();
-        glib::idle_add_local_once(move || {
-            view.scroll_to_mark(&mark, 0.0, true, 0.0, 0.3);
-        });
-    }
-
-    /// Highlights a line in the accent colour for a moment.
-    fn flash_line(&self, iter: &gtk::TextIter) {
-        let mut color = adw::StyleManager::default().accent_color_rgba();
-        color.set_alpha(0.25);
-        self.flash_tag.set_paragraph_background_rgba(Some(&color));
-
-        let (all_start, all_end) = self.buffer.bounds();
-        self.buffer.remove_tag(&self.flash_tag, &all_start, &all_end);
-        let mut line_start = *iter;
-        line_start.set_line_offset(0);
-        let mut line_end = line_start;
-        line_end.forward_to_line_end();
-        self.buffer.apply_tag(&self.flash_tag, &line_start, &line_end);
-
-        let buffer = self.buffer.clone();
-        let tag = self.flash_tag.clone();
-        glib::timeout_add_local_once(Duration::from_millis(1200), move || {
-            let (start, end) = buffer.bounds();
-            buffer.remove_tag(&tag, &start, &end);
-        });
-    }
-
-    /// Scrolls the raw text so the given (possibly fractional) line is at the top.
-    fn scroll_editor_to_line(&self, line: f64) {
-        let whole = line.floor().max(1.0);
-        let Some(iter) = self.buffer.iter_at_line(whole as i32 - 1) else {
-            return;
-        };
-        let (y, height) = self.source_view.line_yrange(&iter);
-        let target = y as f64 + (line - whole).clamp(0.0, 1.0) * height as f64;
-        let adjustment = self.source_scroll.vadjustment();
-        let max = (adjustment.upper() - adjustment.page_size()).max(0.0);
-        adjustment.set_value(target.clamp(0.0, max));
-    }
-
-    /// Called when the raw text scrolls: moves the formatted view to the same spot.
-    fn sync_preview_to_editor(&self) {
-        let now = Instant::now();
-        if self.view_mode.get() != ViewMode::Split
-            || !self.preview_ready.get()
-            || now < self.ignore_editor_scroll_until.get()
-        {
-            return;
-        }
-        let adjustment = self.source_scroll.vadjustment();
-        let top = adjustment.value();
-        let at_bottom = top > 0.0 && top >= adjustment.upper() - adjustment.page_size() - 1.0;
-
-        let (iter, line_top) = self.source_view.line_at_y(top as i32);
-        let (_, height) = self.source_view.line_yrange(&iter);
-        let fraction = if height > 0 {
-            ((top - line_top as f64) / height as f64).clamp(0.0, 1.0)
-        } else {
-            0.0
-        };
-        let line = (iter.line() + 1) as f64 + fraction;
-
-        // About to scroll the formatted view: ignore the scroll events that causes
-        self.ignore_preview_scroll_until.set(now + SYNC_QUIET);
-        self.run_js(&format!(
-            "window.leafmd && window.leafmd.scrollToLine({line}, {at_bottom});"
-        ));
-    }
-
-    /// Decides what happens when something tries to change the page in the formatted view.
-    /// Returns true when LeafMD has handled it.
-    fn decide_navigation(
-        self: &Rc<Self>,
-        webview: &webkit6::WebView,
-        decision: &webkit6::PolicyDecision,
-        kind: webkit6::PolicyDecisionType,
-    ) -> bool {
-        if kind != webkit6::PolicyDecisionType::NavigationAction {
-            return false;
-        }
-        let Some(nav) = decision.downcast_ref::<webkit6::NavigationPolicyDecision>() else {
-            return false;
-        };
-        let Some(action) = nav.navigation_action() else {
-            return false;
-        };
-
-        // LeafMD loading its own page, or a reload of it: allow
-        if self.preview_loading.replace(false)
-            || action.navigation_type() == webkit6::NavigationType::Reload
-        {
-            return false;
-        }
-
-        let uri = action
-            .request()
-            .and_then(|request| request.uri())
-            .map(|uri| uri.to_string())
-            .unwrap_or_default();
-
-        // A link to a heading on the same page, like [Install](#install): allow
-        let current_page = webview.uri().map(|u| u.to_string()).unwrap_or_default();
-        let without_heading = |u: &str| u.split('#').next().unwrap_or("").to_string();
-        if uri.contains('#') && without_heading(&uri) == without_heading(&current_page) {
-            return false;
-        }
-
-        // Anything else is blocked. Clicked links open in the right app instead,
-        // and a file dropped onto the formatted view is opened in LeafMD.
-        decision.ignore();
-        if action.navigation_type() == webkit6::NavigationType::LinkClicked
-            && uri.starts_with("file://")
-        {
-            // A link to another file, like [License](LICENSE)
-            self.open_local_link(&uri);
-        } else if action.navigation_type() == webkit6::NavigationType::LinkClicked {
-            // Opens the link in your default browser. Inside Flatpak, GIO asks the
-            // desktop to do it through a "portal". (GTK's UriLauncher was tried first,
-            // but its requests failed with "The application launch failed", while
-            // this route works.)
-            // If it fails, say so instead of doing nothing.
-            let context = WidgetExt::display(&self.window).app_launch_context();
-            let weak = Rc::downgrade(self);
-            glib::spawn_future_local(async move {
-                if let Err(err) = gio::AppInfo::launch_default_for_uri_future(&uri, Some(&context)).await
-                    && let Some(win) = weak.upgrade()
-                {
-                    eprintln!("LeafMD: could not open link: {err}");
-                    win.toast(&format!("Couldn't open the link: {}", err.message()));
-                }
-            });
-        } else if uri.starts_with("file://") {
-            self.ask_open_file(gio::File::for_uri(&uri));
-        }
-        true
-    }
-
-    /// A clicked link to a file on this computer. Text files (markdown, LICENSE,
-    /// .txt and so on) open in a new LeafMD window; anything else, like an image,
-    /// PDF or folder, opens in its usual app.
-    fn open_local_link(self: &Rc<Self>, uri: &str) {
-        // A "#heading" part names a spot in the file, used after it opens
-        let (file_uri, heading) = match uri.split_once('#') {
-            Some((file_uri, heading)) => (file_uri, Some(heading.to_string())),
-            None => (uri, None),
-        };
-        let file = gio::File::for_uri(file_uri);
-        let win = self.clone();
-        glib::spawn_future_local(async move {
-            let info = file
-                .query_info_future(
-                    "standard::type,standard::content-type",
-                    gio::FileQueryInfoFlags::NONE,
-                    glib::Priority::DEFAULT,
-                )
-                .await;
-            let info = match info {
-                Ok(info) => info,
-                Err(_) => {
-                    let name = file
-                        .basename()
-                        .map(|n| n.display().to_string())
-                        .unwrap_or_default();
-                    win.toast(&format!("“{name}” doesn't exist"));
-                    return;
-                }
-            };
-            let is_text = info.file_type() == gio::FileType::Regular
-                && info
-                    .content_type()
-                    .is_some_and(|kind| gio::content_type_is_a(&kind, "text/plain"));
-            if is_text {
-                // Opens in its own window, so this document stays open too
-                let target = match heading {
-                    Some(heading) => format!("{}#{heading}", file.uri()),
-                    None => file.uri().to_string(),
-                };
-                if let Some(app) = win.window.application() {
-                    app.activate_action("open-in-new-window", Some(&target.to_variant()));
-                }
-            } else {
-                let context = WidgetExt::display(&win.window).app_launch_context();
-                if let Err(err) =
-                    gio::AppInfo::launch_default_for_uri_future(&file.uri(), Some(&context)).await
-                {
-                    win.toast(&format!("Couldn't open the link: {}", err.message()));
-                }
-            }
-        });
-    }
 
     // =====================================================================
     // Files
     // =====================================================================
 
+    /// New: an empty document in a new tab. Nothing is asked, because no other
+    /// document is replaced.
     fn ask_new(self: &Rc<Self>) {
-        self.confirm_discard(|win| {
-            win.set_text("");
-            win.set_file(None);
-            win.show_document();
-            // A new document needs somewhere to type, so show the raw text
-            if win.view_mode.get() == ViewMode::Preview {
-                win.set_view(ViewMode::Split);
-            }
-            win.source_view.grab_focus();
-        });
+        // A new document needs somewhere to type, so show the raw text
+        let view = match self.last_view.get() {
+            ViewMode::Preview => ViewMode::Split,
+            view => view,
+        };
+        let doc = self.add_tab(view);
+        doc.set_file(None);
+        self.show_document();
+        doc.source_view.grab_focus();
     }
 
-    /// Closes the document but keeps the window, going back to the
-    /// "No Document Open" page. LeafMD starts on that page next time too.
+    /// Close Document: closes the selected tab. If it's the last one, the
+    /// window stays open on the "No Document Open" page.
     fn ask_close_document(self: &Rc<Self>) {
-        self.confirm_discard(|win| {
-            win.find.bar.set_search_mode(false);
-            win.set_text("");
-            win.reveal_pending.set(false);
-            win.stack.set_visible_child_name("empty");
-            // After switching page, so the title goes back to "LeafMD"
-            win.set_file(None);
-            win.set_document_actions_enabled(false);
-            // The closed file was left out of the list while open; show it again
-            win.update_recent_menu();
-            state::forget_last_file();
-        });
+        if let Some(page) = self.tab_view.selected_page() {
+            self.tab_view.close_page(&page);
+        }
     }
 
     fn ask_open(self: &Rc<Self>) {
-        self.confirm_discard(|win| {
-            let win = win.clone();
-            glib::spawn_future_local(async move {
-                let dialog = gtk::FileDialog::builder()
-                    .title("Open Markdown File")
-                    .modal(true)
-                    .filters(&file_filters())
-                    .build();
-                if let Ok(file) = dialog.open_future(Some(&win.window)).await {
-                    win.load_file(file).await;
-                }
-            });
+        let win = self.clone();
+        glib::spawn_future_local(async move {
+            let dialog = gtk::FileDialog::builder()
+                .title("Open Markdown File")
+                .modal(true)
+                .filters(&file_filters())
+                .build();
+            if let Ok(file) = dialog.open_future(Some(&win.window)).await {
+                win.open_file_here(file, None);
+            }
         });
     }
 
-    pub fn ask_open_file(self: &Rc<Self>, file: gio::File) {
-        self.ask_open_file_at(file, None);
+    /// Opens a file asked for from this window: Open, Recent files, a dropped
+    /// file or a link. Scrolls to `heading` if one is given. Nothing is asked
+    /// about unsaved changes, because no other document is replaced.
+    pub fn open_file_here(self: &Rc<Self>, file: gio::File, heading: Option<String>) {
+        if let Some(app) = self
+            .window
+            .application()
+            .and_then(|app| app.downcast::<adw::Application>().ok())
+        {
+            open_file(&app, &self.windows, file, heading, Some(self));
+        }
     }
 
-    /// Opens a file in this window, scrolled to `heading` if one is given.
-    pub fn open_file_at(self: &Rc<Self>, file: gio::File, heading: Option<String>) {
-        self.ask_open_file_at(file, heading);
+    /// Moves this window to the end of the list of windows.
+    fn became_most_recent(self: &Rc<Self>) {
+        let mut list = self.windows.borrow_mut();
+        if let Some(position) = list.iter().position(|win| Rc::ptr_eq(win, self)) {
+            let win = list.remove(position);
+            list.push(win);
+        }
     }
 
-    /// The address of the file this window shows, if any.
-    pub fn file_uri(&self) -> Option<String> {
-        self.file.borrow().as_ref().map(|file| file.uri().to_string())
+    /// Whether one of this window's tabs shows this file.
+    pub fn has_file(&self, uri: &str) -> bool {
+        self.documents().iter().any(|doc| doc.file_uri().as_deref() == Some(uri))
+            || self.waiting_files.borrow().iter().any(|waiting| waiting.file.uri() == uri)
+            || self.restoring_files.borrow().iter().any(|restoring| restoring == uri)
     }
 
-    /// False while the window shows the "No Document Open" start page.
-    pub fn has_document(&self) -> bool {
-        self.stack.visible_child_name().as_deref() == Some("document")
+    /// True while the window shows the "No Document Open" page with nothing on the way.
+    pub fn is_empty(&self) -> bool {
+        self.tab_view.n_pages() == 0
+            && self.waiting_files.borrow().is_empty()
+            && self.restoring_files.borrow().is_empty()
     }
 
-    /// Scrolls the formatted view to the heading with this id (like "part-two").
-    pub fn scroll_to_heading(&self, heading: &str) {
-        let id = serde_json::to_string(heading).unwrap_or_default();
-        self.run_js(&format!("document.getElementById({id})?.scrollIntoView();"));
+    /// Selects the tab showing this file, scrolled to `heading` if one is given.
+    pub fn select_file(&self, uri: &str, heading: Option<&str>) {
+        let documents = self.documents();
+        let Some(doc) = documents.iter().find(|doc| doc.file_uri().as_deref() == Some(uri)) else {
+            return;
+        };
+        self.select_document(doc);
+        if let Some(heading) = heading {
+            // A tab still drawing for the first time scrolls once it has finished
+            if doc.preview_ready.get() {
+                doc.scroll_to_heading(heading);
+            } else {
+                *doc.pending_heading.borrow_mut() = Some(heading.to_string());
+            }
+        }
     }
 
-    /// Opens a file (asking about unsaved changes first), then scrolls the
-    /// formatted view to `heading` if one is given.
-    fn ask_open_file_at(self: &Rc<Self>, file: gio::File, heading: Option<String>) {
-        self.confirm_discard(move |win| {
-            *win.pending_heading.borrow_mut() = heading;
-            win.begin_loading();
-            let win = win.clone();
+    /// Adds a file to the ones waiting to open in this window.
+    pub fn queue_file(self: &Rc<Self>, file: gio::File, heading: Option<String>) {
+        // Set before the window is first drawn, so it opens blank, not "No Document Open"
+        self.begin_loading();
+        self.waiting_files.borrow_mut().push_back(WaitingFile { file, heading });
+        if !self.reading_files.replace(true) {
+            let win = self.clone();
             glib::spawn_future_local(async move {
-                win.load_file(file).await;
+                win.read_waiting_files().await;
             });
-        });
+        }
     }
 
-    async fn load_file(self: &Rc<Self>, file: gio::File) {
+    /// Reads the waiting files one at a time, and shows each in a tab. Because a
+    /// tab only appears once its file has been read, a file that can't be opened
+    /// leaves nothing behind but the message saying why.
+    async fn read_waiting_files(self: &Rc<Self>) {
+        loop {
+            let next = self
+                .waiting_files
+                .borrow()
+                .front()
+                .map(|waiting| (waiting.file.clone(), waiting.heading.clone()));
+            let Some((file, heading)) = next else { break };
+            let text = self.read_file(&file).await;
+            self.waiting_files.borrow_mut().pop_front();
+            if let Some(text) = text {
+                self.show_file(file, heading, text);
+            } else if self.is_empty() {
+                self.cancel_loading();
+            }
+        }
+        self.reading_files.set(false);
+        self.read_restoring_files();
+    }
+
+    /// The file's text, or None after saying why it couldn't be opened.
+    async fn read_file(&self, file: &gio::File) -> Option<String> {
         let bytes = match file.load_contents_future().await {
             Ok((bytes, _)) => bytes,
             Err(err) => {
-                self.cancel_loading();
                 self.toast(&format!("Could not open the file: {}", err.message()));
                 // A recent file that has been moved or deleted drops off the list
                 self.forget_recent(&file.uri());
-                return;
+                return None;
             }
         };
-        let Ok(text) = String::from_utf8(bytes.to_vec()) else {
-            self.cancel_loading();
-            self.toast("This file isn't plain text, so LeafMD can't open it");
-            return;
+        match String::from_utf8(bytes.to_vec()) {
+            Ok(text) => Some(text),
+            Err(_) => {
+                self.toast("This file isn't plain text, so LeafMD can't open it");
+                None
+            }
+        }
+    }
+
+    /// Shows a file that has been read: in a new tab, or in place of an empty
+    /// new document that nothing has been typed in, so that isn't left behind.
+    fn show_file(self: &Rc<Self>, file: gio::File, heading: Option<String>, text: String) {
+        let doc = match self.current().filter(|doc| doc.is_untouched()) {
+            Some(doc) => {
+                // It's a new document's view, which is Split if that was the way
+                // to have somewhere to type. A file starts in the usual one.
+                self.apply_view(self.last_view.get());
+                self.show_view_of(&doc);
+                doc
+            }
+            None => self.add_tab(self.last_view.get()),
         };
-        self.set_text(&text);
-        *self.known_version.borrow_mut() = Some(Version::Contents(text.into_bytes()));
-        self.set_file(Some(file.clone()));
+        *doc.pending_heading.borrow_mut() = heading;
+        doc.show_file(file.clone(), text);
         self.show_document();
         self.remember_recent(&file);
     }
 
-    /// Opens the file LeafMD had open last time, if it's still there.
-    /// If it has been moved or deleted, the normal start page shows instead.
+    /// Brings back the tabs from the window closed last, the ones still there.
+    /// If none are, the normal start page shows instead. The selected file comes
+    /// first, the normal way, which puts it on screen as soon as it's ready. The
+    /// others follow once it's there, so none of them takes its place.
     pub fn open_last_file(self: &Rc<Self>) {
         let last = state::load_last_file();
-        let Some(uri) = state::file_to_reopen(last.as_deref(), &self.recent.borrow()) else {
-            return;
-        };
-        let file = gio::File::for_uri(&uri);
-        if !file.query_exists(gio::Cancellable::NONE) {
+        let tabs = state::load_saved_tabs();
+        let reopen = state::tabs_to_reopen(
+            last.as_deref(),
+            tabs.as_deref(),
+            &self.recent.borrow(),
+            |uri| gio::File::for_uri(uri).query_exists(gio::Cancellable::NONE),
+        );
+        let Some(reopen) = reopen else { return };
+        *self.restoring_files.borrow_mut() =
+            reopen.files.iter().filter(|uri| **uri != reopen.selected).cloned().collect();
+        self.restoring_not_started.set(true);
+        self.queue_file(gio::File::for_uri(&reopen.selected), None);
+        *self.restored_order.borrow_mut() = reopen.files;
+    }
+
+    /// Starts reading the other tabs to bring back. Each file is read by itself,
+    /// so a slow or stuck one, say on a network drive, only holds up its own tab.
+    fn read_restoring_files(self: &Rc<Self>) {
+        if !self.restoring_not_started.replace(false) {
             return;
         }
-        // Set before the window is first drawn, so it opens blank, not "No Document Open"
-        self.begin_loading();
-        let win = self.clone();
-        glib::spawn_future_local(async move {
-            win.load_file(file).await;
-        });
+        for uri in self.restoring_files.borrow().iter() {
+            let (win, uri) = (self.clone(), uri.clone());
+            glib::spawn_future_local(async move {
+                let file = gio::File::for_uri(&uri);
+                let text = win.read_file(&file).await;
+                win.restoring_files.borrow_mut().retain(|restoring| *restoring != uri);
+                // The window may have been closed while this was being read
+                let open = win.windows.borrow().iter().any(|other| Rc::ptr_eq(other, &win));
+                match text {
+                    Some(text) if open => win.add_restored_tab(file, text),
+                    None if win.is_empty() => win.cancel_loading(),
+                    _ => {}
+                }
+            });
+        }
+    }
+
+    /// Adds a tab for a file being brought back at startup, without selecting it or
+    /// drawing its formatted view. It starts in the view that was saved.
+    fn add_restored_tab(self: &Rc<Self>, file: gio::File, text: String) {
+        let doc = self.new_document(self.last_view.get());
+        doc.preview_waiting.set(true);
+        let tabs: Vec<_> = self.documents().iter().map(|doc| doc.file_uri()).collect();
+        let position =
+            opening::restored_tab_position(&self.restored_order.borrow(), &tabs, &file.uri());
+        self.tab_view.insert(&doc.paned, position as i32);
+        doc.show_file(file, text);
+        // The selected file couldn't be read, so this one, as the first tab to
+        // arrive, was selected in its place and is what the window now shows
+        if self.stack.visible_child_name().as_deref() == Some("loading") {
+            self.show_document();
+        }
+        self.update_recent_menu();
     }
 
     // =====================================================================
@@ -1843,7 +1815,7 @@ impl Window {
     // =====================================================================
 
     /// Moves a file to the top of the recent list.
-    fn remember_recent(&self, file: &gio::File) {
+    pub fn remember_recent(&self, file: &gio::File) {
         let uri = file.uri().to_string();
         // Start from the saved list, which other LeafMD windows may have added to
         let mut recent = state::load_recent();
@@ -1855,7 +1827,7 @@ impl Window {
         self.update_recent_menu();
     }
 
-    fn forget_recent(&self, uri: &str) {
+    pub fn forget_recent(&self, uri: &str) {
         let mut recent = state::load_recent();
         let before = recent.len();
         recent.retain(|u| u != uri);
@@ -1880,12 +1852,12 @@ impl Window {
     }
 
     /// Rebuilds the list under the arrow next to Open: each file's name with
-    /// its folder in brackets, then "Clear Recent Files". The open file is skipped.
+    /// its folder in brackets, then "Clear Recent Files". Files open in this
+    /// window are skipped, since they're already here.
     fn update_recent_menu(&self) {
-        let current = self.file.borrow().as_ref().map(|f| f.uri().to_string());
         let files = gio::Menu::new();
         for uri in self.recent.borrow().iter() {
-            if Some(uri) == current.as_ref() {
+            if self.has_file(uri) {
                 continue;
             }
             let file = gio::File::for_uri(uri);
@@ -1927,359 +1899,23 @@ impl Window {
         }
     }
 
-    /// Saves to the current file, or asks where to save a new document.
-    /// Returns true if it was saved.
-    async fn save(self: &Rc<Self>) -> bool {
-        let file = self.file.borrow().clone();
-        match file {
-            Some(file) => {
-                if !self.ok_to_replace(&file).await {
-                    return false;
-                }
-                let saved = self.write_to(&file).await;
-                // Saving counts as recent use, and puts the file back on the
-                // list if Clear Recent Files emptied it while the file was open
-                if saved {
-                    self.remember_recent(&file);
-                }
-                saved
-            }
-            None => self.save_as().await,
-        }
-    }
 
-    async fn save_as(self: &Rc<Self>) -> bool {
-        let dialog = gtk::FileDialog::builder()
-            .title("Save Markdown File")
-            .modal(true)
-            .initial_name(self.save_name())
-            .filters(&file_filters())
-            .build();
-        let Ok(file) = dialog.save_future(Some(&self.window)).await else {
-            return false;
-        };
-        if !self.write_to(&file).await {
-            return false;
-        }
-        self.set_file(Some(file.clone()));
-        self.remember_recent(&file);
-        true
-    }
 
-    async fn write_to(self: &Rc<Self>, file: &gio::File) -> bool {
-        let text = self.text();
-        self.saves_running.set(self.saves_running.get() + 1);
-        // GIO writes to a temporary file first and then swaps it in, so a crash
-        // or full disk part-way through can't leave a half-written file.
-        let result = file
-            .replace_contents_future(
-                text.clone().into_bytes(),
-                None,
-                false,
-                gio::FileCreateFlags::NONE,
-            )
-            .await;
-        self.saves_running.set(self.saves_running.get() - 1);
-        let saved = match result {
-            Ok(_) => {
-                // Only mark as saved if nothing was typed while saving
-                if self.text() == text {
-                    self.buffer.set_modified(false);
-                }
-                // What was written, not what's in the editor now, which may
-                // have gained more typing during the save
-                *self.known_version.borrow_mut() = Some(Version::Contents(text.into_bytes()));
-                self.close_file_banner();
-                self.toast("Saved");
-                true
-            }
-            Err((_, err)) => {
-                self.toast(&format!("Could not save: {}", err.message()));
-                false
-            }
-        };
-        // Checks wait during a save, so look now in case another app changed
-        // the file during it
-        self.schedule_file_check();
-        saved
-    }
 
-    // =====================================================================
-    // Noticing when another app changes the open file
-    // =====================================================================
-
-    /// Starts watching the window's current file, and forgets anything known
-    /// about the previous one. Fails quietly: on a drive that can't be watched,
-    /// LeafMD still checks when returning to the window and before saving.
-    fn watch_file(self: &Rc<Self>) {
-        self.file_generation.set(self.file_generation.get() + 1);
-        self.close_file_banner();
-        let monitor = self.file.borrow().as_ref().and_then(|file| {
-            file.monitor_file(gio::FileMonitorFlags::NONE, gio::Cancellable::NONE)
-                .ok()
-        });
-        if let Some(monitor) = &monitor {
-            let weak = Rc::downgrade(self);
-            monitor.connect_changed(move |_, _, _, _| {
-                if let Some(win) = weak.upgrade() {
-                    win.schedule_file_check();
-                }
-            });
-        }
-        *self.file_monitor.borrow_mut() = monitor;
-    }
-
-    /// Checks the file after FILE_CHECK_DELAY. Calling this again while waiting
-    /// doesn't restart the wait, so an app that writes constantly can't hold the
-    /// check off forever.
-    fn schedule_file_check(self: &Rc<Self>) {
-        if self.file_check_scheduled.replace(true) {
-            return;
-        }
-        let weak = Rc::downgrade(self);
-        glib::timeout_add_local_once(FILE_CHECK_DELAY, move || {
-            if let Some(win) = weak.upgrade() {
-                win.file_check_scheduled.set(false);
-                glib::spawn_future_local(async move {
-                    win.check_file().await;
-                });
-            }
-        });
-    }
-
-    /// Reads the open file, and opens or closes the banner to match.
-    async fn check_file(self: &Rc<Self>) {
-        // write_to runs another check when it finishes
-        if self.saves_running.get() > 0 {
-            return;
-        }
-        let Some(file) = self.file.borrow().clone() else {
-            return;
-        };
-        let generation = self.file_generation.get();
-        let on_disk = read_version(&file).await;
-        // While reading, the window may have moved to another file or started a save
-        if generation != self.file_generation.get() || self.saves_running.get() > 0 {
-            return;
-        }
-        let comparison = match self.known_version.borrow().as_ref() {
-            Some(known) => file_change::compare(known, on_disk.as_ref()),
-            None => return,
-        };
-        match comparison {
-            Comparison::Same => self.close_file_banner(),
-            Comparison::Changed | Comparison::Deleted => {
-                *self.banner_version.borrow_mut() = on_disk;
-                self.update_file_banner();
-            }
-            Comparison::Unknown => {}
-        }
-    }
-
-    /// Makes the banner match what it's telling the user about and whether there
-    /// are unsaved changes.
-    fn update_file_banner(&self) {
-        match self.banner_version.borrow().as_ref() {
-            Some(version) => {
-                let (message, action, loses_work) = file_change::banner_text(
-                    &self.display_name(),
-                    version,
-                    self.buffer.is_modified(),
-                );
-                self.file_banner.show(&message, action, loses_work);
-            }
-            None => self.file_banner.hide(),
-        }
-    }
-
-    fn close_file_banner(&self) {
-        *self.banner_version.borrow_mut() = None;
-        self.update_file_banner();
-    }
-
-    /// Ignore: the version the banner was about now counts as seen, so it isn't
-    /// mentioned again and saving replaces it without asking. Using that version
-    /// rather than reading the file again means a newer change still gets a banner.
-    fn ignore_file_change(self: &Rc<Self>) {
-        if let Some(version) = self.banner_version.borrow_mut().take() {
-            *self.known_version.borrow_mut() = Some(version);
-        }
-        self.update_file_banner();
-        self.schedule_file_check();
-    }
-
-    /// Reload, Discard and Reload, or Save Again.
-    async fn banner_action(self: &Rc<Self>) {
-        let deleted = self.banner_version.borrow().as_ref() == Some(&Version::Missing);
-        if deleted {
-            self.save().await;
-        } else {
-            self.reload_file().await;
-        }
-    }
-
-    /// Replaces the document with the newest version of the file. If that can't be
-    /// done, the document and the banner stay and a message says why.
-    async fn reload_file(self: &Rc<Self>) {
-        let Some(file) = self.file.borrow().clone() else {
-            return;
-        };
-        let generation = self.file_generation.get();
-        let result = file.load_contents_future().await;
-        if generation != self.file_generation.get() {
-            return;
-        }
-        let bytes = match result {
-            Ok((bytes, _)) => bytes.to_vec(),
-            Err(err) => {
-                self.toast(&format!("Could not reload the file: {}", err.message()));
-                self.schedule_file_check();
-                return;
-            }
-        };
-        let Ok(text) = String::from_utf8(bytes) else {
-            self.toast("This file isn't plain text, so LeafMD can't open it");
-            return;
-        };
-        self.replace_text_keeping_place(&text);
-        *self.known_version.borrow_mut() = Some(Version::Contents(text.into_bytes()));
-        self.close_file_banner();
-    }
-
-    /// Before saving: if another app changed the file and the user hasn't chosen
-    /// to ignore that, asks before replacing it. Returns true if it's fine to save.
-    /// A deleted file has nothing to replace, and if the file can't be read, the
-    /// save itself will report any problem.
-    async fn ok_to_replace(self: &Rc<Self>, file: &gio::File) -> bool {
-        if self.asking_to_replace.get() {
-            return false;
-        }
-        let on_disk = read_version(file).await;
-        let changed = match self.known_version.borrow().as_ref() {
-            Some(known) => file_change::compare(known, on_disk.as_ref()) == Comparison::Changed,
-            None => false,
-        };
-        if !changed {
-            return true;
-        }
-        let dialog = adw::AlertDialog::new(
-            Some("Replace the Other Version?"),
-            Some(&format!(
-                "“{}” was changed by another app since LeafMD last opened or saved it. Saving will replace that version.",
-                self.display_name()
-            )),
-        );
-        dialog.add_responses(&[("cancel", "_Cancel"), ("save", "_Save Anyway")]);
-        dialog.set_response_appearance("save", adw::ResponseAppearance::Destructive);
-        dialog.set_default_response(Some("cancel"));
-        dialog.set_close_response("cancel");
-        self.asking_to_replace.set(true);
-        let response = dialog.choose_future(Some(&self.window)).await;
-        self.asking_to_replace.set(false);
-        response.as_str() == "save"
-    }
-
-    /// Runs `then` straight away if there are no unsaved changes. Otherwise asks
-    /// the user to save, discard or cancel, and only runs `then` if they didn't cancel.
-    fn confirm_discard(self: &Rc<Self>, then: impl FnOnce(&Rc<Self>) + 'static) {
-        if !self.buffer.is_modified() {
-            then(self);
-            return;
-        }
-        let dialog = adw::AlertDialog::new(
-            Some("Save Changes?"),
-            Some(&format!(
-                "“{}” has unsaved changes. If you don't save them, they will be lost.",
-                self.display_name()
-            )),
-        );
-        dialog.add_responses(&[
-            ("cancel", "_Cancel"),
-            ("discard", "_Discard"),
-            ("save", "_Save"),
-        ]);
-        dialog.set_response_appearance("discard", adw::ResponseAppearance::Destructive);
-        dialog.set_response_appearance("save", adw::ResponseAppearance::Suggested);
-        dialog.set_default_response(Some("save"));
-        dialog.set_close_response("cancel");
-
-        let win = self.clone();
-        glib::spawn_future_local(async move {
-            match dialog.choose_future(Some(&win.window)).await.as_str() {
-                "discard" => then(&win),
-                // Only carry on if the save actually worked
-                "save" if win.save().await => then(&win),
-                _ => {}
-            }
-        });
-    }
-
-    fn set_file(self: &Rc<Self>, file: Option<gio::File>) {
-        if file.is_none() {
-            *self.known_version.borrow_mut() = None;
-        }
-        *self.file.borrow_mut() = file;
-        self.update_title();
-        self.reload_preview();
-        self.watch_file();
-    }
-
-    /// Replaces the editor text without adding it to the undo history.
-    fn set_text(&self, text: &str) {
-        self.buffer.begin_irreversible_action();
-        self.buffer.set_text(text);
-        self.buffer.end_irreversible_action();
-        self.buffer.set_modified(false);
-        self.buffer.place_cursor(&self.buffer.start_iter());
-        self.source_view
-            .scroll_to_iter(&mut self.buffer.start_iter(), 0.0, false, 0.0, 0.0);
-    }
-
-    /// Like set_text, but for reloading the same document: the cursor and scroll
-    /// position stay where they were instead of going back to the top. The
-    /// formatted view redraws through its normal update, which keeps its position.
-    fn replace_text_keeping_place(self: &Rc<Self>, text: &str) {
-        let cursor = self.buffer.iter_at_mark(&self.buffer.get_insert());
-        let (line, column) = (cursor.line(), cursor.line_offset());
-        let scroll = self.source_scroll.vadjustment().value();
-
-        self.buffer.begin_irreversible_action();
-        self.buffer.set_text(text);
-        self.buffer.end_irreversible_action();
-        self.buffer.set_modified(false);
-
-        // If the file got shorter, the cursor goes to the end of the document or line
-        let place = match self.buffer.iter_at_line(line) {
-            Some(mut place) => {
-                let mut line_end = place;
-                if !line_end.ends_line() {
-                    line_end.forward_to_line_end();
-                }
-                place.set_line_offset(column.min(line_end.line_offset()));
-                place
-            }
-            None => self.buffer.end_iter(),
-        };
-        self.buffer.place_cursor(&place);
-
-        // GTK works out the new text's height over the next moments, and until
-        // it has, the scroll position would be cut short
-        let weak = Rc::downgrade(self);
-        glib::timeout_add_local_once(Duration::from_millis(50), move || {
-            if let Some(win) = weak.upgrade() {
-                win.source_scroll.vadjustment().set_value(scroll);
-            }
-        });
-    }
-
-    fn text(&self) -> String {
-        let (start, end) = self.buffer.bounds();
-        self.buffer.text(&start, &end, false).to_string()
-    }
 
     // =====================================================================
     // Small helpers
     // =====================================================================
+
+    /// The document the window's buttons and shortcuts act on.
+    pub fn current(&self) -> Option<Rc<Document>> {
+        Document::for_widget(&self.tab_view.selected_page()?.child())
+    }
+
+    /// Whether this document is the one the window is showing.
+    pub fn is_current(&self, doc: &Document) -> bool {
+        self.current().is_some_and(|current| std::ptr::eq(&*current, doc))
+    }
 
     fn action(&self, name: &str) -> gio::SimpleAction {
         self.window
@@ -2288,68 +1924,31 @@ impl Window {
             .expect("LeafMD action is registered")
     }
 
-    fn display_name(&self) -> String {
-        self.file
-            .borrow()
-            .as_ref()
-            .and_then(|file| file.basename())
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "Untitled".into())
-    }
 
-    fn save_name(&self) -> String {
-        match self.file.borrow().as_ref() {
-            Some(_) => self.display_name(),
-            None => "Untitled.md".into(),
-        }
-    }
-
-    fn update_title(&self) {
-        if self.stack.visible_child_name().as_deref() != Some("document") {
+    pub fn update_title(&self) {
+        let Some(doc) = self.current().filter(|_| {
+            self.stack.visible_child_name().as_deref() == Some("document")
+        }) else {
             self.title.set_title("LeafMD");
             self.title.set_subtitle("");
             self.window.set_title(Some("LeafMD"));
             return;
-        }
-        let dot = if self.buffer.is_modified() { "• " } else { "" };
-        let name = format!("{dot}{}", self.display_name());
-        let folder = self
-            .file
-            .borrow()
-            .as_ref()
-            .and_then(|file| file.parent())
-            .and_then(|dir| dir.path())
-            .map(|path| match path.strip_prefix(glib::home_dir()) {
-                Ok(rest) if rest.as_os_str().is_empty() => "~".to_string(),
-                Ok(rest) => format!("~/{}", rest.display()),
-                Err(_) => path.display().to_string(),
-            })
-            .unwrap_or_default();
+        };
+        let dot = if doc.buffer.is_modified() { "• " } else { "" };
+        let name = format!("{dot}{}", doc.display_name());
         self.title.set_title(&name);
-        self.title.set_subtitle(&folder);
+        self.title.set_subtitle(&doc.folder());
         self.window.set_title(Some(&format!("{name} - LeafMD")));
     }
 
-    /// Matches the editor colours and the formatted view to the system's light or dark style.
+    /// Matches every document's colours to the system's light or dark style.
     fn update_style(&self) {
-        let dark = adw::StyleManager::default().is_dark();
-        let scheme = sourceview5::StyleSchemeManager::default()
-            .scheme(if dark { "Adwaita-dark" } else { "Adwaita" });
-        self.buffer.set_style_scheme(scheme.as_ref());
-
-        let background = if dark { "#1e1e1e" } else { "#ffffff" };
-        if let Ok(rgba) = gdk::RGBA::parse(background) {
-            self.webview.set_background_color(&rgba);
-        }
-        if self.preview_ready.get() {
-            let theme = if dark { "dark" } else { "light" };
-            self.run_js(&format!(
-                "document.documentElement.dataset.theme = '{theme}';"
-            ));
+        for doc in self.documents() {
+            doc.update_style();
         }
     }
 
-    fn toast(&self, message: &str) {
+    pub fn toast(&self, message: &str) {
         self.toasts.add_toast(
             adw::Toast::builder()
                 .title(message)
@@ -2363,7 +1962,7 @@ impl Window {
         const TERMINAL_ROW: &str = "From a terminal";
         const TERMINAL_SETUP_URL: &str = "https://leafmd.app/#terminal";
         let page = adw::PreferencesPage::new();
-        let sections: [(&str, &[(&str, &str)]); 5] = [
+        let sections: [(&str, &[(&str, &str)]); 6] = [
             (
                 "The Three Views",
                 &[
@@ -2377,10 +1976,20 @@ impl Window {
                 "Editing",
                 &[
                     ("Editing the raw text", "The raw text can always be edited in Raw or Split view. Changes are only written to the file when you save."),
-                    ("Unsaved changes", "A dot (•) before the file name means there are unsaved changes. LeafMD asks before closing or opening another file."),
+                    ("Unsaved changes", "A dot (•) before the file name means there are unsaved changes. LeafMD asks before closing them, and if a window with several unsaved tabs closes, you choose which ones to save."),
                     ("Jump to a word", "In Split view, double-click a word on the formatted side to select it in the raw text."),
                     ("Lists", "In a list, Enter starts the next item for you: another bullet, the next number, or an unticked checkbox. Press Enter on an empty item to end the list, or Shift+Enter for a new line without a marker."),
                     ("Pasting a link", "Select some text and paste a web address over it to turn the text into a link. Pasting anything else replaces the text as usual."),
+                ],
+            ),
+            (
+                "Tabs",
+                &[
+                    ("Opening a tab", "New opens an empty document in a new tab, and any file you open gets a tab of its own, including files from your file manager and links. The tab bar appears once a window has two or more tabs. A file that's already open isn't opened again: LeafMD shows its tab."),
+                    ("Moving between tabs", "Click a tab, press Ctrl+Tab or Ctrl+Shift+Tab, or press Alt and a number to go to a tab by its position. Each tab keeps its own text, view, find bar and undo history."),
+                    ("Closing a tab", "Use the tab's close button or Ctrl+W. Closing the last tab closes the window. Ctrl+Q closes the window with all its tabs."),
+                    ("Rearranging tabs", "Drag a tab along the tab bar to change the order, onto another LeafMD window to move it there, or away from the tab bars to give it a window of its own. Right-clicking a tab offers the same moves. A moved tab keeps its unsaved changes and undo history."),
+                    ("New windows", "Press Ctrl+N or choose New Window from the main menu for another window. Right-clicking LeafMD's icon offers New Window too."),
                 ],
             ),
             (
@@ -2403,12 +2012,12 @@ impl Window {
             (
                 "Files and Links",
                 &[
-                    ("Opening files", "Use Open, drop a file onto the window, or double-click a markdown file in your file manager."),
+                    ("Opening files", "Use Open, drop a file onto the window, or double-click a markdown file in your file manager. It opens in a new tab, in the LeafMD window you used last."),
                     (TERMINAL_ROW, "Type leafmd notes.md in a terminal to open a file. It takes a one-time setup, and Setup shows you how."),
-                    ("Recent files", "The arrow next to Open lists the files you opened recently. When you start LeafMD, it reopens the last file you had open. Clear Recent Files empties the list, and LeafMD then forgets the last file too."),
-                    ("Closing a document", "Close Document in the main menu closes the file but keeps the window open, and LeafMD starts with no document next time. Closing the window instead (Ctrl+W) brings the file back next time."),
+                    ("Recent files", "The arrow next to Open lists the files you opened recently. When you start LeafMD, it reopens the saved files from the window you closed last, in the same tabs. Clear Recent Files empties the list, and LeafMD then has nothing to reopen."),
+                    ("Closing a document", "Close Document in the main menu closes the selected tab. If it's the last one, the window stays open and LeafMD starts with no document next time. Closing the window instead (Ctrl+W on the last tab, or Ctrl+Q) brings its files back next time."),
                     ("Changes from other apps", "If another app changes or deletes the open file, a banner appears across the top of the window, and nothing changes until you choose. Reload brings in the new version, and Ignore keeps what you have. If you save a file that changed without you noticing, LeafMD asks first."),
-                    ("Links", "Web links open in your browser. Links to other markdown or text files open them in a new LeafMD window, and links to headings scroll to them."),
+                    ("Links", "Web links open in your browser. Links to other markdown or text files open them in a new tab, and links to headings scroll to them."),
                     ("Images", "Images next to the file and images online are shown in the formatted view."),
                 ],
             ),
@@ -2453,7 +2062,7 @@ impl Window {
         // Built like Help rather than with adw::ShortcutsDialog, which always
         // has a search box. Keep the keys in step with set_shortcuts in main.rs.
         let page = adw::PreferencesPage::new();
-        let sections: [(&str, &[(&str, &str)]); 5] = [
+        let sections: [(&str, &[(&str, &str)]); 6] = [
             (
                 "Views",
                 &[
@@ -2465,11 +2074,21 @@ impl Window {
             (
                 "Files",
                 &[
-                    ("New document", "Ctrl+N"),
+                    ("New document", "Ctrl+T"),
+                    ("New window", "Ctrl+N"),
                     ("Open", "Ctrl+O"),
                     ("Save", "Ctrl+S"),
                     ("Save as", "Ctrl+Shift+S"),
-                    ("Close window", "Ctrl+W or Ctrl+Q"),
+                    ("Close window", "Ctrl+Q"),
+                ],
+            ),
+            (
+                "Tabs",
+                &[
+                    ("Close tab", "Ctrl+W"),
+                    ("Next tab", "Ctrl+Tab, Ctrl+Page Down or Ctrl+Alt+Page Down"),
+                    ("Previous tab", "Ctrl+Shift+Tab, Ctrl+Page Up or Ctrl+Alt+Page Up"),
+                    ("Go to a tab by its position", "Alt+1 to Alt+9"),
                 ],
             ),
             (
@@ -2507,9 +2126,14 @@ impl Window {
             for (name, keys) in items {
                 let row = adw::ActionRow::builder().title(*name).build();
                 row.add_suffix(
+                    // The longer lists of keys wrap, so they fit a narrow window
                     &gtk::Label::builder()
                         .label(*keys)
                         .css_classes(["dim-label"])
+                        .wrap(true)
+                        .max_width_chars(22)
+                        .justify(gtk::Justification::Right)
+                        .xalign(1.0)
                         .build(),
                 );
                 group.add(&row);
@@ -2709,7 +2333,7 @@ impl Window {
     fn save_state(&self) {
         let (width, height) = self.window.default_size();
         SavedState {
-            view: self.view_mode.get(),
+            view: self.current().map_or(self.last_view.get(), |doc| doc.view_mode.get()),
             width,
             height,
             maximized: self.window.is_maximized(),
@@ -2802,21 +2426,7 @@ fn build_format_bar() -> gtk::ScrolledWindow {
         .vscrollbar_policy(gtk::PolicyType::Never)
         .build()
 }
-
-/// Whether the line starting at this point has nothing but spaces on it.
-fn line_is_blank(line_start: &gtk::TextIter) -> bool {
-    let mut line_end = *line_start;
-    if !line_end.ends_line() {
-        line_end.forward_to_line_end();
-    }
-    line_start
-        .buffer()
-        .text(line_start, &line_end, true)
-        .trim()
-        .is_empty()
-}
-
-fn file_filters() -> gio::ListStore {
+pub fn file_filters() -> gio::ListStore {
     let markdown = gtk::FileFilter::new();
     markdown.set_name(Some("Markdown"));
     markdown.add_mime_type("text/markdown");
@@ -2837,14 +2447,4 @@ fn file_filters() -> gio::ListStore {
     filters.append(&text);
     filters.append(&all);
     filters
-}
-
-/// Reads a file as it is on disk now. None means it couldn't be read for some
-/// reason other than not being there.
-async fn read_version(file: &gio::File) -> Option<Version> {
-    match file.load_contents_future().await {
-        Ok((bytes, _)) => Some(Version::Contents(bytes.to_vec())),
-        Err(err) if err.matches(gio::IOErrorEnum::NotFound) => Some(Version::Missing),
-        Err(_) => None,
-    }
 }

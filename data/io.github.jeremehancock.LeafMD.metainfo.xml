@@ -24,6 +24,7 @@
     <ul>
       <li>Switch between formatted, raw and split views with one click or Ctrl+1, 2 and 3</li>
       <li>A formatted-only view for pure, distraction-free reading</li>
+      <li>Tabs keep several documents in one window, and reopen when you start LeafMD again</li>
       <li>Edit the raw text with the formatted view updating as you type</li>
       <li>A formatting bar adds bold, links, lists, headings, tables and more for you</li>
       <li>Lists continue themselves when you press Enter, and pasting a web address over text makes a link</li>
@@ -95,6 +96,21 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.6.0" date="2026-11-06">
+      <description>
+        <p>LeafMD now has tabs, so one window can hold everything you're working on.</p>
+        <ul>
+          <li>Any file you open gets its own tab, including from your file manager and from links. The tab bar appears once a window has two documents</li>
+          <li>Each tab keeps its own text, view, undo history, find bar and banner</li>
+          <li>Drag a tab to reorder it, move it to another window or pull it out into a new one</li>
+          <li>Starting LeafMD brings back the saved files from the window you closed last, in the same tabs</li>
+          <li>Keyboard changes: Ctrl+T starts a new document, Ctrl+N opens a new window, and Ctrl+W closes the tab rather than the window. Ctrl+Q closes the window with all its tabs</li>
+          <li>Right-clicking LeafMD's icon offers New Window</li>
+          <li>Ctrl+Z now works straight after clicking Replace All</li>
+          <li>If you set up the short leafmd command before this version, run the setup again to use options like --new-window from any folder. See leafmd.app for the steps</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.5.0" date="2026-11-05">
       <description>
         <p>LeafMD is now easier to use from a terminal.</p>
