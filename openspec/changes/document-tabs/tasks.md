@@ -64,7 +64,7 @@ Commit nothing until the owner asks; `/ship` handles commits. "Standard checks" 
 - [x] 8.1 Run the standard checks, `./build-aux/sdk-check.sh`, `./build-aux/flathub-lint.sh` and `openspec validate document-tabs --strict`; verify all pass
 - [x] 8.2 Test narrow windows at 360 and 500 pixels with 8 tabs, including with minimize and maximize buttons on and the find bar open; verify each scenario in "Tabs in a narrow window" that the compact layout scenarios in `windows` still hold, and that the unsaved tabs dialog fits and scrolls at 360 pixels with long file names and 8 unsaved tabs
 - [x] 8.3 Open 10 tabs, note the memory used, and tell the owner the number; verify switching stays quick
-- [ ] 8.4 Rebuild and install with `./build-aux/flatpak-install.sh`, then ask the owner to close every LeafMD window, reopen it and try the change; verify with the owner, and don't close their running LeafMD yourself
+- [x] 8.4 Rebuild and install with `./build-aux/flatpak-install.sh`, then ask the owner to close every LeafMD window, reopen it and try the change; verify with the owner, and don't close their running LeafMD yourself
 
 ## Workflow follow-up
 
