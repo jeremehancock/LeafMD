@@ -4,7 +4,6 @@
 //! a button is in window.rs, because it needs the editor and the formatted view.
 
 use gtk::{gio, prelude::*};
-use sourceview5::prelude::*;
 
 pub struct FindBar {
     /// GTK's sliding search bar. It has the close button and handles Escape.
@@ -24,20 +23,10 @@ pub struct FindBar {
     pub replace_toggle: gtk::ToggleButton,
     pub replace_row: gtk::Box,
     pub replace_entry: gtk::Entry,
-    /// What to look for in the raw text, and how (match case, whole words)
-    pub settings: sourceview5::SearchSettings,
-    /// Searches the raw text: highlights every match and counts them
-    pub context: sourceview5::SearchContext,
 }
 
 impl FindBar {
-    pub fn new(buffer: &sourceview5::Buffer) -> Self {
-        let settings = sourceview5::SearchSettings::new();
-        // After the last match, Enter goes back to the first
-        settings.set_wrap_around(true);
-        let context = sourceview5::SearchContext::new(buffer, Some(&settings));
-        context.set_highlight(true);
-
+    pub fn new() -> Self {
         // ---- First row: what to find ----
         let entry = gtk::SearchEntry::builder()
             .placeholder_text("Find")
@@ -164,8 +153,6 @@ impl FindBar {
             replace_toggle,
             replace_row,
             replace_entry,
-            settings,
-            context,
         }
     }
 

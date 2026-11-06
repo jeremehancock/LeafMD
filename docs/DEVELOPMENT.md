@@ -83,7 +83,10 @@ With Claude Code, `/ship` walks a change through all of this: the checks, trying
 | File | What it does |
 |---|---|
 | `src/main.rs` | Starts the app, gives the terminal back when started from one, sets up keyboard shortcuts, opens files passed on the command line |
-| `src/window.rs` | The window: toolbar, formatting bar, raw editor, formatted view, find and replace, Help, cheatsheet and About, opening and saving |
+| `src/window.rs` | The window: toolbar, formatting bar, find and replace, recent files, Help, cheatsheet and About |
+| `src/document.rs` | One open document: the raw editor, the formatted view, links, saving and reloading, and noticing changes to its file |
+| `src/dialog.rs` | The questions about saving: a heading, some text and a row of equal buttons, laid out like gedit's |
+| `src/opening.rs` | The rule for which window a file opens in, with tests |
 | `src/file_change.rs` | Noticing when another app changes the open file: what counts as a change, what the banner says, and the banner's widgets, with tests |
 | `src/find.rs` | The find and replace bar's buttons and boxes |
 | `src/format.rs` | What each formatting button does to the text (bold, lists, headings, tables and so on), with tests |
