@@ -224,7 +224,7 @@
           <h3>For everyone on this computer</h3>
           <p>Asks for your admin password, and works straight away on most systems:</p>
           <div class="command">
-            <code id="terminal-system">sudo sh -c 'set -C; printf "%s\n" "#!/bin/sh" "exec flatpak run <span class="nowrap">--file-forwarding</span> io.<wbr>github.<wbr>jeremehancock.<wbr>LeafMD @@ \"\$@\" @@" &gt; /usr/<wbr>local/<wbr>bin/<wbr>leafmd &amp;&amp; chmod 755 /usr/<wbr>local/<wbr>bin/<wbr>leafmd'</code>
+            <code id="terminal-system">sudo sh -c 'set -C; printf "%s\n" "#!/bin/sh" "while case \"\$1\" in -*) ;; *) false ;; esac; do o=\"\$o \$1\"; shift; done" "exec flatpak run <span class="nowrap">--file-forwarding</span> io.<wbr>github.<wbr>jeremehancock.<wbr>LeafMD \$o @@ \"\$@\" @@" &gt; /usr/<wbr>local/<wbr>bin/<wbr>leafmd &amp;&amp; chmod 755 /usr/<wbr>local/<wbr>bin/<wbr>leafmd'</code>
             <button type="button" class="copy" data-copy="terminal-system" hidden>Copy</button>
           </div>
         </article>
@@ -232,7 +232,7 @@
           <h3>Just for you</h3>
           <p>No admin password needed:</p>
           <div class="command">
-            <code id="terminal-home">sh -c 'set -C; mkdir -p ~/.local/bin; printf "%s\n" "#!/bin/sh" "exec flatpak run <span class="nowrap">--file-forwarding</span> io.<wbr>github.<wbr>jeremehancock.<wbr>LeafMD @@ \"\$@\" @@" &gt; ~/.local/<wbr>bin/<wbr>leafmd &amp;&amp; chmod 755 ~/.local/<wbr>bin/<wbr>leafmd'</code>
+            <code id="terminal-home">sh -c 'set -C; mkdir -p ~/.local/bin; printf "%s\n" "#!/bin/sh" "while case \"\$1\" in -*) ;; *) false ;; esac; do o=\"\$o \$1\"; shift; done" "exec flatpak run <span class="nowrap">--file-forwarding</span> io.<wbr>github.<wbr>jeremehancock.<wbr>LeafMD \$o @@ \"\$@\" @@" &gt; ~/.local/<wbr>bin/<wbr>leafmd &amp;&amp; chmod 755 ~/.local/<wbr>bin/<wbr>leafmd'</code>
             <button type="button" class="copy" data-copy="terminal-home" hidden>Copy</button>
           </div>
         </article>
@@ -240,6 +240,7 @@
       <ul class="notes">
         <li><strong>Works with every version</strong> It works best with the latest, which gives your terminal back as soon as LeafMD opens. On older versions, files open the same way, but the terminal stays busy until LeafMD closes.</li>
         <li><strong>Already have a <code>leafmd</code>?</strong> Neither line replaces it. You'll see an error, and nothing changes.</li>
+        <li><strong>Set this up before?</strong> If options like <code>leafmd --new-window</code> say "Failed to open" in folders outside your home folder, delete the old file and use the line again. Opening files works either way.</li>
         <li><strong>Is <code>leafmd</code> not found?</strong> After using the "Just for you" line, log out and back in. If it still isn't found, add <code>~/.local/bin</code> to your <code>PATH</code>.</li>
         <li><strong>To undo the setup</strong> Delete the file the line created: <code>/usr/local/bin/leafmd</code> (with <code>sudo rm</code>) or <code>~/.local/bin/leafmd</code>.</li>
       </ul>

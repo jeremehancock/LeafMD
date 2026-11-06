@@ -17,6 +17,11 @@ LeafMD SHALL list a "New Window" item for the desktop to show when its app icon 
 - **WHEN** the user runs `leafmd --new-window` in a terminal
 - **THEN** a new window opens and the prompt comes back straight away
 
+#### Scenario: From a folder outside the home folder
+- **GIVEN** the user has done the one-time setup
+- **WHEN** the user runs `leafmd --new-window` with the terminal in `/tmp`
+- **THEN** a new window opens, rather than Flatpak treating the option as a file
+
 ## MODIFIED Requirements
 
 ### Requirement: Command line

@@ -95,18 +95,19 @@ Flatpak apps don't come with a short command, but one line adds it. After that, 
 For everyone on this computer (asks for your admin password, and works straight away on most systems):
 
 ```
-sudo sh -c 'set -C; printf "%s\n" "#!/bin/sh" "exec flatpak run --file-forwarding io.github.jeremehancock.LeafMD @@ \"\$@\" @@" > /usr/local/bin/leafmd && chmod 755 /usr/local/bin/leafmd'
+sudo sh -c 'set -C; printf "%s\n" "#!/bin/sh" "while case \"\$1\" in -*) ;; *) false ;; esac; do o=\"\$o \$1\"; shift; done" "exec flatpak run --file-forwarding io.github.jeremehancock.LeafMD \$o @@ \"\$@\" @@" > /usr/local/bin/leafmd && chmod 755 /usr/local/bin/leafmd'
 ```
 
 Or just for you (no admin password needed):
 
 ```
-sh -c 'set -C; mkdir -p ~/.local/bin; printf "%s\n" "#!/bin/sh" "exec flatpak run --file-forwarding io.github.jeremehancock.LeafMD @@ \"\$@\" @@" > ~/.local/bin/leafmd && chmod 755 ~/.local/bin/leafmd'
+sh -c 'set -C; mkdir -p ~/.local/bin; printf "%s\n" "#!/bin/sh" "while case \"\$1\" in -*) ;; *) false ;; esac; do o=\"\$o \$1\"; shift; done" "exec flatpak run --file-forwarding io.github.jeremehancock.LeafMD \$o @@ \"\$@\" @@" > ~/.local/bin/leafmd && chmod 755 ~/.local/bin/leafmd'
 ```
 
 The `leafmd` command works with every version of LeafMD, and works best with the latest, which gives your terminal back as soon as LeafMD opens. On older versions, files open the same way, but the terminal stays busy until LeafMD closes.
 
 - Neither line replaces a `leafmd` that's already there: you'll see an error, and nothing changes.
+- If you set this up before and options like `leafmd --new-window` say "Failed to open" in folders outside your home folder, delete the old file (see below) and use the line again. Opening files works either way.
 - If `leafmd` isn't found after using the second line, log out and back in. If it still isn't found, add `~/.local/bin` to your `PATH`.
 - To see LeafMD's messages when something goes wrong, run `leafmd --foreground`, which keeps it attached to the terminal.
 - To undo the setup, delete the file the line created: `/usr/local/bin/leafmd` (with `sudo rm`) or `~/.local/bin/leafmd`.
