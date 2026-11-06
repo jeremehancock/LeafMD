@@ -24,6 +24,7 @@
     <ul>
       <li>Switch between formatted, raw and split views with one click or Ctrl+1, 2 and 3</li>
       <li>A formatted-only view for pure, distraction-free reading</li>
+      <li>Tabs keep several documents in one window, and reopen when you start LeafMD again</li>
       <li>Edit the raw text with the formatted view updating as you type</li>
       <li>A formatting bar adds bold, links, lists, headings, tables and more for you</li>
       <li>Lists continue themselves when you press Enter, and pasting a web address over text makes a link</li>

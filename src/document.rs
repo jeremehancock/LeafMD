@@ -55,6 +55,10 @@ pub struct FindState {
     pub query: String,
     pub replace_open: bool,
     pub replace_text: String,
+    /// The keyboard's focus was in the find bar rather than the document
+    pub focus_in_bar: bool,
+    /// And it was in the replace box in particular
+    pub focus_in_replace: bool,
 }
 
 thread_local! {
@@ -102,6 +106,10 @@ pub struct Document {
     /// True while a file has loaded but its formatted view is still being drawn.
     /// The document is shown once that's done, so it appears all at once.
     pub reveal_pending: Cell<bool>,
+    /// True for a tab restored at startup whose formatted view hasn't been drawn,
+    /// which waits until the tab is first selected. This keeps starting LeafMD
+    /// quick with many tabs.
+    pub preview_waiting: Cell<bool>,
 
     /// Tells LeafMD when the open file changes. Dropping it stops the watching.
     file_monitor: RefCell<Option<gio::FileMonitor>>,
@@ -202,6 +210,7 @@ impl Document {
             flash_tag,
             pending_heading: RefCell::new(None),
             reveal_pending: Cell::new(false),
+            preview_waiting: Cell::new(false),
             file_monitor: RefCell::new(None),
             known_version: RefCell::new(None),
             banner_version: RefCell::new(None),
@@ -701,6 +710,13 @@ impl Document {
         self.preview_ready.set(false);
         self.preview_loading.set(true);
         self.webview.load_html(PREVIEW_PAGE, base.as_deref());
+    }
+
+    /// The tab has been selected: draws the formatted view if it was waiting.
+    pub fn draw_preview_if_waiting(&self) {
+        if self.preview_waiting.replace(false) {
+            self.reload_preview();
+        }
     }
 
     fn schedule_render(self: &Rc<Self>) {
@@ -1353,7 +1369,9 @@ impl Document {
         }
         *self.file.borrow_mut() = file;
         self.title_changed();
-        self.reload_preview();
+        if !self.preview_waiting.get() {
+            self.reload_preview();
+        }
         self.watch_file();
     }
 

@@ -11,6 +11,7 @@ mod window;
 
 use std::ffi::{OsStr, OsString};
 use std::io::IsTerminal;
+use std::ops::ControlFlow;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::process::CommandExt;
 use std::process::{Command, Stdio};
@@ -48,9 +49,15 @@ fn use_same_icons_everywhere() {
 ///
 /// Also never when an option was given: `--help` has to print before LeafMD
 /// exits, a mistyped option has to show its error, and `--foreground` is an
-/// option that asks to stay, so it doesn't need a rule of its own.
+/// option that asks to stay, so it doesn't need a rule of its own. The exception
+/// is `--new-window`, which has nothing to print and gives the prompt back like
+/// opening a file does.
 fn should_detach<A: AsRef<OsStr>>(all_terminals: bool, args: &[A]) -> bool {
-    all_terminals && !args.iter().any(|arg| arg.as_ref().as_bytes().starts_with(b"-"))
+    all_terminals
+        && !args.iter().any(|arg| {
+            let arg = arg.as_ref().as_bytes();
+            arg.starts_with(b"-") && arg != b"--new-window"
+        })
 }
 
 /// Starts a copy of LeafMD that carries on after this one exits, with the same
@@ -110,6 +117,31 @@ fn main() -> glib::ExitCode {
         None,
     );
 
+    app.add_main_option(
+        "new-window",
+        glib::Char::from(0),
+        glib::OptionFlags::NONE,
+        glib::OptionArg::None,
+        "Open a new window",
+        None,
+    );
+
+    // This runs before the rest of startup, and works out whether another copy of
+    // LeafMD is already running. Registering is what finds that out. Either way
+    // the action below then runs in whichever copy is in charge, and startup
+    // carries on as normal. So with no file, the usual "activate" step finds the
+    // new window and just shows it, rather than reopening the last file.
+    app.connect_handle_local_options(|app, options| {
+        if options.contains("new-window") {
+            if let Err(err) = app.register(gio::Cancellable::NONE) {
+                eprintln!("LeafMD: could not start: {err}");
+                return ControlFlow::Break(glib::ExitCode::FAILURE);
+            }
+            app.activate_action("new-window", None);
+        }
+        ControlFlow::Continue(())
+    });
+
     app.connect_startup(|app| {
         sourceview5::init();
         use_same_icons_everywhere();
@@ -117,6 +149,17 @@ fn main() -> glib::ExitCode {
     });
 
     let windows = Windows::default();
+
+    // New Window from the app launcher or `leafmd --new-window`. Inside LeafMD,
+    // Ctrl+N uses the window's own action instead, to carry its view across.
+    let new_window = gio::SimpleAction::new("new-window", None);
+    let (w, weak_app) = (windows.clone(), app.downgrade());
+    new_window.connect_activate(move |_, _| {
+        if let Some(app) = weak_app.upgrade() {
+            Window::open_new(&app, &w).window.present();
+        }
+    });
+    app.add_action(&new_window);
 
     let w = windows.clone();
     app.connect_activate(move |app| {
@@ -126,9 +169,11 @@ fn main() -> glib::ExitCode {
         match existing {
             Some(win) => win.window.present(),
             None => {
+                // Told about its files before it appears, so it starts blank. Once
+                // it's on screen, leaving "No Document Open" would be a visible fade.
                 let win = Window::open_new(app, &w);
-                win.window.present();
                 win.open_last_file();
+                win.window.present();
             }
         }
     });
@@ -146,6 +191,7 @@ fn main() -> glib::ExitCode {
 fn set_shortcuts(app: &adw::Application) {
     let shortcuts: &[(&str, &[&str])] = &[
         ("win.new", &["<Control>t"]),
+        ("win.new-window", &["<Control>n"]),
         ("win.open", &["<Control>o"]),
         ("win.save", &["<Control>s"]),
         ("win.save-as", &["<Control><Shift>s"]),
@@ -184,6 +230,15 @@ mod tests {
         assert!(should_detach::<&str>(true, &[]));
         assert!(should_detach(true, &["notes.md"]));
         assert!(should_detach(true, &["my notes.md", "/tmp/todo.md"]));
+    }
+
+    #[test]
+    fn detaches_for_a_new_window() {
+        assert!(should_detach(true, &["--new-window"]));
+        assert!(should_detach(true, &["--new-window", "notes.md"]));
+        // Only the terminal decides that, and other options still stay
+        assert!(!should_detach(false, &["--new-window"]));
+        assert!(!should_detach(true, &["--new-window", "--foreground"]));
     }
 
     #[test]

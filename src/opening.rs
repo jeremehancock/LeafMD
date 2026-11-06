@@ -42,13 +42,64 @@ pub fn choose_window(windows: &[WindowFacts], asked_from: Option<usize>) -> Targ
     }
 }
 
+/// Where a tab being brought back at startup goes, given the order saved when
+/// the window closed and the tabs there now (their files, or None for a document
+/// with no file). They can arrive in any order, because each file is read by
+/// itself. It goes just before the first tab that was saved after it, or at the
+/// end if there isn't one, so a new document someone just started stays last.
+pub fn restored_tab_position(saved: &[String], tabs: &[Option<String>], uri: &str) -> usize {
+    let place = |uri: &str| saved.iter().position(|saved| saved == uri);
+    let mine = place(uri);
+    tabs.iter()
+        .position(|tab| {
+            let theirs = tab.as_deref().and_then(place);
+            matches!((theirs, mine), (Some(theirs), Some(mine)) if theirs > mine)
+        })
+        .unwrap_or(tabs.len())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{Target, WindowFacts, choose_window};
+    use super::{Target, WindowFacts, choose_window, restored_tab_position};
 
     const WITH_DOCUMENT: WindowFacts = WindowFacts { has_file: false, is_empty: false };
     const EMPTY: WindowFacts = WindowFacts { has_file: false, is_empty: true };
     const HAS_THE_FILE: WindowFacts = WindowFacts { has_file: true, is_empty: false };
+
+    fn names(list: &[&str]) -> Vec<String> {
+        list.iter().map(|name| name.to_string()).collect()
+    }
+
+    fn tabs(list: &[Option<&str>]) -> Vec<Option<String>> {
+        list.iter().map(|tab| tab.map(str::to_string)).collect()
+    }
+
+    #[test]
+    fn restored_tabs_land_in_the_saved_order_however_they_arrive() {
+        let saved = names(&["a", "b", "c", "d"]);
+        let mut open = tabs(&[Some("c")]);
+        // The selected file is first, then the rest in a muddled order
+        for uri in ["d", "a", "b"] {
+            let position = restored_tab_position(&saved, &open, uri);
+            open.insert(position, Some(uri.to_string()));
+        }
+        assert_eq!(open, tabs(&[Some("a"), Some("b"), Some("c"), Some("d")]));
+    }
+
+    #[test]
+    fn a_new_document_started_meanwhile_stays_after_the_restored_tabs() {
+        let saved = names(&["a", "b"]);
+        let open = tabs(&[Some("a"), None]);
+        assert_eq!(restored_tab_position(&saved, &open, "b"), 2);
+        let open = tabs(&[None, Some("b")]);
+        assert_eq!(restored_tab_position(&saved, &open, "a"), 1);
+    }
+
+    #[test]
+    fn a_missing_file_leaves_the_rest_in_order() {
+        let saved = names(&["a", "b", "c"]);
+        assert_eq!(restored_tab_position(&saved, &tabs(&[Some("c")]), "a"), 0);
+    }
 
     #[test]
     fn with_leafmd_not_running_it_makes_a_window() {

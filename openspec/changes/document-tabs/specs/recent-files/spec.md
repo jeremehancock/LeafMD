@@ -22,7 +22,7 @@ LeafMD SHALL keep a list of the 10 most recently opened or saved files, newest f
 - **THEN** the list shows a greyed-out "No Recent Files"
 
 ### Requirement: Reopening the last file
-When started without a file (from the app grid), LeafMD SHALL reopen the saved files in the window closed last, in the same order, with the same tab selected, skipping any that no longer exist. Failing that it SHALL use the newest recent file. Never-saved documents SHALL NOT be restored, and a window with no saved file SHALL NOT change what reopens. Close Document on the last tab and Clear Recent Files SHALL leave nothing to reopen.
+When started without a file (from the app grid), LeafMD SHALL reopen the saved files that are on the recent list from the window closed last, in the same order, with the same tab selected, skipping any that no longer exist. Failing that it SHALL use the newest recent file. Never-saved documents SHALL NOT be restored, and a window with no saved file SHALL NOT change what reopens. Close Document on the last tab and Clear Recent Files SHALL leave nothing to reopen.
 
 #### Scenario: Reopening several tabs
 - **WHEN** a window has README.md, LICENSE and notes.md in that order, LICENSE is selected, the user presses Ctrl+Q and starts LeafMD again
@@ -47,6 +47,10 @@ When started without a file (from the app grid), LeafMD SHALL reopen the saved f
 #### Scenario: One of several tabs was deleted
 - **WHEN** a window was closed with a.md, b.md and c.md with b.md selected, b.md has since been deleted, and LeafMD starts
 - **THEN** a.md and c.md reopen, in that order, and one of them is selected
+
+#### Scenario: More tabs than the list holds
+- **WHEN** a window has 12 saved files open, the user closes it and starts LeafMD again
+- **THEN** the 10 on the recent list reopen, and the two opened longest ago don't, because only files on the list reopen
 
 #### Scenario: A never-saved tab
 - **WHEN** a window has notes.md and an empty Untitled tab, Untitled is selected, the user presses Ctrl+Q and starts LeafMD again

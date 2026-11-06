@@ -35,35 +35,35 @@ Commit nothing until the owner asks; `/ship` handles commits. "Standard checks" 
 
 ## 4. Views and find per tab
 
-- [ ] 4.1 Keep the view per `Document`, with new tabs starting in the window's last used view, and new documents in Split view; verify each scenario in "Each tab has its own view" by hand
-- [ ] 4.2 Save and load each tab's find state, with a guard so loading doesn't count as typing, and window-wide search options; verify each scenario in "Each tab has its own find bar" by hand, including that the cursor doesn't move when switching back
+- [x] 4.1 Keep the view per `Document`, with new tabs starting in the window's last used view, and new documents in Split view; verify each scenario in "Each tab has its own view" by hand
+- [x] 4.2 Save and load each tab's find state, with a guard so loading doesn't count as typing, and window-wide search options; verify each scenario in "Each tab has its own find bar" by hand, including that the cursor doesn't move when switching back
 
 ## 5. New windows and moving tabs
 
-- [ ] 5.1 Add the New Window action (Ctrl+N) and menu item, opening on the start page; verify the "New windows" scenarios by hand
-- [ ] 5.2 Add the right-click tab menu with Move Left, Move Right, Move to New Window and Close, acting on the right-clicked tab, with Move Left and Right greyed out at the ends; verify each item by hand on a tab that isn't selected, and that dragging a tab along the tab bar changes the order as in the "Reordering" scenario
-- [ ] 5.3 Connect `create-window` and `page-attached`, so dragging or moving a tab updates its window link, find options and toolbar state, and a window left with no tabs closes; verify that a moved tab's formatted view still draws, its links open, its messages appear in the new window, it still saves, and the "Moving a tab that has a banner" and "Changes after moving a tab" scenarios hold. If the page comes back wrong, redraw it after the move as `design.md` says
-- [ ] 5.4 Add `--new-window` handling and the `should_detach` exception, with a unit test for the exception; verify with `cargo test` and by running `leafmd --new-window` with LeafMD open and closed
-- [ ] 5.5 Add the `New Window` action to `data/io.github.jeremehancock.LeafMD.desktop`; verify with `desktop-file-validate`, `./build-aux/flathub-lint.sh` and, after installing, right-clicking the icon with LeafMD open and with it closed
+- [x] 5.1 Add the New Window action (Ctrl+N) and menu item, opening on the start page; verify the "New windows" scenarios by hand
+- [x] 5.2 Add the right-click tab menu with Move Left, Move Right, Move to New Window and Close, acting on the right-clicked tab, with Move Left and Right greyed out at the ends; verify each item by hand on a tab that isn't selected, and that dragging a tab along the tab bar changes the order as in the "Reordering" scenario
+- [x] 5.3 Connect `create-window` and `page-attached`, so dragging or moving a tab updates its window link, find options and toolbar state, and a window left with no tabs closes; verify that a moved tab's formatted view still draws, its links open, its messages appear in the new window, it still saves, and the "Moving a tab that has a banner" and "Changes after moving a tab" scenarios hold. If the page comes back wrong, redraw it after the move as `design.md` says
+- [x] 5.4 Add `--new-window` handling and the `should_detach` exception, with a unit test for the exception; verify with `cargo test` and by running `leafmd --new-window` with LeafMD open and closed
+- [x] 5.5 Add the `New Window` action to `data/io.github.jeremehancock.LeafMD.desktop`; verify with `desktop-file-validate`, `./build-aux/flathub-lint.sh` and, after installing, right-clicking the icon with LeafMD open and with it closed
 
 ## 6. Reopening tabs
 
-- [ ] 6.1 Replace `file_to_reopen` in `src/state.rs` with a function returning the list of files and the selected one, plus saving and loading the `tabs` key; verify with unit tests for a missing key (older state file), an empty value, missing files, and a selected file that's gone
-- [ ] 6.2 Save the tabs on close under the existing rules, and restore them at startup with the blank page until the selected one is ready; verify every scenario in "Reopening the last file" by hand, and that "No Document Open" never flashes
-- [ ] 6.3 Hold off drawing the formatted view for unselected restored tabs until first selected; verify that a heading link, find and the banner still work in a tab selected for the first time
+- [x] 6.1 Replace `file_to_reopen` in `src/state.rs` with a function returning the list of files and the selected one, plus saving and loading the `tabs` key; verify with unit tests for a missing key (older state file), an empty value, missing files, and a selected file that's gone
+- [x] 6.2 Save the tabs on close under the existing rules, and restore them at startup with the blank page until the selected one is ready; verify every scenario in "Reopening the last file" by hand, and that "No Document Open" never flashes
+- [x] 6.3 Hold off drawing the formatted view for unselected restored tabs until first selected; verify that a heading link, find and the banner still work in a tab selected for the first time
 
 ## 7. Everything users read
 
-- [ ] 7.1 Update `README.md`: tabs in the features, links opening a tab, Close Document, the shortcuts table (Ctrl+T, Ctrl+N, Ctrl+W, Ctrl+Q and the tab keys); verify no line still says links open a new window or that Ctrl+W closes the window
-- [ ] 7.2 Add tabs to the description in `data/io.github.jeremehancock.LeafMD.metainfo.xml`; verify with `./build-aux/flathub-lint.sh`
-- [ ] 7.3 Add tabs to the storefront in `site/index.html`; verify the page reads correctly in a browser
-- [ ] 7.4 Add tabs to `ROADMAP.md` as an unticked item, since it isn't there today, for `/ship` to tick; verify the item is present
+- [x] 7.1 Update `README.md`: tabs in the features, links opening a tab, Close Document, the shortcuts table (Ctrl+T, Ctrl+N, Ctrl+W, Ctrl+Q and the tab keys); verify no line still says links open a new window or that Ctrl+W closes the window
+- [x] 7.2 Add tabs to the description in `data/io.github.jeremehancock.LeafMD.metainfo.xml`; verify with `./build-aux/flathub-lint.sh`
+- [x] 7.3 Add tabs to the storefront in `site/index.html`; verify the page reads correctly in a browser
+- [x] 7.4 Add tabs to `ROADMAP.md` as an unticked item, since it isn't there today, for `/ship` to tick; verify the item is present
 
 ## 8. Checking the whole thing
 
-- [ ] 8.1 Run the standard checks, `./build-aux/sdk-check.sh`, `./build-aux/flathub-lint.sh` and `openspec validate document-tabs --strict`; verify all pass
-- [ ] 8.2 Test narrow windows at 360 and 500 pixels with 8 tabs, including with minimize and maximize buttons on and the find bar open; verify each scenario in "Tabs in a narrow window" that the compact layout scenarios in `windows` still hold, and that the unsaved tabs dialog fits and scrolls at 360 pixels with long file names and 8 unsaved tabs
-- [ ] 8.3 Open 10 tabs, note the memory used, and tell the owner the number; verify switching stays quick
+- [x] 8.1 Run the standard checks, `./build-aux/sdk-check.sh`, `./build-aux/flathub-lint.sh` and `openspec validate document-tabs --strict`; verify all pass
+- [x] 8.2 Test narrow windows at 360 and 500 pixels with 8 tabs, including with minimize and maximize buttons on and the find bar open; verify each scenario in "Tabs in a narrow window" that the compact layout scenarios in `windows` still hold, and that the unsaved tabs dialog fits and scrolls at 360 pixels with long file names and 8 unsaved tabs
+- [x] 8.3 Open 10 tabs, note the memory used, and tell the owner the number; verify switching stays quick
 - [ ] 8.4 Rebuild and install with `./build-aux/flatpak-install.sh`, then ask the owner to close every LeafMD window, reopen it and try the change; verify with the owner, and don't close their running LeafMD yourself
 
 ## Workflow follow-up

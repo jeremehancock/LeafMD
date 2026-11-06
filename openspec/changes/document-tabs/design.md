@@ -114,7 +114,7 @@ When a window closes, it records its saved files that are still on the recent li
 
 In `state.ini`, the new `tabs` key holds the addresses, one per line, like the existing `files` key. The existing `last` key holds the selected tab, or the nearest saved tab when the selected one was never saved. `file_to_reopen` becomes a function returning the list and the selected file, with unit tests. If `tabs` is missing (an older state file), `last` alone gives one tab, and `forget_last_file` clears both. An older version of LeafMD reading a newer state file just reopens `last`.
 
-Files are read in order at startup, and the window stays blank until the selected one is ready, so "No Document Open" never flashes. Files in tabs that aren't selected don't draw their formatted view until first selected. That keeps startup fast with many tabs.
+At startup the selected file is read first, and the window stays blank until it's ready, so "No Document Open" never flashes. The other files are then read independently and each slots into its saved position as it arrives (`restored_tab_position` in `src/opening.rs`), so a slow or stuck file, say on a network drive, only holds up its own tab. Files in tabs that aren't selected don't draw their formatted view until first selected. That keeps startup fast with many tabs.
 
 ### Keyboard shortcuts for tabs
 

@@ -80,9 +80,11 @@ pub fn open_file(
             win.queue_file(file, heading);
         }
         Target::NewWindow => {
+            // Told about the file before it appears, so it starts blank. Once it's
+            // on screen, leaving "No Document Open" would be a visible fade.
             let win = Window::open_new(app, windows);
-            win.window.present();
             win.queue_file(file, heading);
+            win.window.present();
         }
     }
 }
@@ -98,6 +100,14 @@ pub struct Window {
     waiting_files: RefCell<VecDeque<WaitingFile>>,
     /// True while the waiting files are being read
     reading_files: Cell<bool>,
+    /// The order of the tabs being brought back at startup, as they were saved
+    restored_order: RefCell<Vec<String>>,
+    /// The tabs still to come back at startup, apart from the selected one, which
+    /// comes back first. A file stays here while it's being read, so opening it
+    /// again doesn't read it twice.
+    restoring_files: RefCell<Vec<String>>,
+    /// True until those files have started being read
+    restoring_not_started: Cell<bool>,
     title: adw::WindowTitle,
     toasts: adw::ToastOverlay,
     stack: gtk::Stack,
@@ -123,6 +133,9 @@ pub struct Window {
     /// True while LeafMD itself is closing a tab or the window, as opposed to
     /// a tab being dragged to another window
     closing_tab: Cell<bool>,
+    /// The tab whose right-click menu was opened last, which is the one the
+    /// menu's items act on. It may not be the selected tab.
+    menu_page: glib::WeakRef<adw::TabPage>,
     /// The view last chosen in this window, which new tabs start in
     last_view: Cell<ViewMode>,
     /// Set after the user has answered "discard" or "save" when closing.
@@ -198,6 +211,7 @@ impl Window {
         // The menu is grouped into sections (shown with dividers); shortcuts appear automatically.
         let file_section = gio::Menu::new();
         file_section.append(Some("New"), Some("win.new"));
+        file_section.append(Some("New Window"), Some("win.new-window"));
         file_section.append(Some("Open…"), Some("win.open"));
         file_section.append(Some("Close Document"), Some("win.close-document"));
         let save_section = gio::Menu::new();
@@ -276,6 +290,18 @@ impl Window {
                 | adw::TabViewShortcuts::CONTROL_SHIFT_TAB
                 | adw::TabViewShortcuts::ALT_DIGITS,
         );
+        // What right-clicking a tab shows
+        let moves = gio::Menu::new();
+        moves.append(Some("Move Left"), Some("win.tab-move-left"));
+        moves.append(Some("Move Right"), Some("win.tab-move-right"));
+        moves.append(Some("Move to New Window"), Some("win.tab-move-to-new-window"));
+        let closes = gio::Menu::new();
+        closes.append(Some("Close"), Some("win.tab-close"));
+        let tab_menu = gio::Menu::new();
+        tab_menu.append_section(None, &moves);
+        tab_menu.append_section(None, &closes);
+        tab_view.set_menu_model(Some(&tab_menu));
+
         let tab_bar = adw::TabBar::builder()
             .view(&tab_view)
             .autohide(true)
@@ -397,6 +423,9 @@ impl Window {
             windows,
             waiting_files: RefCell::new(VecDeque::new()),
             reading_files: Cell::new(false),
+            restored_order: RefCell::new(Vec::new()),
+            restoring_files: RefCell::new(Vec::new()),
+            restoring_not_started: Cell::new(false),
             title,
             toasts,
             stack,
@@ -410,6 +439,7 @@ impl Window {
             shown_document: RefCell::new(Weak::new()),
             loading_find: Cell::new(false),
             closing_tab: Cell::new(false),
+            menu_page: glib::WeakRef::new(),
             last_view: Cell::new(saved.view),
             close_confirmed: Cell::new(false),
             file_banner,
@@ -440,10 +470,31 @@ impl Window {
             self.window.add_action(&action);
         };
         add("new", |win| win.ask_new());
+        add("new-window", |win| {
+            win.new_sibling_window();
+        });
         add("open", |win| win.ask_open());
         add("close-document", |win| win.ask_close_document());
         add("close-tab", |win| win.close_tab());
         add("clear-recent", |win| win.clear_recent());
+
+        // The right-click menu on a tab
+        add("tab-move-left", |win| {
+            if let Some(page) = win.menu_page.upgrade() {
+                win.tab_view.reorder_backward(&page);
+            }
+        });
+        add("tab-move-right", |win| {
+            if let Some(page) = win.menu_page.upgrade() {
+                win.tab_view.reorder_forward(&page);
+            }
+        });
+        add("tab-move-to-new-window", |win| win.move_menu_tab_to_new_window());
+        add("tab-close", |win| {
+            if let Some(page) = win.menu_page.upgrade() {
+                win.tab_view.close_page(&page);
+            }
+        });
 
         // Opening a recent file: the menu item carries the file's address
         let open_recent = gio::SimpleAction::new("open-recent", Some(glib::VariantTy::STRING));
@@ -626,16 +677,17 @@ impl Window {
                 }
             }
             win.save_state();
-            // Each window records its file as it closes, so the window closed
-            // last decides what opens next time. A window with no saved file
-            // (start page or a new, never-saved document) leaves it unchanged.
-            // So does a file that isn't on the recent list: after Clear Recent
-            // Files, closing a file that's still open shouldn't bring it back.
-            // This reads the saved list because another window may have cleared it.
-            if let Some(uri) = win.current().and_then(|doc| doc.file_uri())
-                && state::load_recent().contains(&uri)
-            {
-                state::save_last_file(&uri);
+            // Each window records its tabs as it closes, so the window closed last
+            // decides what opens next time. A window with no saved file (start
+            // page or a new, never-saved document) leaves that unchanged. This
+            // reads the saved recent list because another window may have cleared it.
+            let tabs: Vec<_> = win.documents().iter().map(|doc| doc.file_uri()).collect();
+            let selected = win
+                .tab_view
+                .selected_page()
+                .map(|page| win.tab_view.page_position(&page) as usize);
+            if let Some(tabs) = state::tabs_to_save(&tabs, selected, &state::load_recent()) {
+                state::save_tabs(&tabs);
             }
             // The tabs go with the window, so this doesn't count as them being
             // dragged away
@@ -700,25 +752,95 @@ impl Window {
             glib::Propagation::Stop
         });
 
-        // A tab arriving from another window now belongs to this one
+        // A tab has been dragged out of the tab bar and dropped away from any
+        // other window: this makes the window it lands in
         let weak = Rc::downgrade(self);
-        self.tab_view.connect_page_attached(move |_, page, _| {
-            if let (Some(win), Some(doc)) = (weak.upgrade(), Document::for_widget(&page.child())) {
-                doc.set_window(Rc::downgrade(&win));
-                win.update_tab(&doc);
+        self.tab_view.connect_create_window(move |_| {
+            weak.upgrade()?.new_sibling_window().map(|win| win.tab_view.clone())
+        });
+
+        // Right-clicking a tab: note which one, and what can be done with it.
+        // The menu closing also comes through here, with no tab. That's ignored,
+        // because it can happen just before the chosen item runs.
+        let weak = Rc::downgrade(self);
+        self.tab_view.connect_setup_menu(move |view, page| {
+            if let (Some(win), Some(page)) = (weak.upgrade(), page) {
+                win.menu_page.set(Some(page));
+                let position = view.page_position(page);
+                win.action("tab-move-left").set_enabled(position > 0);
+                win.action("tab-move-right").set_enabled(position < view.n_pages() - 1);
             }
         });
 
-        // Its only tab was dragged away, so there's nothing left in this window
+        // Adding a tab comes through here too, but only a tab arriving from
+        // another window needs anything done: it now belongs to this window, and
+        // the bars around it have to show what it remembers. The window it landed
+        // in may also have been on the "No Document Open" page.
+        let weak = Rc::downgrade(self);
+        self.tab_view.connect_page_attached(move |_, page, _| {
+            let (Some(win), Some(doc)) = (weak.upgrade(), Document::for_widget(&page.child()))
+            else {
+                return;
+            };
+            if doc.window().is_some_and(|window| Rc::ptr_eq(&window, &win)) {
+                return;
+            }
+            doc.set_window(Rc::downgrade(&win));
+            win.update_tab(&doc);
+            win.reveal_document();
+            win.selected_tab_changed();
+            win.update_recent_menu();
+            // Typing and Ctrl+Z should reach the document that just moved. This
+            // waits until the move has finished, because a window that has only
+            // just opened picks its own focus first.
+            let weak = Rc::downgrade(&win);
+            glib::idle_add_local_once(move || {
+                if let Some(win) = weak.upgrade()
+                    && win.is_current(&doc)
+                {
+                    win.focus_document(&doc);
+                }
+            });
+        });
+
+        // A tab left for another window. If it was the only one, there's nothing
+        // left in this window, so it closes. Otherwise that file can now be
+        // offered in this window's recent files.
         let weak = Rc::downgrade(self);
         self.tab_view.connect_page_detached(move |view, _, _| {
-            if let Some(win) = weak.upgrade()
-                && view.n_pages() == 0
-                && !win.closing_tab.get()
-            {
+            let Some(win) = weak.upgrade().filter(|win| !win.closing_tab.get()) else {
+                return;
+            };
+            if view.n_pages() == 0 {
                 win.window.close();
+            } else {
+                win.update_recent_menu();
             }
         });
+    }
+
+    /// Opens another window on the "No Document Open" page, starting in the view
+    /// last chosen in this one.
+    fn new_sibling_window(&self) -> Option<Rc<Window>> {
+        let app = self.window.application().and_downcast::<adw::Application>()?;
+        let win = Window::open_new(&app, &self.windows);
+        win.start_in_view(self.last_view.get());
+        win.window.present();
+        Some(win)
+    }
+
+    /// Sets the view for a window that has no tabs yet.
+    fn start_in_view(&self, view: ViewMode) {
+        self.last_view.set(view);
+        self.action("view").set_state(&view.as_str().to_variant());
+        self.view_switcher.set_active_name(Some(view.as_str()));
+    }
+
+    /// Move to New Window in a tab's right-click menu.
+    fn move_menu_tab_to_new_window(&self) {
+        if let (Some(page), Some(win)) = (self.menu_page.upgrade(), self.new_sibling_window()) {
+            self.tab_view.transfer_page(&page, &win.tab_view, 0);
+        }
     }
 
     /// Every document in this window, in tab order.
@@ -733,12 +855,18 @@ impl Window {
         self.tab_view.set_selected_page(&self.tab_view.page(&doc.paned));
     }
 
-    /// Adds a tab with a new, empty document and selects it.
-    fn add_tab(self: &Rc<Self>, view: ViewMode) -> Rc<Document> {
+    /// A new, empty document that belongs to this window, not in a tab yet.
+    fn new_document(self: &Rc<Self>, view: ViewMode) -> Rc<Document> {
         let doc = Document::new(view);
         doc.set_window(Rc::downgrade(self));
         doc.apply_view(view);
         doc.update_style();
+        doc
+    }
+
+    /// Adds a tab with a new, empty document and selects it.
+    fn add_tab(self: &Rc<Self>, view: ViewMode) -> Rc<Document> {
+        let doc = self.new_document(view);
         // Selected straight away, so the tab bar never shows it unselected. The
         // first tab in a window is selected by this too.
         let page = self.tab_view.append(&doc.paned);
@@ -773,6 +901,7 @@ impl Window {
         *self.shown_document.borrow_mut() = doc.as_ref().map_or_else(Weak::new, Rc::downgrade);
 
         let Some(doc) = doc else { return };
+        doc.draw_preview_if_waiting();
         self.show_view_of(&doc);
         self.load_find_state(&doc);
         self.update_format_bar();
@@ -796,6 +925,10 @@ impl Window {
         state.query = self.find.entry.text().to_string();
         state.replace_open = self.find.replace_toggle.is_active();
         state.replace_text = self.find.replace_entry.text().to_string();
+        let focus = gtk::prelude::GtkWindowExt::focus(&self.window);
+        state.focus_in_bar = focus.as_ref().is_some_and(|focus| focus.is_ancestor(&self.find.bar));
+        state.focus_in_replace =
+            focus.is_some_and(|focus| focus.is_ancestor(&self.find.replace_entry));
     }
 
     /// Puts a tab's find state into the find bar, without moving its cursor.
@@ -804,8 +937,18 @@ impl Window {
             let state = doc.find_state.borrow();
             (state.open, state.query.clone(), state.replace_open, state.replace_text.clone())
         };
+        // Normally the tab is searching for this already, and setting it again
+        // does nothing. It differs if the tab was left within a moment of typing,
+        // before the search had started.
+        if open {
+            doc.search_settings
+                .set_search_text(Some(query.as_str()).filter(|query| !query.is_empty()));
+        }
         self.loading_find.set(true);
-        self.find.entry.set_text(&query);
+        // Setting the text empties the box first, even to the same text
+        if self.find.entry.text() != query {
+            self.find.entry.set_text(&query);
+        }
         self.find.replace_entry.set_text(&replace_text);
         self.find.replace_toggle.set_active(replace_open);
         self.find.bar.set_search_mode(open);
@@ -819,9 +962,28 @@ impl Window {
         if !open {
             self.find.show_count(0, 0);
         } else if doc.searching_preview() {
-            self.preview_find(0);
+            self.preview_resume_find();
         } else {
             self.update_raw_find_count();
+        }
+
+        // GTK puts the focus in the find box whenever the bar opens. Someone who
+        // was typing in the document should carry on there, or their next letters
+        // would change the search. Not while a dialog is asking something, because
+        // the focus belongs in that.
+        if open && self.window.visible_dialog().is_none() {
+            let (in_bar, in_replace) = {
+                let state = doc.find_state.borrow();
+                (state.focus_in_bar, state.focus_in_replace)
+            };
+            // The formatted view has no replace box
+            if in_replace && !doc.searching_preview() {
+                self.find.replace_entry.grab_focus();
+            } else if in_bar {
+                self.find.entry.grab_focus();
+            } else {
+                self.focus_document(doc);
+            }
         }
     }
 
@@ -1047,6 +1209,12 @@ impl Window {
             let Some(win) = weak.upgrade() else { return };
             // The box also changes when another tab is selected. That tab has
             // already searched for this, and its cursor should stay where it is.
+            // The box being emptied on the way arrives straight away, while the
+            // tab's text is being put in. The text itself arrives a moment later,
+            // when it matches what the tab remembers.
+            if win.loading_find.get() {
+                return;
+            }
             let unchanged = win
                 .current()
                 .is_some_and(|doc| doc.find_state.borrow().query == entry.text());
@@ -1168,6 +1336,11 @@ impl Window {
         let Some(doc) = self.current() else { return };
         doc.search_settings.set_search_text(None);
         doc.run_js("window.leafmd && window.leafmd.clearFind();");
+        self.focus_document(&doc);
+    }
+
+    /// Puts the keyboard's focus in whichever text this document is showing.
+    fn focus_document(&self, doc: &Document) {
         if doc.searching_preview() {
             doc.webview.grab_focus();
         } else {
@@ -1294,6 +1467,24 @@ impl Window {
         ));
     }
 
+    /// A tab showing the formatted view was selected with its find bar open. Its
+    /// page remembers the search, so this only gets the count back for the find
+    /// bar, without moving to another match or scrolling. If the search options
+    /// changed while the tab was away, it searches again.
+    fn preview_resume_find(&self) {
+        let Some(doc) = self.current() else { return };
+        let Some(query) = self.find.query() else {
+            self.preview_find(0);
+            return;
+        };
+        let query = serde_json::to_string(&query).unwrap_or_default();
+        let match_case = self.find_option("find-match-case");
+        let whole_words = self.find_option("find-whole-words");
+        doc.run_js(&format!(
+            "window.leafmd && window.leafmd.resumeFind({query}, {match_case}, {whole_words});"
+        ));
+    }
+
     /// Replaces the selected match, then moves to the next one. If no match is
     /// selected yet, it just goes to the next one, so you see what will change.
     fn replace_one(self: &Rc<Self>) {
@@ -1328,6 +1519,11 @@ impl Window {
         doc.buffer.begin_user_action();
         let result = doc.search_context.replace_all(&replacement);
         doc.buffer.end_user_action();
+        // Clicking the button left the focus on it, where Ctrl+Z does nothing.
+        // Only the raw text can undo, so that's where the focus goes.
+        if result.is_ok() && count > 0 {
+            doc.source_view.grab_focus();
+        }
         match result {
             Ok(()) if count == 1 => self.toast("Replaced 1 match"),
             Ok(()) if count > 1 => self.toast(&format!("Replaced {count} matches")),
@@ -1450,11 +1646,14 @@ impl Window {
     pub fn has_file(&self, uri: &str) -> bool {
         self.documents().iter().any(|doc| doc.file_uri().as_deref() == Some(uri))
             || self.waiting_files.borrow().iter().any(|waiting| waiting.file.uri() == uri)
+            || self.restoring_files.borrow().iter().any(|restoring| restoring == uri)
     }
 
     /// True while the window shows the "No Document Open" page with nothing on the way.
     pub fn is_empty(&self) -> bool {
-        self.tab_view.n_pages() == 0 && self.waiting_files.borrow().is_empty()
+        self.tab_view.n_pages() == 0
+            && self.waiting_files.borrow().is_empty()
+            && self.restoring_files.borrow().is_empty()
     }
 
     /// Selects the tab showing this file, scrolled to `heading` if one is given.
@@ -1465,7 +1664,12 @@ impl Window {
         };
         self.select_document(doc);
         if let Some(heading) = heading {
-            doc.scroll_to_heading(heading);
+            // A tab still drawing for the first time scrolls once it has finished
+            if doc.preview_ready.get() {
+                doc.scroll_to_heading(heading);
+            } else {
+                *doc.pending_heading.borrow_mut() = Some(heading.to_string());
+            }
         }
     }
 
@@ -1502,6 +1706,7 @@ impl Window {
             }
         }
         self.reading_files.set(false);
+        self.read_restoring_files();
     }
 
     /// The file's text, or None after saying why it couldn't be opened.
@@ -1543,18 +1748,66 @@ impl Window {
         self.remember_recent(&file);
     }
 
-    /// Opens the file LeafMD had open last time, if it's still there.
-    /// If it has been moved or deleted, the normal start page shows instead.
+    /// Brings back the tabs from the window closed last, the ones still there.
+    /// If none are, the normal start page shows instead. The selected file comes
+    /// first, the normal way, which puts it on screen as soon as it's ready. The
+    /// others follow once it's there, so none of them takes its place.
     pub fn open_last_file(self: &Rc<Self>) {
         let last = state::load_last_file();
-        let Some(uri) = state::file_to_reopen(last.as_deref(), &self.recent.borrow()) else {
-            return;
-        };
-        let file = gio::File::for_uri(&uri);
-        if !file.query_exists(gio::Cancellable::NONE) {
+        let tabs = state::load_saved_tabs();
+        let reopen = state::tabs_to_reopen(
+            last.as_deref(),
+            tabs.as_deref(),
+            &self.recent.borrow(),
+            |uri| gio::File::for_uri(uri).query_exists(gio::Cancellable::NONE),
+        );
+        let Some(reopen) = reopen else { return };
+        *self.restoring_files.borrow_mut() =
+            reopen.files.iter().filter(|uri| **uri != reopen.selected).cloned().collect();
+        self.restoring_not_started.set(true);
+        self.queue_file(gio::File::for_uri(&reopen.selected), None);
+        *self.restored_order.borrow_mut() = reopen.files;
+    }
+
+    /// Starts reading the other tabs to bring back. Each file is read by itself,
+    /// so a slow or stuck one, say on a network drive, only holds up its own tab.
+    fn read_restoring_files(self: &Rc<Self>) {
+        if !self.restoring_not_started.replace(false) {
             return;
         }
-        self.queue_file(file, None);
+        for uri in self.restoring_files.borrow().iter() {
+            let (win, uri) = (self.clone(), uri.clone());
+            glib::spawn_future_local(async move {
+                let file = gio::File::for_uri(&uri);
+                let text = win.read_file(&file).await;
+                win.restoring_files.borrow_mut().retain(|restoring| *restoring != uri);
+                // The window may have been closed while this was being read
+                let open = win.windows.borrow().iter().any(|other| Rc::ptr_eq(other, &win));
+                match text {
+                    Some(text) if open => win.add_restored_tab(file, text),
+                    None if win.is_empty() => win.cancel_loading(),
+                    _ => {}
+                }
+            });
+        }
+    }
+
+    /// Adds a tab for a file being brought back at startup, without selecting it or
+    /// drawing its formatted view. It starts in the view that was saved.
+    fn add_restored_tab(self: &Rc<Self>, file: gio::File, text: String) {
+        let doc = self.new_document(self.last_view.get());
+        doc.preview_waiting.set(true);
+        let tabs: Vec<_> = self.documents().iter().map(|doc| doc.file_uri()).collect();
+        let position =
+            opening::restored_tab_position(&self.restored_order.borrow(), &tabs, &file.uri());
+        self.tab_view.insert(&doc.paned, position as i32);
+        doc.show_file(file, text);
+        // The selected file couldn't be read, so this one, as the first tab to
+        // arrive, was selected in its place and is what the window now shows
+        if self.stack.visible_child_name().as_deref() == Some("loading") {
+            self.show_document();
+        }
+        self.update_recent_menu();
     }
 
     // =====================================================================
@@ -1735,6 +1988,8 @@ impl Window {
                     ("Opening a tab", "New opens an empty document in a new tab, and any file you open gets a tab of its own, including files from your file manager and links. The tab bar appears once a window has two or more tabs. A file that's already open isn't opened again: LeafMD shows its tab."),
                     ("Moving between tabs", "Click a tab, press Ctrl+Tab or Ctrl+Shift+Tab, or press Alt and a number to go to a tab by its position. Each tab keeps its own text, view, find bar and undo history."),
                     ("Closing a tab", "Use the tab's close button or Ctrl+W. Closing the last tab closes the window. Ctrl+Q closes the window with all its tabs."),
+                    ("Rearranging tabs", "Drag a tab along the tab bar to change the order, onto another LeafMD window to move it there, or away from the tab bars to give it a window of its own. Right-clicking a tab offers the same moves. A moved tab keeps its unsaved changes and undo history."),
+                    ("New windows", "Press Ctrl+N or choose New Window from the main menu for another window. Right-clicking LeafMD's icon offers New Window too."),
                 ],
             ),
             (
@@ -1759,8 +2014,8 @@ impl Window {
                 &[
                     ("Opening files", "Use Open, drop a file onto the window, or double-click a markdown file in your file manager. It opens in a new tab, in the LeafMD window you used last."),
                     (TERMINAL_ROW, "Type leafmd notes.md in a terminal to open a file. It takes a one-time setup, and Setup shows you how."),
-                    ("Recent files", "The arrow next to Open lists the files you opened recently. When you start LeafMD, it reopens the last file you had open. Clear Recent Files empties the list, and LeafMD then forgets the last file too."),
-                    ("Closing a document", "Close Document in the main menu closes the selected tab. If it's the last one, the window stays open and LeafMD starts with no document next time. Closing the window instead (Ctrl+W or Ctrl+Q) brings the file back next time."),
+                    ("Recent files", "The arrow next to Open lists the files you opened recently. When you start LeafMD, it reopens the saved files from the window you closed last, in the same tabs. Clear Recent Files empties the list, and LeafMD then has nothing to reopen."),
+                    ("Closing a document", "Close Document in the main menu closes the selected tab. If it's the last one, the window stays open and LeafMD starts with no document next time. Closing the window instead (Ctrl+W on the last tab, or Ctrl+Q) brings its files back next time."),
                     ("Changes from other apps", "If another app changes or deletes the open file, a banner appears across the top of the window, and nothing changes until you choose. Reload brings in the new version, and Ignore keeps what you have. If you save a file that changed without you noticing, LeafMD asks first."),
                     ("Links", "Web links open in your browser. Links to other markdown or text files open them in a new tab, and links to headings scroll to them."),
                     ("Images", "Images next to the file and images online are shown in the formatted view."),

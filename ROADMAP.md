@@ -32,6 +32,7 @@ Each feature is planned in detail with [OpenSpec](https://github.com/Fission-AI/
 - [x] **Reload when the file changes:** if another app changes the open file, LeafMD shows the new version. If there are unsaved changes too, it asks which to keep instead of overwriting anything
 - [ ] **Zoom:** Ctrl+plus, Ctrl+minus and Ctrl+0 make the text bigger, smaller or back to normal in both views, for a quick change without opening Preferences
 - [ ] **Word count:** the number of words (and reading time) shown somewhere unobtrusive
+- [ ] **Tabs:** several documents in one window, with links and opened files getting a tab of their own, tabs that can be dragged between windows, and all of them reopening next time
 
 ## 5. Sharing
 
