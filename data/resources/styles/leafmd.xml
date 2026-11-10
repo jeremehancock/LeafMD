@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- LeafMD's colours for the raw text in light mode. Everything comes from
+     GNOME's Adwaita editor scheme except the line numbers and the current
+     line, which are quieter so they don't compete with the text. -->
+<style-scheme id="leafmd" name="LeafMD" version="1.0" parent-scheme="Adwaita">
+  <metadata>
+    <property name="variant">light</property>
+    <property name="dark-variant">leafmd-dark</property>
+  </metadata>
+  <style name="current-line" background="#FAFAFB"/>
+  <style name="current-line-number" background="#FFFFFF" foreground="#77767B"/>
+  <style name="line-numbers" background="#FFFFFF" foreground="#C0BFBC"/>
+</style-scheme>

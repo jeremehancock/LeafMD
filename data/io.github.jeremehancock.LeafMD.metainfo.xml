@@ -23,7 +23,7 @@
     </p>
     <ul>
       <li>Switch between formatted, raw and split views with one click or Ctrl+1, 2 and 3</li>
-      <li>A formatted-only view for pure, distraction-free reading</li>
+      <li>A formatted-only view for pure, distraction-free reading, and a Distraction Free mode that hides everything but your document</li>
       <li>Tabs keep several documents in one window, and reopen when you start LeafMD again</li>
       <li>An optional side panel shows the folder you're working in as a tree, for moving between documents</li>
       <li>Edit the raw text with the formatted view updating as you type</li>
@@ -35,7 +35,7 @@
       <li>In split view, both sides scroll together</li>
       <li>Supports tables, task lists, footnotes and other GitHub-style markdown</li>
       <li>Open files, or a whole folder with leafmd ., from a terminal with an optional short leafmd command</li>
-      <li>Follows your system's light or dark style</li>
+      <li>Looks at home on GNOME, following your light or dark style and your accent colour</li>
     </ul>
   </description>
 

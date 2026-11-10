@@ -167,6 +167,20 @@ pub struct Window {
     /// Holds the side panel on the left and everything else on the right. In a
     /// narrow window it's "collapsed": the panel slides over the document instead.
     split: adw::OverlaySplitView,
+    /// The header bar, tab bar and formatting bar (and the bottom bar in a
+    /// narrow window), which Distraction Free hides
+    controls: adw::ToolbarView,
+    /// The main menu's button, so F10 can bring the hidden header bar back
+    menu_button: gtk::MenuButton,
+    /// Distraction Free: only the document shows. This window only, always
+    /// off when a window opens.
+    distraction_free: Cell<bool>,
+    /// Whether line numbers show while in Distraction Free. They start hidden
+    /// each time, and Line Numbers in the menu shows them.
+    distraction_free_numbers: Cell<bool>,
+    /// True while the main menu is open because F10 brought the hidden bars
+    /// back for it, so they go again when it closes
+    menu_from_key: Cell<bool>,
     side_panel: SidePanel,
     /// The Files page of the side panel
     files: Rc<FilesPage>,
@@ -270,6 +284,9 @@ impl Window {
         // Shows a tick while the panel is open, because the action is a yes or no
         let panel_section = gio::Menu::new();
         panel_section.append(Some("Side Panel"), Some("win.side-panel"));
+        panel_section.append(Some("Line Numbers"), Some("win.line-numbers"));
+        panel_section.append(Some("Distraction Free"), Some("win.distraction-free"));
+        panel_section.append(Some("Full Screen"), Some("win.fullscreen"));
         let app_section = gio::Menu::new();
         app_section.append(Some("Help"), Some("win.help"));
         app_section.append(Some("Markdown Cheatsheet"), Some("win.cheatsheet"));
@@ -281,14 +298,13 @@ impl Window {
         menu.append_section(None, &find_section);
         menu.append_section(None, &panel_section);
         menu.append_section(None, &app_section);
-        header.pack_end(
-            &gtk::MenuButton::builder()
-                .icon_name("open-menu-symbolic")
-                .menu_model(&menu)
-                .primary(true)
-                .tooltip_text("Main Menu")
-                .build(),
-        );
+        let menu_button = gtk::MenuButton::builder()
+            .icon_name("open-menu-symbolic")
+            .menu_model(&menu)
+            .primary(true)
+            .tooltip_text("Main Menu")
+            .build();
+        header.pack_end(&menu_button);
         // GNOME's rounded switcher with LeafMD's own icons. Each toggle is named
         // after its view ("preview", "source", "split"); hovering shows the name.
         let view_switcher = adw::ToggleGroup::new();
@@ -386,14 +402,21 @@ impl Window {
         let toasts = adw::ToastOverlay::new();
         toasts.set_child(Some(&stack));
 
+        // Two layers of bars. The outer one holds the window's controls, which
+        // Distraction Free hides. The inner one holds the bars that only appear
+        // when they're needed (the file-changed banner and find), which stay.
         let toolbar_view = adw::ToolbarView::new();
         toolbar_view.add_top_bar(&header);
         toolbar_view.add_top_bar(&tab_bar);
-        let file_banner = FileBanner::new();
-        toolbar_view.add_top_bar(&file_banner.revealer);
         toolbar_view.add_top_bar(&format_bar);
-        toolbar_view.add_top_bar(&find.bar);
-        toolbar_view.set_content(Some(&toasts));
+        let file_banner = FileBanner::new();
+        let inner_bars = adw::ToolbarView::new();
+        inner_bars.add_css_class("leafmd-inner-bars");
+        load_window_style();
+        inner_bars.add_top_bar(&file_banner.revealer);
+        inner_bars.add_top_bar(&find.bar);
+        inner_bars.set_content(Some(&toasts));
+        toolbar_view.set_content(Some(&inner_bars));
 
         // ---- Side panel ----
         let files = FilesPage::new();
@@ -531,6 +554,11 @@ impl Window {
             files,
             folder: RefCell::new(None),
             panel_wanted: Cell::new(panel_wanted),
+            controls: toolbar_view,
+            menu_button,
+            distraction_free: Cell::new(false),
+            distraction_free_numbers: Cell::new(false),
+            menu_from_key: Cell::new(false),
         });
 
         win.setup_actions(saved.view);
@@ -660,6 +688,49 @@ impl Window {
         });
         self.window.add_action(&panel);
 
+        // Line Numbers in the menu, ticked while this window shows them
+        let line_numbers = gio::SimpleAction::new_stateful(
+            "line-numbers",
+            None,
+            &document::line_numbers_wanted().to_variant(),
+        );
+        let weak = Rc::downgrade(self);
+        line_numbers.connect_activate(move |_, _| {
+            if let Some(win) = weak.upgrade() {
+                win.toggle_line_numbers();
+            }
+        });
+        self.window.add_action(&line_numbers);
+
+        // Distraction Free: on or off for this window. The menu shows a tick.
+        let distraction_free = gio::SimpleAction::new_stateful("distraction-free", None, &false.to_variant());
+        let weak = Rc::downgrade(self);
+        distraction_free.connect_activate(move |action, _| {
+            if let Some(win) = weak.upgrade() {
+                let on = !win.distraction_free.get();
+                action.set_state(&on.to_variant());
+                win.set_distraction_free(on);
+            }
+        });
+        self.window.add_action(&distraction_free);
+
+        // Full screen (F11). The tick follows the window, which can also leave
+        // full screen by other routes.
+        let fullscreen = gio::SimpleAction::new_stateful("fullscreen", None, &false.to_variant());
+        let weak = Rc::downgrade(self);
+        fullscreen.connect_activate(move |_, _| {
+            if let Some(win) = weak.upgrade() {
+                win.window.set_fullscreened(!win.window.is_fullscreen());
+            }
+        });
+        self.window.add_action(&fullscreen);
+        let weak = Rc::downgrade(self);
+        self.window.connect_fullscreened_notify(move |window| {
+            if let Some(win) = weak.upgrade() {
+                win.action("fullscreen").set_state(&window.is_fullscreen().to_variant());
+            }
+        });
+
         // "view" remembers which of the three views is active
         let view = gio::SimpleAction::new_stateful(
             "view",
@@ -696,6 +767,7 @@ impl Window {
     fn setup_signals(self: &Rc<Self>) {
         self.setup_tab_signals();
         self.setup_panel_signals();
+        self.setup_distraction_free();
 
         // The banner's buttons act on the document it's showing
         let weak = Rc::downgrade(self);
@@ -716,6 +788,14 @@ impl Window {
         // Follow the system's light or dark style
         let weak = Rc::downgrade(self);
         adw::StyleManager::default().connect_dark_notify(move |_| {
+            if let Some(win) = weak.upgrade() {
+                win.update_style();
+            }
+        });
+        // ...and the accent colour chosen in GNOME Settings, which the
+        // formatted view uses for links and ticked boxes
+        let weak = Rc::downgrade(self);
+        adw::StyleManager::default().connect_accent_color_notify(move |_| {
             if let Some(win) = weak.upgrade() {
                 win.update_style();
             }
@@ -830,7 +910,9 @@ impl Window {
         let weak = Rc::downgrade(self);
         self.split.connect_collapsed_notify(move |split| {
             if let Some(win) = weak.upgrade() {
-                split.set_show_sidebar(!split.is_collapsed() && win.panel_wanted.get());
+                split.set_show_sidebar(
+                    !split.is_collapsed() && win.panel_wanted.get() && !win.distraction_free.get(),
+                );
             }
         });
 
@@ -853,6 +935,50 @@ impl Window {
                     }
                     glib::Propagation::Stop
                 }
+                // F10 opens the main menu by pressing its button, which can't
+                // happen while Distraction Free has the bars hidden. So bring
+                // them in first, and open the menu once they've arrived.
+                Some(win)
+                    if key == gdk::Key::F10
+                        && win.distraction_free.get()
+                        && !win.controls.reveals_top_bars() =>
+                {
+                    win.reveal_controls(true);
+                    win.menu_from_key.set(true);
+                    let weak = Rc::downgrade(&win);
+                    win.menu_button.add_tick_callback(move |button, _| {
+                        let Some(win) = weak.upgrade() else {
+                            return glib::ControlFlow::Break;
+                        };
+                        let arrived = button
+                            .ancestor(gtk::Revealer::static_type())
+                            .and_then(|r| r.downcast::<gtk::Revealer>().ok())
+                            .is_none_or(|r| r.is_child_revealed());
+                        if !win.controls.reveals_top_bars() {
+                            win.menu_from_key.set(false);
+                            return glib::ControlFlow::Break;
+                        }
+                        if arrived {
+                            button.popup();
+                            return glib::ControlFlow::Break;
+                        }
+                        glib::ControlFlow::Continue
+                    });
+                    glib::Propagation::Stop
+                }
+                // Then it leaves Full Screen and Distraction Free together, once
+                // the find bar (which closes with Escape too) is out of the way
+                Some(win)
+                    if key == gdk::Key::Escape
+                        && !win.find.bar.is_search_mode()
+                        && (win.distraction_free.get() || win.window.is_fullscreen()) =>
+                {
+                    if win.distraction_free.get() {
+                        win.action("distraction-free").activate(None);
+                    }
+                    win.window.set_fullscreened(false);
+                    glib::Propagation::Stop
+                }
                 _ => glib::Propagation::Proceed,
             }
         });
@@ -869,6 +995,95 @@ impl Window {
                 }
             }
         });
+    }
+
+    /// Turns Distraction Free on or off for this window. On, the header bar,
+    /// tab bar, formatting bar and side panel are hidden, and the document
+    /// fills the window. The bars slide back over the document while the
+    /// pointer is at the top or bottom edge (see setup_distraction_free).
+    /// Off, everything comes back as it was, including the side panel if it
+    /// was open.
+    fn set_distraction_free(&self, on: bool) {
+        self.distraction_free.set(on);
+        if on {
+            self.controls.add_css_class("leafmd-distraction-free");
+        } else {
+            self.controls.remove_css_class("leafmd-distraction-free");
+        }
+        self.controls.set_extend_content_to_top_edge(on);
+        self.controls.set_extend_content_to_bottom_edge(on);
+        self.reveal_controls(!on);
+        self.distraction_free_numbers.set(false);
+        self.update_line_numbers();
+        if on {
+            self.split.set_show_sidebar(false);
+        } else {
+            self.split.set_show_sidebar(!self.split.is_collapsed() && self.panel_wanted.get());
+        }
+    }
+
+    fn reveal_controls(&self, reveal: bool) {
+        self.controls.set_reveal_top_bars(reveal);
+        self.controls.set_reveal_bottom_bars(reveal);
+    }
+
+    /// In Distraction Free, brings the bars back while they're wanted: the
+    /// pointer at the window's top or bottom edge shows them, and they go again
+    /// once it moves back over the document. They stay while one of their menus
+    /// is open, and F10 (the main menu's key) brings them back too.
+    fn setup_distraction_free(self: &Rc<Self>) {
+        // How close to the edge, in pixels, the pointer has to be
+        const EDGE: f64 = 6.0;
+        // How far past the bars it can wander before they hide again
+        const SLACK: f64 = 24.0;
+        let motion = gtk::EventControllerMotion::new();
+        // Heard before the document gets the movement, as the formatted view
+        // might otherwise keep it to itself
+        motion.set_propagation_phase(gtk::PropagationPhase::Capture);
+        let weak = Rc::downgrade(self);
+        motion.connect_motion(move |_, _, y| {
+            let Some(win) = weak.upgrade() else { return };
+            if !win.distraction_free.get() {
+                return;
+            }
+            let height = f64::from(win.controls.height());
+            let shown = win.controls.reveals_top_bars();
+            if !shown && (y <= EDGE || y >= height - EDGE) {
+                win.reveal_controls(true);
+            } else if shown
+                && y > f64::from(win.controls.top_bar_height()) + SLACK
+                && y < height - f64::from(win.controls.bottom_bar_height()) - SLACK
+                && !win.menu_is_open()
+                // The bars moving in for F10 count as the pointer moving
+                && !win.menu_from_key.get()
+            {
+                win.reveal_controls(false);
+            }
+        });
+        self.controls.add_controller(motion);
+
+        let weak = Rc::downgrade(self);
+        self.menu_button.connect_active_notify(move |button| {
+            let Some(win) = weak.upgrade() else { return };
+            if !win.distraction_free.get() {
+                return;
+            }
+            if button.is_active() {
+                win.reveal_controls(true);
+            } else if win.menu_from_key.replace(false) {
+                // Opened with F10, so the keyboard is in use: tuck the bars away
+                // again rather than waiting for the pointer to move
+                win.reveal_controls(false);
+            }
+        });
+    }
+
+    /// Whether a menu from the bars is open (typing goes to it while it is),
+    /// so they don't hide from under it.
+    fn menu_is_open(&self) -> bool {
+        self.menu_button.is_active()
+            || gtk::prelude::GtkWindowExt::focus(&self.window)
+                .is_some_and(|widget| widget.ancestor(gtk::Popover::static_type()).is_some())
     }
 
     /// F9, the panel button or Side Panel in the menu. In a wide window this
@@ -1074,6 +1289,7 @@ impl Window {
                 return;
             }
             doc.set_window(Rc::downgrade(&win));
+            doc.show_line_numbers(win.wants_line_numbers());
             win.update_tab(&doc);
             win.reveal_document();
             win.selected_tab_changed();
@@ -1147,6 +1363,7 @@ impl Window {
     fn new_document(self: &Rc<Self>, view: ViewMode) -> Rc<Document> {
         let doc = Document::new(view);
         doc.set_window(Rc::downgrade(self));
+        doc.source_view.set_show_line_numbers(self.wants_line_numbers());
         doc.apply_view(view);
         doc.update_style();
         doc
@@ -2239,6 +2456,40 @@ impl Window {
         self.window.set_title(Some(&format!("{name} - LeafMD")));
     }
 
+    /// Shows or hides line numbers in every document, and ticks Line Numbers
+    /// in the menu to match. Called when the setting or Distraction Free changes.
+    pub fn update_line_numbers(&self) {
+        let show = self.wants_line_numbers();
+        for doc in self.documents() {
+            doc.show_line_numbers(show);
+        }
+        self.action("line-numbers").set_state(&show.to_variant());
+    }
+
+    /// Whether this window's documents show line numbers: the Line Numbers
+    /// setting, except in Distraction Free, where they're hidden unless asked
+    /// for there.
+    fn wants_line_numbers(&self) -> bool {
+        if self.distraction_free.get() {
+            self.distraction_free_numbers.get()
+        } else {
+            document::line_numbers_wanted()
+        }
+    }
+
+    /// Line Numbers in the menu: flips what this window shows, and makes that
+    /// the setting for every window. So in Distraction Free (where they're
+    /// hidden) it always shows them, even if the setting was already on.
+    fn toggle_line_numbers(&self) {
+        let show = !self.wants_line_numbers();
+        self.distraction_free_numbers.set(show);
+        if let Some(app) = self.window.application() {
+            // Calls update_line_numbers on every window, this one included
+            app.change_action_state("line-numbers", &show.to_variant());
+        }
+        self.update_line_numbers();
+    }
+
     /// Matches every document's colours to the system's light or dark style.
     fn update_style(&self) {
         for doc in self.documents() {
@@ -2260,13 +2511,15 @@ impl Window {
         const TERMINAL_ROW: &str = "From a terminal";
         const TERMINAL_SETUP_URL: &str = "https://leafmd.app/#terminal";
         let page = adw::PreferencesPage::new();
-        let sections: [(&str, &[(&str, &str)]); 7] = [
+        let sections: [(&str, &[(&str, &str)]); 8] = [
             (
                 "The Three Views",
                 &[
                     ("Formatted", "The document as it looks when rendered. Just for reading, with nothing to edit by accident."),
-                    ("Raw", "The markdown text itself. Type here to make changes."),
+                    ("Raw", "The markdown text itself. Type here to make changes. In a wide window it sits in a comfortable column down the middle."),
                     ("Split", "Raw text on the left, formatted on the right. The formatted side updates as you type, and both sides scroll together."),
+                    ("Line numbers", "The raw text has no line numbers unless you turn them on with Line Numbers in the main menu. The choice applies to every window, and LeafMD remembers it."),
+                    ("Light, dark and accent colours", "LeafMD follows your system's light or dark style. Links and ticked checkboxes in the formatted view use the accent colour you choose in GNOME Settings."),
                     ("Narrow windows", "When the window is narrow, the New, Save and Find buttons and the view buttons move to a bar along the bottom. They work the same way there, and move back when the window is wider."),
                 ],
             ),
@@ -2299,6 +2552,16 @@ impl Window {
                     ("Greyed-out files", "Images, PDFs and other files that aren't text are greyed out, because LeafMD can't open them. Hidden files, like .git, aren't listed."),
                     ("Folders LeafMD can't see", "When you open a document from outside your home folder, LeafMD is given that one file, not the folder it's in. Choose the folder with Open Folder… to show its other files."),
                     ("Narrow windows", "When the window is narrow, the panel slides over the document instead of sitting beside it, and tucks away when you pick a file or press Escape."),
+                ],
+            ),
+            (
+                "Distraction Free",
+                &[
+                    ("Just your document", "Press Ctrl+Shift+D, or choose Distraction Free from the main menu, to hide the header bar, tabs, formatting bar, side panel and line numbers. Only that window changes, and every window starts with it off."),
+                    ("Getting the bars back", "Move the pointer to the top or bottom edge of the window and the bars slide in over the document. They slide away when you move back to your text. F10 brings them in with the main menu open."),
+                    ("Still there when needed", "Find (Ctrl+F) and the banner about a file changed by another app still appear. Choosing Line Numbers from the menu shows them here too."),
+                    ("Leaving", "Press Escape or Ctrl+Shift+D, or choose Distraction Free again. Everything comes back as it was."),
+                    ("Full screen", "Press F11, or choose Full Screen from the main menu, to fill the screen. It works with or without Distraction Free; use both for nothing but your text. Escape leaves both."),
                 ],
             ),
             (
@@ -2379,6 +2642,9 @@ impl Window {
                     ("Raw text", "Ctrl+2"),
                     ("Split view", "Ctrl+3"),
                     ("Side panel", "F9"),
+                    ("Distraction Free", "Ctrl+Shift+D"),
+                    ("Full screen", "F11"),
+                    ("Leave Distraction Free and full screen", "Escape"),
                 ],
             ),
             (
@@ -2656,6 +2922,45 @@ impl Window {
 /// The row of formatting buttons. Each button runs "win.format" with the
 /// format's name, so the buttons, the heading menu and the keyboard shortcuts
 /// all share the same code.
+/// Styles for the window's two layers of bars (see the Layout part of
+/// Window::new).
+///
+/// In Distraction Free the outer bars slide in over the document instead of
+/// above it, so they need a background of their own (normally they're
+/// see-through, over the window's). A soft shadow separates them from the text.
+///
+/// libadwaita leaves a 6 pixel gap under a top bar, which suits a header bar
+/// but would sit between the document and the inner bars even while they're
+/// hidden, so the inner bars don't have it.
+fn load_window_style() {
+    static LOADED: std::sync::Once = std::sync::Once::new();
+    LOADED.call_once(|| {
+        let Some(display) = gdk::Display::default() else {
+            return;
+        };
+        let provider = gtk::CssProvider::new();
+        provider.load_from_string(
+            "toolbarview.leafmd-distraction-free > .top-bar,
+             toolbarview.leafmd-distraction-free > .bottom-bar {
+                background-color: var(--headerbar-bg-color);
+                box-shadow: 0 1px 3px rgb(0 0 6 / 12%);
+            }
+            toolbarview.leafmd-inner-bars > .top-bar,
+            toolbarview.leafmd-inner-bars > .top-bar > windowhandle,
+            toolbarview.leafmd-inner-bars > .top-bar > windowhandle > box {
+                padding: 0;
+                margin: 0;
+                min-height: 0;
+            }",
+        );
+        gtk::style_context_add_provider_for_display(
+            &display,
+            &provider,
+            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
+    });
+}
+
 fn build_format_bar() -> gtk::ScrolledWindow {
     let bar = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     // GNOME's toolbar style: flat buttons with even spacing

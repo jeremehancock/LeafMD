@@ -147,6 +147,9 @@ fn main() -> glib::ExitCode {
     app.connect_startup(|app| {
         sourceview5::init();
         use_same_icons_everywhere();
+        // LeafMD's raw text colours (data/resources/styles), built into the program
+        sourceview5::StyleSchemeManager::default()
+            .append_search_path("resource:///io/github/jeremehancock/LeafMD/styles/");
         set_shortcuts(app);
     });
 
@@ -162,6 +165,23 @@ fn main() -> glib::ExitCode {
         }
     });
     app.add_action(&new_window);
+
+    // The Line Numbers setting: one for every window, remembered between runs.
+    // The menu item is each window's own "line-numbers" action, whose tick
+    // shows what that window shows (Distraction Free hides them); it changes
+    // this setting through change_action_state.
+    let line_numbers =
+        gio::SimpleAction::new_stateful("line-numbers", None, &state::load_line_numbers().to_variant());
+    let w = windows.clone();
+    line_numbers.connect_change_state(move |action, value| {
+        let Some(show) = value.and_then(|v| v.get::<bool>()) else { return };
+        action.set_state(&show.to_variant());
+        state::save_line_numbers(show);
+        for win in w.borrow().iter() {
+            win.update_line_numbers();
+        }
+    });
+    app.add_action(&line_numbers);
 
     let w = windows.clone();
     app.connect_activate(move |app| {
@@ -211,6 +231,8 @@ fn set_shortcuts(app: &adw::Application) {
         ("win.open", &["<Control>o"]),
         ("win.open-folder", &["<Control><Shift>o"]),
         ("win.side-panel", &["F9"]),
+        ("win.distraction-free", &["<Control><Shift>d"]),
+        ("win.fullscreen", &["F11"]),
         ("win.save", &["<Control>s"]),
         ("win.save-as", &["<Control><Shift>s"]),
         ("win.help", &["F1"]),

@@ -234,12 +234,14 @@ take() { # <picture name> <LeafMD's name for the view> <light or dark> <click x>
 }
 
 # The click positions land on: a blank part of the page in Formatted, and just
-# before the "O" in "Our plan" on line 3 in the others. If the header bar or
-# formatting bar changes height, they need changing too.
+# before the "O" in "Our plan" on line 3 in the others (Raw view's text sits in
+# a centred column, so its click is further right). If the header bar or
+# formatting bar changes height, or the raw text's margins, line spacing or
+# column width change, they need changing too.
 take formatted preview light 25 650
-take raw source light 38 143
-take split split light 38 143
-take split-dark split dark 38 143
+take raw source light 149 153
+take split split light 19 153
+take split-dark split dark 19 153
 
 # Close the hidden desktop before checking, then look for any effect on the real one.
 stop_processes() {
