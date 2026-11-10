@@ -140,13 +140,24 @@ difference.
 
 ```bash
 ./build-aux/flatpak-install.sh
+./build-aux/end-to-end-tests.sh   # about five minutes; nothing shows on screen
 ```
 
-Then ask the owner to close every LeafMD window and reopen it, and give them a
-short, concrete list of what to try: the change's spec scenarios in plain words
-(real text to type, real keys to press), plus anything the tasks list says to
-hand-check. Never close their running LeafMD yourself; it may have unsaved
-work.
+The end-to-end tests try the installed build the way a person would, on a
+hidden desktop. If any scenario fails, stop: report which one, what it said,
+and the picture in `target/end-to-end/<scenario>/screen.png` (look at it), and
+don't ask the owner to test. It goes back to `/opsx:apply` (or a fix). If the
+run warns that LeafMD's real saved data changed, ask the owner whether they
+were using LeafMD at the time; if not, stop, because something reached the
+real desktop.
+
+When they pass, ask the owner to close every LeafMD window and reopen it, and
+give them a short, concrete list of what to try: the change's spec scenarios in
+plain words (real text to type, real keys to press), plus anything the tasks
+list says to hand-check. Leave out what the passing scenarios already checked
+(each file in `build-aux/end-to-end/` says which spec it follows), and say in
+one line that those were checked automatically. Never close their running
+LeafMD yourself; it may have unsaved work.
 
 Stop and wait. Only carry on once the owner says it works. If they find a
 problem, it goes back to `/opsx:apply` (or a fix), and through the gates again.

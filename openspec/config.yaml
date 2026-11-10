@@ -20,4 +20,5 @@ rules:
     - Give scenarios concrete examples (real text, real keys), not placeholders.
   tasks:
     - "Include updating every place users read about the change, where it applies: Help, Keyboard Shortcuts, README, the app store description in data/*.metainfo.xml, and ticking the item in ROADMAP.md."
-    - End with rebuilding and installing the Flatpak (./build-aux/flatpak-install.sh) so the owner can try the change.
+    - "When the change adds behaviour the end-to-end tests can check (typing, keys, saving, windows and tabs, what LeafMD remembers), add a scenario for it in build-aux/end-to-end/, following the files already there. They can't check how things look, file dialogs or dragging."
+    - End with rebuilding and installing the Flatpak (./build-aux/flatpak-install.sh), then running ./build-aux/end-to-end-tests.sh, so the owner can try the change.
