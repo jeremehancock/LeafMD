@@ -57,6 +57,24 @@ LeafMD isn't on Flathub, but it keeps meeting Flathub's rules. To run Flathub's 
 
 It installs the checker (the `org.flatpak.Builder` Flatpak) the first time. GitHub also runs it on every finished build (`./build-aux/flathub-lint.sh repo`). Any problem fails, except the two in `build-aux/flathub-lint-exceptions.json`. Both are about Flathub keeping its own copies of every app's screenshots (inside its repository, and on its media server at `dl.flathub.org/media`), which nothing outside Flathub can do.
 
+## The end-to-end tests
+
+`cargo test` checks pieces of the code on their own. The end-to-end tests check the whole app the way a person uses it: they start the installed Flatpak, type, press shortcuts, save, close and reopen, then check the results. Rebuild first, because they test what's installed:
+
+```
+./build-aux/flatpak-install.sh
+./build-aux/end-to-end-tests.sh              # every scenario, about five minutes
+./build-aux/end-to-end-tests.sh save tabs    # only these
+```
+
+Nothing shows on screen, and any LeafMD you have open can stay open. Everything happens on a hidden GNOME desktop with its own home folder, set up by `build-aux/test-desktop.sh` (which explains how it keeps away from the real desktop). Afterwards the run checks that your real LeafMD settings didn't change, the real document portal didn't restart and Flatpak apps still start. If you use LeafMD during a run, it will warn that your saved data changed; that's expected.
+
+Each scenario is a short file in `build-aux/end-to-end/`, named after what it checks and following one of the specs in `openspec/specs/`. To add one, copy a similar file: the helpers it can use (`sample`, `open_leafmd`, `press`, `type_text`, `click_text`, `expect_file`, `expect_title` and others) are described in `test-desktop.sh`. They check facts with one right answer: what's in a saved file, the window's title, how many windows are open, and what LeafMD saved for next time.
+
+When a scenario fails, the output says what it found instead, and `target/end-to-end/<scenario>/` holds a picture of the hidden screen, LeafMD's messages and its saved settings.
+
+What they can't test: how things look (colours, spacing, the formatted page), file dialogs (one could reach the real desktop, so they're never opened), and dragging tabs. Those stay hand checks. They also don't run on GitHub, only on a computer with GNOME and the Flatpak installed. `/ship` runs them before asking for a hand test.
+
 ## How changes are planned
 
 LeafMD uses [OpenSpec](https://github.com/Fission-AI/OpenSpec) to keep a written description of how the app behaves, in plain English. `openspec/specs/` has one file per area (views, documents, recent files, find and replace and so on), each listing the rules the app follows with a short example for each. New features start as a proposal in `openspec/changes/` that says what will change and why. Once a feature is built and tested, its rules are added to the specs.
@@ -99,7 +117,7 @@ With Claude Code, `/ship` walks a change through all of this: the checks, trying
 | `src/state.rs` | Remembers the last view, window size, recent files, tabs and whether the side panel is open in `~/.config/leafmd/state.ini`, and decides which tabs to save and reopen, with tests |
 | `data/*.desktop` | The app menu entry: name, icon, and the file types LeafMD opens |
 | `data/*.metainfo.xml` | The description, license and release notes shown in software centers |
-| `build-aux/` | The Flatpak recipe, the script that builds and installs it, `sdk-check.sh` (the checks GitHub runs), `flathub-lint.sh` and its exceptions file (Flathub's checker), `release-info.py` (reads the version and release notes, and checks they match), `build-site.py` (builds leafmd.app), `flatpak-repo-preview.sh` (a private copy of leafmd.app on this computer), `take-screenshots.sh` and `screenshot-settings-portal.py` (take the screenshots on a hidden desktop), `screenshot-mode.sh` (GNOME's default look for taking screenshots by hand) and `leafmd-signing-key.gpg` (the public half of LeafMD's signing key) |
+| `build-aux/` | The Flatpak recipe, the script that builds and installs it, `sdk-check.sh` (the checks GitHub runs), `flathub-lint.sh` and its exceptions file (Flathub's checker), `release-info.py` (reads the version and release notes, and checks they match), `build-site.py` (builds leafmd.app), `flatpak-repo-preview.sh` (a private copy of leafmd.app on this computer), `take-screenshots.sh` and `screenshot-settings-portal.py` (take the screenshots on a hidden desktop), `test-desktop.sh` (that hidden desktop, shared with the end-to-end tests), `end-to-end-tests.sh` and the scenarios in `end-to-end/` (the end-to-end tests), `screenshot-mode.sh` (GNOME's default look for taking screenshots by hand) and `leafmd-signing-key.gpg` (the public half of LeafMD's signing key) |
 | `site/` | The storefront at leafmd.app: the page, its styles, its three small scripts (the Copy buttons, the viewer that shows screenshots full size, and the Ubuntu setup help in `install-help.js`), and the templates for the install files |
 | `data/screenshots/` | The screenshots used on leafmd.app, in app stores and in the README, the sample document they show, and how to take them again |
 | `.github/workflows/ci.yml` | GitHub's build: checks and builds each push, and when a new version reaches `main`, signs it, publishes a GitHub Release and publishes leafmd.app. Also republishes leafmd.app on request |

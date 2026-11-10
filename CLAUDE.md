@@ -10,9 +10,9 @@ file does, and docs/PUBLISHING.md covers releases and leafmd.app.
 `openspec/specs/` describes how LeafMD behaves today, one folder per area
 (views, documents, recent-files, windows, tabs, links, formatted-view,
 formatting-bar, find-replace, smart-typing, help-and-about, distribution,
-desktop-integration, side-panel, folder-tree). Read the relevant spec before
-changing behaviour, and don't change behaviour a spec describes without
-saying so.
+desktop-integration, side-panel, folder-tree, distraction-free,
+end-to-end-tests). Read the relevant spec before changing behaviour, and don't
+change behaviour a spec describes without saying so.
 
 - **Features and behaviour changes** (anything from ROADMAP.md, or anything a
   user would notice): start with `/opsx:propose`, get the owner's approval of
@@ -76,7 +76,15 @@ reopen it. Don't close their running LeafMD yourself; it may have unsaved work.
 Before that: `cargo build`, `cargo test` and `cargo clippy --all-targets -- -D
 warnings` (no warnings at all; GitHub's build fails on any), and
 `./build-aux/sdk-check.sh`, which runs the same checks GitHub does inside the
-GNOME SDK.
+GNOME SDK. After installing, `./build-aux/end-to-end-tests.sh` tries the
+installed build on a hidden desktop (about five minutes; docs/DEVELOPMENT.md
+has more). Ask the owner to try it only once those pass, and leave what they
+checked out of the list you give them.
+
+To try LeafMD yourself without showing it on screen, use the hidden desktop in
+`build-aux/test-desktop.sh`. Never run it under `dbus-run-session`: a private
+message bus that can start its own services once broke the real document
+portal and stopped every Flatpak app starting.
 
 ## Every user-visible change also updates
 

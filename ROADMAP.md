@@ -48,6 +48,10 @@ Each feature is planned in detail with [OpenSpec](https://github.com/Fission-AI/
 - [x] Publish the code on GitHub
 - [x] Install from LeafMD's own Flatpak repository at [leafmd.app](https://leafmd.app/) with one click, and get updates automatically
 
+## Behind the scenes
+
+- [x] **Automated end-to-end tests:** a script that tries the installed app the way a person would (typing, shortcuts, saving, tabs, reopening) and checks the results, so every release is checked the same way and hand testing can focus on what's new
+
 ## Later
 
 - [ ] Submit LeafMD to Flathub, so it can be installed from GNOME Software and other app stores
