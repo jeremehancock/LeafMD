@@ -813,6 +813,31 @@ impl Window {
         });
         self.window.add_controller(drop);
 
+        // A tab dragged from another window can normally only be dropped on a tab
+        // bar, and a window showing "No Document Open" has none (the bar hides
+        // itself until there are two tabs). Without this, libadwaita treats the
+        // drop as "away from any tab bar" and gives the tab a third window. So an
+        // empty window takes a dragged tab dropped anywhere on it.
+        //
+        // While it's dragged, libadwaita takes the tab out of its window, and only
+        // its own tab bars can put it into another (it keeps that step private).
+        // So the drop is reported as not done, which makes libadwaita put the tab
+        // back where it was, and then it's moved here the ordinary way, like Move
+        // to New Window does.
+        let tab_drop = gtk::DropTarget::new(adw::TabPage::static_type(), gdk::DragAction::MOVE);
+        let weak = Rc::downgrade(self);
+        tab_drop.connect_accept(move |_, _| {
+            weak.upgrade().is_some_and(|win| win.shows_no_document())
+        });
+        let weak = Rc::downgrade(self);
+        tab_drop.connect_drop(move |_, value, _, _| {
+            if let (Some(win), Ok(page)) = (weak.upgrade(), value.get::<adw::TabPage>()) {
+                win.take_tab_when_back(page);
+            }
+            false
+        });
+        self.window.add_controller(tab_drop);
+
         // Switching to this window: refresh the recent list, which another
         // LeafMD window may have changed, and check the open file, in case it
         // changed somewhere that doesn't send change notices (like a network drive)
@@ -2069,9 +2094,44 @@ impl Window {
         self.update_title();
     }
 
+    /// Moves a tab that was dropped on this empty window into it, once
+    /// libadwaita has put it back in the window it was dragged from (see the tab
+    /// drop target in setup_signals). Checks every frame-or-so for up to a
+    /// second; if the tab never reappears, nothing happens.
+    fn take_tab_when_back(self: &Rc<Self>, page: adw::TabPage) {
+        let weak = Rc::downgrade(self);
+        let mut tries = 0;
+        glib::timeout_add_local(Duration::from_millis(20), move || {
+            tries += 1;
+            let Some(win) = weak.upgrade() else {
+                return glib::ControlFlow::Break;
+            };
+            let source = win.windows.borrow().iter().find_map(|other| {
+                let view = &other.tab_view;
+                (0..view.n_pages())
+                    .any(|position| view.nth_page(position) == page)
+                    .then(|| view.clone())
+            });
+            match source {
+                Some(view) if view == win.tab_view => glib::ControlFlow::Break,
+                Some(view) => {
+                    view.transfer_page(&page, &win.tab_view, 0);
+                    glib::ControlFlow::Break
+                }
+                None if tries < 50 => glib::ControlFlow::Continue,
+                None => glib::ControlFlow::Break,
+            }
+        });
+    }
+
+    /// Whether the window is showing the "No Document Open" page.
+    fn shows_no_document(&self) -> bool {
+        self.stack.visible_child_name().as_deref() == Some("empty")
+    }
+
     /// Swaps "No Document Open" for a blank page while a file opens.
     fn begin_loading(&self) {
-        if self.stack.visible_child_name().as_deref() == Some("empty") {
+        if self.shows_no_document() {
             self.stack.set_visible_child_name("loading");
         }
     }
