@@ -59,12 +59,16 @@ The storefront SHALL follow the visitor's light or dark style, fit a 360-pixel-w
 - **WHEN** the page loads with the browser's network panel open
 - **THEN** every request goes to `leafmd.app`
 
+#### Scenario: Links to other websites
+- **WHEN** someone clicks a link on the storefront that goes to another website, such as GitHub or flatpak.org
+- **THEN** it opens in a new browser tab, and the storefront stays open in the original tab
+
 ### Requirement: Larger screenshots
 On a screen at least 700 pixels wide, clicking one of the storefront's small screenshots SHALL show it full size over the page with its caption, previous and next buttons, and SHALL close with Esc, the close button or a click outside the picture. On a narrower screen, or with scripts turned off, clicking SHALL open the picture by itself.
 
 #### Scenario: Looking closer on a laptop
 - **WHEN** someone clicks the raw view screenshot on a 1280-pixel-wide window
-- **THEN** it opens full size over the page with "Edit markdown with the formatting bar" under it
+- **THEN** it opens full size over the page with "Write with a formatting bar" under it
 - **AND** the next button shows the next screenshot, and Esc closes the viewer
 
 #### Scenario: On a phone
