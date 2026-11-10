@@ -44,6 +44,7 @@ LeafMD has three views. Switch between them with the icons in the header bar, or
 The raw text can always be edited in Raw and Split view, and changes are only written to the file when you save.
 
 - **Tabs:** a window can hold several documents, and the tab bar appears once there are two. New (Ctrl+T) opens an empty one, and any file you open gets its own tab, including from your file manager and from links. A file that's already open isn't opened twice: LeafMD shows its tab. Each tab keeps its own text, view, undo history, find bar and banner. Drag a tab to reorder it, drop it on another LeafMD window, or pull it out into a window of its own. Right-clicking a tab offers the same moves.
+- **Side panel** (F9, or the button at the left of the header bar): a tree of the folder you're working in. Click a folder to open it and a file to open it in a tab; the open document is highlighted. Until you choose a folder with **Open Folder…** (Ctrl+Shift+O) or `leafmd .`, it shows the folder of the document you're looking at. A chosen folder shows whenever you're looking at a document inside it, until you close its window. Images, PDFs and other files LeafMD can't open are greyed out, and hidden files aren't listed. Once opened, the panel stays open, in new windows and next time, until you close it. In a narrow window it slides over the document instead.
 - **Windows:** Ctrl+N, New Window in the main menu, or right-clicking LeafMD's icon opens another window. A file from outside LeafMD opens in an empty window if there is one, otherwise as a tab in the window you used last.
 - **Formatting bar:** in Raw and Split view, a row of buttons above the text adds the markdown for you: bold, italic, strikethrough, inline code, links, headings, bulleted, numbered and check lists, quotes, code blocks and tables. Select some text and press a button, or press it with nothing selected to format the word or line the cursor is on. Press it again to take the formatting off.
 - **Markdown cheatsheet** (Shift+F1, or the Cheatsheet button) shows the most common markdown next to what it looks like.
@@ -64,9 +65,11 @@ The raw text can always be edited in Raw and Split view, and changes are only wr
 | Keys | Action |
 |---|---|
 | Ctrl+1 / Ctrl+2 / Ctrl+3 | Formatted / Raw / Split view |
+| F9 | Show or hide the side panel |
 | Ctrl+T | New document, in a new tab |
 | Ctrl+N | New window |
 | Ctrl+O | Open |
+| Ctrl+Shift+O | Open folder in the side panel |
 | Ctrl+S | Save |
 | Ctrl+Shift+S | Save as |
 | Ctrl+W | Close tab, or the window if it's the last tab (asks first if there are unsaved changes) |
@@ -86,11 +89,11 @@ The raw text can always be edited in Raw and Split view, and changes are only wr
 | Shift+F1 | Markdown cheatsheet |
 | Ctrl+? | Keyboard shortcuts |
 
-You can also open a file by dropping it on the window, or by typing `leafmd file.md` in a terminal, after [a one-time setup](#from-a-terminal).
+You can also open a file by dropping it on the window, or by typing `leafmd file.md` in a terminal (or `leafmd .` for the folder you're in), after [a one-time setup](#from-a-terminal).
 
 ## From a terminal
 
-Flatpak apps don't come with a short command, but one line adds it. After that, typing `leafmd notes.md` opens that file in LeafMD, `leafmd a.md b.md` opens both as tabs in one window, and `leafmd --new-window` opens a new window.
+Flatpak apps don't come with a short command, but one line adds it. After that, typing `leafmd notes.md` opens that file in LeafMD, `leafmd a.md b.md` opens both as tabs in one window, `leafmd .` opens the folder you're in, in the side panel of a window of its own, and `leafmd --new-window` opens a new window.
 
 For everyone on this computer (asks for your admin password, and works straight away on most systems):
 
@@ -116,9 +119,18 @@ The `leafmd` command works with every version of LeafMD, and works best with the
 
 | Permission | Why |
 |---|---|
-| Your home folder | So images and links next to a markdown file show up in the formatted view |
+| Your home folder | So images and links next to a markdown file show up in the formatted view, and the side panel can list the folder a document is in |
 | Network | So images hosted online (like README badges) load |
 | Graphics (dri) | The formatted view draws faster with the graphics card |
+
+### Folders outside your home folder
+
+LeafMD runs in Flatpak's sandbox, which keeps apps to what they've been given. Your home folder is given to LeafMD (see above), so the side panel can list any folder in it. Anything outside it, like `/tmp` or a second drive, is shared with LeafMD only when you choose it.
+
+- When you open a single document from outside your home folder, LeafMD is given that one file and nothing next to it. The side panel says "Can't See This Folder" rather than show an empty or wrong list.
+- To see the rest of the folder, choose it with Open Folder… (Ctrl+Shift+O), or run `leafmd .` in it (see [From a terminal](#from-a-terminal)). Either way the whole folder is shared with LeafMD.
+
+Flatpak's documentation has more on [how the sandbox shares files](https://docs.flatpak.org/en/latest/sandbox-permissions.html).
 
 ## Safety
 

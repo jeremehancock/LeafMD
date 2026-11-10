@@ -33,6 +33,7 @@ Each feature is planned in detail with [OpenSpec](https://github.com/Fission-AI/
 - [ ] **Zoom:** Ctrl+plus, Ctrl+minus and Ctrl+0 make the text bigger, smaller or back to normal in both views, for a quick change without opening Preferences
 - [ ] **Word count:** the number of words (and reading time) shown somewhere unobtrusive
 - [x] **Tabs:** several documents in one window, with links and opened files getting a tab of their own, tabs that can be dragged between windows, and all of them reopening next time
+- [ ] **Side panel with a folder tree** (F9): a panel on the left showing the folder you're working in, for moving between documents. `leafmd .` opens a folder in it from a terminal, and Open Folder… chooses one. It's closed until you open it, then stays open until you close it, and it's built so later features can add pages to it
 
 ## 5. Sharing
 
@@ -58,7 +59,6 @@ These might fit LeafMD, or might add more than they're worth. Each one needs a d
 
 - Spell checking in the raw text
 - A headings menu for jumping to a section of a long document
-- A list of the other markdown files in the same folder, for moving between related documents. Either a full folder tree in a sidebar, or something lighter like a menu of the files next to the open one
 - Coloured syntax highlighting inside code blocks in the formatted view
 - Remembering where you were scrolled to in each file
 - Dropping an image onto the raw text inserts a markdown image link

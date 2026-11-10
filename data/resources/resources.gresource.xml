@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Files built into the LeafMD program itself. GTK automatically looks for
      icons under /io/github/jeremehancock/LeafMD/icons.
-     The view icons, the formatting bar icons, the replace icon and the new document icon live here.
+     The view icons, the formatting bar icons, the replace icon, the new document icon
+     and the side panel's icons live here.
      Icons GTK asks for by name, like the window's buttons, are in data/icon-theme (see main.rs). -->
 <gresources>
   <gresource prefix="/io/github/jeremehancock/LeafMD">
@@ -22,5 +23,8 @@
     <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-format-task-list-symbolic.svg</file>
     <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-replace-symbolic.svg</file>
     <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-new-symbolic.svg</file>
+    <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-side-panel-symbolic.svg</file>
+    <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-folder-symbolic.svg</file>
+    <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-document-symbolic.svg</file>
   </gresource>
 </gresources>

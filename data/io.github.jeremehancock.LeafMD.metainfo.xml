@@ -18,13 +18,14 @@
     </p>
     <p>
       Rather than trying to do everything, LeafMD focuses on doing the essentials
-      well. There are no plugins to manage, panels to arrange or settings to tune,
+      well. There are no plugins to manage or settings to tune,
       just a fast, dependable app that feels obvious from the moment you open it.
     </p>
     <ul>
       <li>Switch between formatted, raw and split views with one click or Ctrl+1, 2 and 3</li>
       <li>A formatted-only view for pure, distraction-free reading</li>
       <li>Tabs keep several documents in one window, and reopen when you start LeafMD again</li>
+      <li>An optional side panel shows the folder you're working in as a tree, for moving between documents</li>
       <li>Edit the raw text with the formatted view updating as you type</li>
       <li>A formatting bar adds bold, links, lists, headings, tables and more for you</li>
       <li>Lists continue themselves when you press Enter, and pasting a web address over text makes a link</li>
@@ -33,7 +34,7 @@
       <li>A banner tells you when another app changes your file, and nothing is overwritten without asking</li>
       <li>In split view, both sides scroll together</li>
       <li>Supports tables, task lists, footnotes and other GitHub-style markdown</li>
-      <li>Open files from a terminal with an optional short leafmd command</li>
+      <li>Open files, or a whole folder with leafmd ., from a terminal with an optional short leafmd command</li>
       <li>Follows your system's light or dark style</li>
     </ul>
   </description>
