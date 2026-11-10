@@ -58,7 +58,7 @@ a:hover { text-decoration-thickness: 2px; }
 h1, h2, h3 { line-height: 1.2; margin: 0; }
 /* Spreads short text evenly over its lines, so no line ends up with a single
    word on it. Browsers that don't know it just wrap as usual. */
-h1, h2, h3, .tagline, .lede, .section-lede, .hint, .facts,
+h1, h2, h3, .tagline, .lede, .section-lede, .hint, .facts, .early,
 .gallery figcaption { text-wrap: balance; }
 h2 { font-size: clamp(1.6rem, 4vw, 2.1rem); font-weight: 800; letter-spacing: -0.01em; text-align: center; }
 h3 { font-size: 1.1rem; font-weight: 700; }
@@ -102,6 +102,14 @@ h3 { font-size: 1.1rem; font-weight: 700; }
 .facts { color: var(--muted); font-size: 0.9rem; margin: 0; }
 /* Each piece stays whole, with its dot, so lines only break after a dot */
 .facts > span { white-space: nowrap; }
+/* A quiet, friendly note that LeafMD is still young: the same grey as the
+   other buttons and cards, so it reads as information, not a warning */
+.early {
+  max-width: 620px; margin: 20px auto 0; padding: 12px 18px;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px;
+  color: var(--muted); font-size: 0.9rem;
+}
+.early strong { color: var(--fg); }
 
 .button {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
