@@ -33,7 +33,7 @@ New things added to the app:
 - Pages for the panel other than Files (it's only built to allow them)
 - Registering LeafMD as an app for folders in the file manager (so "Open With LeafMD" on a folder isn't added)
 - Showing which files have unsaved changes in the tree
-- A "Close Folder" action. A new window starts with no chosen folder.
+- A "Close Folder" action. Choosing another folder with Open Folder… replaces it, and a new window starts with none.
 
 ## Capabilities
 

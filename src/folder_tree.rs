@@ -5,8 +5,9 @@
 //! stacks those lists into a tree, and only reads a folder once someone expands
 //! it, so a huge folder like `node_modules` costs nothing until it's opened.
 //!
-//! Which folder to show, and what happens when a file is picked, is decided
-//! by the window (window.rs).
+//! Which folder to show is decided by `folder_to_show` below, which the window
+//! (window.rs) calls whenever the selected tab or chosen folder changes. What
+//! happens when a file is picked is up to the window.
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
@@ -80,8 +81,8 @@ pub fn can_show_unchosen(folder: &gio::File) -> bool {
 /// - The chosen folder (from Open Folder… or `leafmd .`) while the selected
 ///   document is inside it, or there's no document with a file.
 /// - Otherwise the tree follows the document, so it never shows a folder that
-///   has nothing to do with the tab you're on. It stays on the folder it
-///   `showing` (when that isn't the chosen one) while the document is
+///   has nothing to do with the tab you're on. It stays on the folder it's
+///   already showing (`showing`, never the chosen one) while the document is
 ///   somewhere inside it, so opening a file in a subfolder from the tree
 ///   doesn't make the tree jump into the subfolder. Otherwise it moves to the
 ///   document's own folder.
