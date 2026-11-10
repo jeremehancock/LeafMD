@@ -50,7 +50,7 @@ Each feature is planned in detail with [OpenSpec](https://github.com/Fission-AI/
 
 ## Behind the scenes
 
-- [ ] **Automated end-to-end tests:** a script that tries the installed app the way a person would (typing, shortcuts, saving, tabs, reopening) and checks the results, so every release is checked the same way and hand testing can focus on what's new
+- [x] **Automated end-to-end tests:** a script that tries the installed app the way a person would (typing, shortcuts, saving, tabs, reopening) and checks the results, so every release is checked the same way and hand testing can focus on what's new
 
 ## Later
 
