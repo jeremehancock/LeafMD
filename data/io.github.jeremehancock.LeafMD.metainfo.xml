@@ -97,6 +97,19 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.7.0" date="2026-11-10">
+      <description>
+        <p>LeafMD now has a side panel that shows the folder you're working in, so the next document is one click away.</p>
+        <ul>
+          <li>Press F9, or click the new button at the left of the header bar, to open the side panel. It stays open until you close it</li>
+          <li>The panel shows a folder as a tree. Click a file to open it in a tab. The document you're looking at is highlighted</li>
+          <li>The tree follows the document you're looking at. To keep one folder in the panel while you work in it, choose it with Open Folder… (Ctrl+Shift+O) or run leafmd . in a terminal</li>
+          <li>Images, PDFs and other files LeafMD can't open are greyed out, and hidden files aren't listed</li>
+          <li>In a narrow window, the panel slides over the document</li>
+          <li>Split view now always starts with the divider in the middle, even after reopening a maximized window</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.6.0" date="2026-11-06">
       <description>
         <p>LeafMD now has tabs, so one window can hold everything you're working on.</p>
