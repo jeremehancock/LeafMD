@@ -38,13 +38,16 @@ Each [release](https://github.com/jeremehancock/LeafMD/releases) also has a `Lea
 LeafMD has three views. Switch between them with the icons in the header bar, or Ctrl+1, 2 and 3. In a narrow window, those icons and the New, Save and Find buttons move to a bar along the bottom, so LeafMD fits windows as small as 360 by 300 pixels.
 
 - **Formatted:** the rendered document, full window. Just for reading.
-- **Raw:** the markdown text, full window. Type here to edit.
+- **Raw:** the markdown text, in a comfortable column down the middle of the window. Type here to edit.
 - **Split:** raw text on the left, formatted on the right. The formatted side updates as you type.
 
-The raw text can always be edited in Raw and Split view, and changes are only written to the file when you save.
+The raw text can always be edited in Raw and Split view, and changes are only written to the file when you save. It has no line numbers unless you turn them on with **Line Numbers** in the main menu, which every window follows and LeafMD remembers.
+
+LeafMD follows your system's light or dark style, and the formatted view uses the accent colour you choose in GNOME Settings for links and ticked checkboxes.
 
 - **Tabs:** a window can hold several documents, and the tab bar appears once there are two. New (Ctrl+T) opens an empty one, and any file you open gets its own tab, including from your file manager and from links. A file that's already open isn't opened twice: LeafMD shows its tab. Each tab keeps its own text, view, undo history, find bar and banner. Drag a tab to reorder it, drop it on another LeafMD window, or pull it out into a window of its own. Right-clicking a tab offers the same moves.
 - **Side panel** (F9, or the button at the left of the header bar): a tree of the folder you're working in. Click a folder to open it and a file to open it in a tab; the open document is highlighted. Until you choose a folder with **Open Folder…** (Ctrl+Shift+O) or `leafmd .`, it shows the folder of the document you're looking at. A chosen folder shows whenever you're looking at a document inside it, until you close its window. Images, PDFs and other files LeafMD can't open are greyed out, and hidden files aren't listed. Once opened, the panel stays open, in new windows and next time, until you close it. In a narrow window it slides over the document instead.
+- **Distraction Free** (Ctrl+Shift+D, or the main menu): hides the header bar, tabs, formatting bar, side panel and line numbers, leaving just your document. Move the pointer to the top or bottom edge, or press F10, and the bars slide back in over the document. Find and the banner about changed files still appear. Escape leaves. It only affects that window, and every window starts with it off. **Full Screen** (F11, or the main menu) is separate, so you can use either or both.
 - **Windows:** Ctrl+N, New Window in the main menu, or right-clicking LeafMD's icon opens another window. A file from outside LeafMD opens in an empty window if there is one, otherwise as a tab in the window you used last.
 - **Formatting bar:** in Raw and Split view, a row of buttons above the text adds the markdown for you: bold, italic, strikethrough, inline code, links, headings, bulleted, numbered and check lists, quotes, code blocks and tables. Select some text and press a button, or press it with nothing selected to format the word or line the cursor is on. Press it again to take the formatting off.
 - **Markdown cheatsheet** (Shift+F1, or the Cheatsheet button) shows the most common markdown next to what it looks like.
@@ -66,6 +69,9 @@ The raw text can always be edited in Raw and Split view, and changes are only wr
 |---|---|
 | Ctrl+1 / Ctrl+2 / Ctrl+3 | Formatted / Raw / Split view |
 | F9 | Show or hide the side panel |
+| Ctrl+Shift+D | Distraction Free on or off |
+| F11 | Full screen on or off |
+| Escape | Leave Distraction Free and full screen |
 | Ctrl+T | New document, in a new tab |
 | Ctrl+N | New window |
 | Ctrl+O | Open |

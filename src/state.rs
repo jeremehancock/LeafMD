@@ -196,6 +196,29 @@ pub fn save_panel_open(open: bool) {
     update_state_file(|file| file.set_boolean(PANEL_GROUP, "open", open));
 }
 
+const EDITOR_GROUP: &str = "editor";
+
+/// Whether the raw text shows line numbers. Off unless the user turned them on.
+pub fn load_line_numbers() -> bool {
+    let file = glib::KeyFile::new();
+    if file
+        .load_from_file(state_path(), glib::KeyFileFlags::NONE)
+        .is_err()
+    {
+        return false;
+    }
+    line_numbers_in(&file)
+}
+
+fn line_numbers_in(file: &glib::KeyFile) -> bool {
+    file.boolean(EDITOR_GROUP, "line-numbers").unwrap_or(false)
+}
+
+/// Remembers the user turning line numbers on or off.
+pub fn save_line_numbers(show: bool) {
+    update_state_file(|file| file.set_boolean(EDITOR_GROUP, "line-numbers", show));
+}
+
 /// Some files that belong in tabs, and which one is selected.
 #[derive(Debug, PartialEq)]
 pub struct TabList {
@@ -281,7 +304,7 @@ fn update_state_file(change: impl FnOnce(&glib::KeyFile)) {
 
 #[cfg(test)]
 mod tests {
-    use super::{TabList, panel_open_in, tabs_to_reopen, tabs_to_save};
+    use super::{TabList, line_numbers_in, panel_open_in, tabs_to_reopen, tabs_to_save};
     use gtk::glib;
 
     fn key_file(text: &str) -> glib::KeyFile {
@@ -296,6 +319,14 @@ mod tests {
         assert!(!panel_open_in(&key_file("[side-panel]\nopen=false\n")));
         assert!(!panel_open_in(&key_file("[side-panel]\nopen=maybe\n")));
         assert!(panel_open_in(&key_file("[side-panel]\nopen=true\n")));
+    }
+
+    #[test]
+    fn line_numbers_are_off_unless_turned_on() {
+        assert!(!line_numbers_in(&key_file("[window]\nview=source\n")));
+        assert!(!line_numbers_in(&key_file("[editor]\nline-numbers=false\n")));
+        assert!(!line_numbers_in(&key_file("[editor]\nline-numbers=maybe\n")));
+        assert!(line_numbers_in(&key_file("[editor]\nline-numbers=true\n")));
     }
 
     fn list(names: &[&str]) -> Vec<String> {

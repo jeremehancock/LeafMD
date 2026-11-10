@@ -26,6 +26,19 @@ use crate::window::{Window, file_filters};
 /// The empty page (styles only) that the formatted view is drawn into.
 const PREVIEW_PAGE: &str = include_str!("preview.html");
 
+/// A column width so large it never narrows the raw text.
+const UNCLAMPED: i32 = 1_000_000;
+
+/// Whether new documents show line numbers: the Line Numbers setting in the
+/// main menu (the "line-numbers" action, set up in main.rs). Off by default.
+pub fn line_numbers_wanted() -> bool {
+    gio::Application::default()
+        .and_then(|app| app.lookup_action("line-numbers"))
+        .and_then(|action| action.state())
+        .and_then(|state| state.get::<bool>())
+        .unwrap_or(false)
+}
+
 /// Helpers for click-to-jump and synced scrolling, run inside the formatted view.
 const PREVIEW_SCRIPT: &str = include_str!("preview.js");
 
@@ -76,6 +89,8 @@ pub struct Document {
     /// The raw text on the left and the formatted view on the right
     pub paned: gtk::Paned,
     source_scroll: gtk::ScrolledWindow,
+    /// Holds the raw text in a centred column when it's the only view showing
+    source_clamp: adw::ClampScrollable,
     pub source_view: sourceview5::View,
     pub buffer: sourceview5::Buffer,
     pub webview: webkit6::WebView,
@@ -142,19 +157,33 @@ impl Document {
         buffer.tag_table().add(&flash_tag);
 
         let source_view = sourceview5::View::with_buffer(&buffer);
-        source_view.set_show_line_numbers(true);
+        source_view.set_show_line_numbers(line_numbers_wanted());
         source_view.set_monospace(true);
         source_view.set_wrap_mode(gtk::WrapMode::WordChar);
         source_view.set_tab_width(4);
         source_view.set_auto_indent(true);
-        source_view.set_top_margin(12);
-        source_view.set_bottom_margin(12);
-        source_view.set_left_margin(8);
-        source_view.set_right_margin(12);
+        source_view.set_top_margin(16);
+        source_view.set_bottom_margin(16);
+        source_view.set_left_margin(18);
+        source_view.set_right_margin(18);
+        // A little air between lines, the same within a wrapped line as between lines
+        source_view.set_pixels_below_lines(3);
+        source_view.set_pixels_inside_wrap(3);
         source_view.set_highlight_current_line(true);
 
-        let source_scroll = gtk::ScrolledWindow::builder()
+        // Keeps the raw text to a comfortable width in the middle of a wide
+        // window when it's the only thing showing (see apply_view). The
+        // scroll bar stays at the window's edge. The "view" style gives the
+        // space either side the same background as the text.
+        let source_clamp = adw::ClampScrollable::builder()
             .child(&source_view)
+            .maximum_size(UNCLAMPED)
+            .tightening_threshold(UNCLAMPED)
+            .build();
+        source_clamp.add_css_class("view");
+
+        let source_scroll = gtk::ScrolledWindow::builder()
+            .child(&source_clamp)
             .hexpand(true)
             .vexpand(true)
             .build();
@@ -193,6 +222,7 @@ impl Document {
             window: RefCell::new(Weak::new()),
             paned,
             source_scroll,
+            source_clamp,
             source_view,
             buffer,
             webview,
@@ -418,6 +448,11 @@ impl Document {
         };
         self.source_scroll.set_visible(show_source);
         self.webview.set_visible(show_preview);
+        // On its own, the raw text sits in a centred column about as wide as
+        // the formatted view's. In the split each half is narrow enough already.
+        let width = if mode == ViewMode::Source { self.column_width() } else { UNCLAMPED };
+        self.source_clamp.set_maximum_size(width);
+        self.source_clamp.set_tightening_threshold(width);
 
         if mode == ViewMode::Split {
             self.split_down_the_middle();
@@ -427,6 +462,25 @@ impl Document {
             self.render_now();
         }
         self.tell_preview_view_mode();
+    }
+
+    /// How wide the raw text's column is in the raw-only view: room for about
+    /// 80 characters in the editor's font, plus its margins and line numbers.
+    fn column_width(&self) -> i32 {
+        let layout = self.source_view.create_pango_layout(Some("0000000000"));
+        let ten_chars = layout.pixel_size().0.max(70);
+        let margins = self.source_view.left_margin() + self.source_view.right_margin();
+        let numbers = if self.source_view.shows_line_numbers() { ten_chars / 2 + 16 } else { 0 };
+        ten_chars * 8 + margins + numbers
+    }
+
+    /// Shows or hides the raw text's line numbers. The raw-only column widens
+    /// to make room for them.
+    pub fn show_line_numbers(&self, show: bool) {
+        self.source_view.set_show_line_numbers(show);
+        if self.view_mode.get() == ViewMode::Source {
+            self.apply_view(ViewMode::Source);
+        }
     }
 
     /// Puts the divider between the raw text and the formatted view halfway
@@ -1471,18 +1525,31 @@ impl Document {
     /// Matches the editor colours and the formatted view to the system's light or dark style.
     pub fn update_style(&self) {
         let dark = adw::StyleManager::default().is_dark();
-        let scheme = sourceview5::StyleSchemeManager::default()
-            .scheme(if dark { "Adwaita-dark" } else { "Adwaita" });
+        // LeafMD's own schemes (data/resources/styles) are GNOME's with quieter
+        // line numbers. GNOME's are the fallback if they ever fail to load.
+        let schemes = sourceview5::StyleSchemeManager::default();
+        let (ours, gnomes) = if dark { ("leafmd-dark", "Adwaita-dark") } else { ("leafmd", "Adwaita") };
+        let scheme = schemes.scheme(ours).or_else(|| schemes.scheme(gnomes));
         self.buffer.set_style_scheme(scheme.as_ref());
 
-        let background = if dark { "#1e1e1e" } else { "#ffffff" };
+        // The same backgrounds as GNOME's raw text, so the two halves of the split match
+        let background = if dark { "#1d1d20" } else { "#ffffff" };
         if let Ok(rgba) = gdk::RGBA::parse(background) {
             self.webview.set_background_color(&rgba);
         }
         if self.preview_ready.get() {
             let theme = if dark { "dark" } else { "light" };
+            // The accent colour chosen in GNOME Settings. Ticked boxes use it as
+            // it is. Links use GNOME's version for text, which is darker on a
+            // light background and lighter on a dark one so it stays readable.
+            // gdk writes colours as "rgb(…)", which CSS understands.
+            let accent = adw::StyleManager::default().accent_color();
+            let fill = accent.to_rgba().to_string();
+            let link = accent.to_standalone_rgba(dark).to_string();
             self.run_js(&format!(
-                "document.documentElement.dataset.theme = '{theme}';"
+                "document.documentElement.dataset.theme = '{theme}';
+                 document.documentElement.style.setProperty('--accent', '{fill}');
+                 document.documentElement.style.setProperty('--link', '{link}');"
             ));
         }
     }

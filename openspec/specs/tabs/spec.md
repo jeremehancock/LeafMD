@@ -92,7 +92,7 @@ Right-clicking a tab SHALL show a menu with Move Left, Move Right, Move to New W
 - **THEN** Move Left is greyed out and the other items can be chosen
 
 ### Requirement: Dragging tabs
-LeafMD SHALL let the user drag a tab along the tab bar to change the order, onto another LeafMD window's tab bar to move it there, or away from any tab bar to move it to a new window. A moved tab SHALL keep its unsaved changes, undo history, view and find bar. A window that gives away its only tab SHALL close.
+LeafMD SHALL let the user drag a tab along the tab bar to change the order, onto another LeafMD window's tab bar to move it there, anywhere on a window showing "No Document Open" to move it there, or away from any tab bar to move it to a new window. A moved tab SHALL keep its unsaved changes, undo history, view and find bar. A window that gives away its only tab SHALL close.
 
 #### Scenario: Reordering
 - **WHEN** the tabs are notes.md, todo.md and ideas.md, and the user drags ideas.md to the left end
@@ -105,6 +105,10 @@ LeafMD SHALL let the user drag a tab along the tab bar to change the order, onto
 #### Scenario: Pulling a tab out
 - **WHEN** the user drags todo.md out of the tab bar and drops it on the empty desktop
 - **THEN** todo.md opens in a new window of its own
+
+#### Scenario: Moving to an empty window
+- **WHEN** one window has notes.md and todo.md in tabs, a second window shows "No Document Open", and the user drags todo.md onto the middle of the second window
+- **THEN** todo.md opens in the second window, notes.md stays in the first, and no third window appears
 
 ### Requirement: Tabs in a narrow window
 In a window narrower than 680 pixels, the tab bar SHALL stay on its own row under the header bar. Tabs SHALL get narrower as more are opened and then scroll sideways, and the tab bar SHALL NOT stop the window from reaching 360 pixels wide.

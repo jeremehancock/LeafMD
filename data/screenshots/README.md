@@ -53,8 +53,9 @@ have open can stay open. It needs GNOME Shell installed, because it runs a
 real one with no visible screen, and it can't be run on GitHub for now. The
 top of the script explains how it keeps away from your real desktop.
 
-If you change the height of the header bar or formatting bar, check that its
-click positions (near the end of the script) still land where they should.
+If you change the height of the header bar or formatting bar, or the raw
+text's margins, line spacing or column width, check that its click positions
+(near the end of the script) still land where they should.
 
 ## Taking them by hand
 

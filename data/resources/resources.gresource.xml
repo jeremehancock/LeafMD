@@ -3,7 +3,8 @@
      icons under /io/github/jeremehancock/LeafMD/icons.
      The view icons, the formatting bar icons, the replace icon, the new document icon
      and the side panel's icons live here.
-     Icons GTK asks for by name, like the window's buttons, are in data/icon-theme (see main.rs). -->
+     Icons GTK asks for by name, like the window's buttons, are in data/icon-theme (see main.rs).
+     styles/ holds the raw text's colours, found by GtkSourceView through main.rs. -->
 <gresources>
   <gresource prefix="/io/github/jeremehancock/LeafMD">
     <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-view-formatted-symbolic.svg</file>
@@ -26,5 +27,7 @@
     <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-side-panel-symbolic.svg</file>
     <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-folder-symbolic.svg</file>
     <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-document-symbolic.svg</file>
+    <file preprocess="xml-stripblanks">styles/leafmd.xml</file>
+    <file preprocess="xml-stripblanks">styles/leafmd-dark.xml</file>
   </gresource>
 </gresources>
