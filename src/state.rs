@@ -172,6 +172,30 @@ pub fn forget_last_file() {
     });
 }
 
+const PANEL_GROUP: &str = "side-panel";
+
+/// Whether new windows open with the side panel showing. Closed unless the user
+/// opened it last time they chose.
+pub fn load_panel_open() -> bool {
+    let file = glib::KeyFile::new();
+    if file
+        .load_from_file(state_path(), glib::KeyFileFlags::NONE)
+        .is_err()
+    {
+        return false;
+    }
+    panel_open_in(&file)
+}
+
+fn panel_open_in(file: &glib::KeyFile) -> bool {
+    file.boolean(PANEL_GROUP, "open").unwrap_or(false)
+}
+
+/// Remembers the user opening or closing the side panel.
+pub fn save_panel_open(open: bool) {
+    update_state_file(|file| file.set_boolean(PANEL_GROUP, "open", open));
+}
+
 /// Some files that belong in tabs, and which one is selected.
 #[derive(Debug, PartialEq)]
 pub struct TabList {
@@ -257,7 +281,22 @@ fn update_state_file(change: impl FnOnce(&glib::KeyFile)) {
 
 #[cfg(test)]
 mod tests {
-    use super::{TabList, tabs_to_reopen, tabs_to_save};
+    use super::{TabList, panel_open_in, tabs_to_reopen, tabs_to_save};
+    use gtk::glib;
+
+    fn key_file(text: &str) -> glib::KeyFile {
+        let file = glib::KeyFile::new();
+        file.load_from_data(text, glib::KeyFileFlags::NONE).expect("test state file reads");
+        file
+    }
+
+    #[test]
+    fn the_side_panel_starts_closed_unless_it_was_left_open() {
+        assert!(!panel_open_in(&key_file("[window]\nview=split\n")));
+        assert!(!panel_open_in(&key_file("[side-panel]\nopen=false\n")));
+        assert!(!panel_open_in(&key_file("[side-panel]\nopen=maybe\n")));
+        assert!(panel_open_in(&key_file("[side-panel]\nopen=true\n")));
+    }
 
     fn list(names: &[&str]) -> Vec<String> {
         names.iter().map(|name| name.to_string()).collect()

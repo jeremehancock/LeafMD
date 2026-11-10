@@ -82,11 +82,13 @@ With Claude Code, `/ship` walks a change through all of this: the checks, trying
 
 | File | What it does |
 |---|---|
-| `src/main.rs` | Starts the app, gives the terminal back when started from one, sets up keyboard shortcuts, opens files passed on the command line |
-| `src/window.rs` | The window: toolbar, formatting bar, find and replace, recent files, Help, cheatsheet and About |
+| `src/main.rs` | Starts the app, gives the terminal back when started from one, sets up keyboard shortcuts, opens files and folders passed on the command line |
+| `src/window.rs` | The window: toolbar, formatting bar, find and replace, recent files, showing and remembering the side panel, each window's chosen folder, Help, cheatsheet and About |
+| `src/side_panel.rs` | The side panel itself: its header and its pages, so a later feature can add a page with one call |
+| `src/folder_tree.rs` | The Files page of the side panel: the folder tree, which files are greyed out, highlighting the open document, and which folders LeafMD can see, with tests |
 | `src/document.rs` | One open document: the raw editor, the formatted view, links, saving and reloading, and noticing changes to its file |
 | `src/dialog.rs` | The questions about saving: a heading, some text and a row of equal buttons, laid out like gedit's |
-| `src/opening.rs` | The rules for which window a file opens in and where a reopened tab goes, with tests |
+| `src/opening.rs` | The rules for which window a file or folder opens in and where a reopened tab goes, with tests |
 | `src/file_change.rs` | Noticing when another app changes the open file: what counts as a change, what the banner says, and the banner's widgets, with tests |
 | `src/find.rs` | The find and replace bar's buttons and boxes |
 | `src/format.rs` | What each formatting button does to the text (bold, lists, headings, tables and so on), with tests |
@@ -94,14 +96,14 @@ With Claude Code, `/ship` walks a change through all of this: the checks, trying
 | `src/render.rs` | Turns markdown into HTML (comrak), then removes anything unsafe (ammonia) |
 | `src/preview.html` | The page the formatted view is drawn into, including its light and dark styles |
 | `src/preview.js` | Double-click to jump, synced scrolling and find in the formatted view, run in a private script area the document can't reach |
-| `src/state.rs` | Remembers the last view, window size, recent files and tabs in `~/.config/leafmd/state.ini`, and decides which tabs to save and reopen, with tests |
+| `src/state.rs` | Remembers the last view, window size, recent files, tabs and whether the side panel is open in `~/.config/leafmd/state.ini`, and decides which tabs to save and reopen, with tests |
 | `data/*.desktop` | The app menu entry: name, icon, and the file types LeafMD opens |
 | `data/*.metainfo.xml` | The description, license and release notes shown in software centers |
 | `build-aux/` | The Flatpak recipe, the script that builds and installs it, `sdk-check.sh` (the checks GitHub runs), `flathub-lint.sh` and its exceptions file (Flathub's checker), `release-info.py` (reads the version and release notes, and checks they match), `build-site.py` (builds leafmd.app), `flatpak-repo-preview.sh` (a private copy of leafmd.app on this computer), `take-screenshots.sh` and `screenshot-settings-portal.py` (take the screenshots on a hidden desktop), `screenshot-mode.sh` (GNOME's default look for taking screenshots by hand) and `leafmd-signing-key.gpg` (the public half of LeafMD's signing key) |
 | `site/` | The storefront at leafmd.app: the page, its styles, its three small scripts (the Copy buttons, the viewer that shows screenshots full size, and the Ubuntu setup help in `install-help.js`), and the templates for the install files |
 | `data/screenshots/` | The screenshots used on leafmd.app, in app stores and in the README, the sample document they show, and how to take them again |
 | `.github/workflows/ci.yml` | GitHub's build: checks and builds each push, and when a new version reaches `main`, signs it, publishes a GitHub Release and publishes leafmd.app. Also republishes leafmd.app on request |
-| `data/resources/` | Files built into the program: the view icons, formatting bar icons, replace icon and new document icon. LeafMD always uses its own theme in `data/icon-theme/`, so icons look the same on every distro (see `src/main.rs`). LeafMD's own icons are drawn with filled shapes only, because GTK doesn't paint outlined lines in these icons |
+| `data/resources/` | Files built into the program: the view icons, formatting bar icons, replace icon, new document icon and the side panel's icons. LeafMD always uses its own theme in `data/icon-theme/`, so icons look the same on every distro (see `src/main.rs`). LeafMD's own icons are drawn with filled shapes only, because GTK doesn't paint outlined lines in these icons |
 | `openspec/specs/` | How LeafMD behaves, written as rules with examples, one folder per area |
 | `openspec/changes/` | Features being planned or built, and finished ones under `archive/` |
 | `openspec/config.yaml` | Guidance for writing proposals and specs in this project |

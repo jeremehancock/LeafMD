@@ -77,11 +77,11 @@ Ctrl+W SHALL close the current tab, and close the window when it's the last tab 
 - **THEN** the window closes
 
 ### Requirement: Compact layout in narrow windows
-When a LeafMD window is narrower than 640 pixels, it SHALL use a compact layout: the New button, the Save button, the magnifying glass button and the view switcher SHALL move from the header bar to a bar along the bottom of the window, in that order. Open, its recent files arrow, the title, the main menu and the window's own buttons SHALL stay in the header bar. At 640 pixels or wider there SHALL be no bottom bar.
+When a LeafMD window is narrower than 680 pixels, it SHALL use a compact layout: the New button, the Save button, the magnifying glass button and the view switcher SHALL move from the header bar to a bar along the bottom of the window, in that order. The side panel button, Open, its recent files arrow, the title, the main menu and the window's own buttons SHALL stay in the header bar. At 680 pixels or wider there SHALL be no bottom bar.
 
 #### Scenario: Dragging a window narrower
 - **WHEN** a window 800 pixels wide with notes.md open is dragged to 500 pixels wide
-- **THEN** New, Save, the magnifying glass and the view switcher move to a bar along the bottom, and the header bar still shows Open, "notes.md", the main menu and the close button
+- **THEN** New, Save, the magnifying glass and the view switcher move to a bar along the bottom, and the header bar still shows the side panel button, Open, "notes.md", the main menu and the close button
 
 #### Scenario: Dragging it wide again
 - **WHEN** that window is dragged back to 800 pixels wide
@@ -100,8 +100,12 @@ When a LeafMD window is narrower than 640 pixels, it SHALL use a compact layout:
 - **THEN** each does the same thing it does in a wide window
 
 #### Scenario: Wide windows don't change
-- **WHEN** the window is 1000 by 700 pixels
-- **THEN** it looks exactly as it did before the compact layout existed
+- **WHEN** the window is 1000 by 700 pixels and the side panel is closed
+- **THEN** it looks exactly as it did before the compact layout existed, apart from the side panel button at the left end of the header bar
+
+#### Scenario: Just above the limit with extra window buttons
+- **WHEN** the desktop adds minimize and maximize buttons to the title bar and the window is 680 pixels wide
+- **THEN** every header bar button is fully visible and there is no bottom bar
 
 ### Requirement: Opening files inside LeafMD uses a new tab
 LeafMD SHALL open a file chosen with Open or Recent files, dropped on a window, or reached through a link, in a new selected tab in that same window. If the selected tab is an empty new document with nothing typed in it, the file SHALL take its place instead of adding a tab.

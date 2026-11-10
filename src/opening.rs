@@ -42,6 +42,28 @@ pub fn choose_window(windows: &[WindowFacts], asked_from: Option<usize>) -> Targ
     }
 }
 
+/// What the rule for folders needs to know about one window.
+pub struct FolderFacts {
+    /// The side panel already shows this folder as the window's chosen folder
+    pub has_folder: bool,
+    /// It's showing the "No Document Open" page with nothing on the way, and
+    /// no folder has been chosen in it
+    pub is_empty: bool,
+}
+
+/// Where a folder from outside LeafMD (`leafmd .`) should go. Like VS Code, a
+/// folder gets a window of its own, unless a window already shows it or one is
+/// sitting empty. `windows` is in the same order as for `choose_window`.
+pub fn choose_window_for_folder(windows: &[FolderFacts]) -> Target {
+    if let Some(position) = windows.iter().position(|window| window.has_folder) {
+        return Target::AlreadyOpen(position);
+    }
+    match windows.iter().rposition(|window| window.is_empty) {
+        Some(position) => Target::Use(position),
+        None => Target::NewWindow,
+    }
+}
+
 /// Where a tab being brought back at startup goes, given the order saved when
 /// the window closed and the tabs there now (their files, or None for a document
 /// with no file). They can arrive in any order, because each file is read by
@@ -60,7 +82,35 @@ pub fn restored_tab_position(saved: &[String], tabs: &[Option<String>], uri: &st
 
 #[cfg(test)]
 mod tests {
-    use super::{Target, WindowFacts, choose_window, restored_tab_position};
+    use super::{
+        FolderFacts, Target, WindowFacts, choose_window, choose_window_for_folder,
+        restored_tab_position,
+    };
+
+    const BUSY: FolderFacts = FolderFacts { has_folder: false, is_empty: false };
+    const WAITING: FolderFacts = FolderFacts { has_folder: false, is_empty: true };
+    const SHOWS_IT: FolderFacts = FolderFacts { has_folder: true, is_empty: false };
+
+    #[test]
+    fn a_folder_with_leafmd_not_running_makes_a_window() {
+        assert_eq!(choose_window_for_folder(&[]), Target::NewWindow);
+    }
+
+    #[test]
+    fn a_folder_gets_its_own_window_rather_than_joining_documents() {
+        assert_eq!(choose_window_for_folder(&[BUSY, BUSY]), Target::NewWindow);
+    }
+
+    #[test]
+    fn a_folder_uses_an_empty_window_the_most_recent_first() {
+        assert_eq!(choose_window_for_folder(&[WAITING, BUSY]), Target::Use(0));
+        assert_eq!(choose_window_for_folder(&[WAITING, WAITING]), Target::Use(1));
+    }
+
+    #[test]
+    fn a_folder_already_showing_is_brought_forward() {
+        assert_eq!(choose_window_for_folder(&[WAITING, SHOWS_IT]), Target::AlreadyOpen(1));
+    }
 
     const WITH_DOCUMENT: WindowFacts = WindowFacts { has_file: false, is_empty: false };
     const EMPTY: WindowFacts = WindowFacts { has_file: false, is_empty: true };

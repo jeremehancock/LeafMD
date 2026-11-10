@@ -107,11 +107,11 @@ LeafMD SHALL let the user drag a tab along the tab bar to change the order, onto
 - **THEN** todo.md opens in a new window of its own
 
 ### Requirement: Tabs in a narrow window
-In a window narrower than 640 pixels, the tab bar SHALL stay on its own row under the header bar. Tabs SHALL get narrower as more are opened and then scroll sideways, and the tab bar SHALL NOT stop the window from reaching 360 pixels wide.
+In a window narrower than 680 pixels, the tab bar SHALL stay on its own row under the header bar. Tabs SHALL get narrower as more are opened and then scroll sideways, and the tab bar SHALL NOT stop the window from reaching 360 pixels wide.
 
 #### Scenario: Several tabs at the smallest size
 - **WHEN** the window is 360 pixels wide and 8 documents are open
-- **THEN** the header bar still shows Open, the title, the main menu and the window's buttons, the tab bar scrolls sideways, and nothing is cut off
+- **THEN** the header bar still shows the side panel button, Open, the title, the main menu and the window's buttons, the tab bar scrolls sideways, and nothing is cut off
 
 #### Scenario: The selected tab stays in view
 - **WHEN** the window is 360 pixels wide with 8 tabs open and the user presses Alt+8

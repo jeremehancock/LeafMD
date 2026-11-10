@@ -2,9 +2,11 @@ mod dialog;
 mod document;
 mod file_change;
 mod find;
+mod folder_tree;
 mod format;
 mod opening;
 mod render;
+mod side_panel;
 mod state;
 mod typing;
 mod window;
@@ -178,10 +180,24 @@ fn main() -> glib::ExitCode {
         }
     });
 
-    // Files opened from the file manager or command line
-    app.connect_open(move |app, files, _hint| {
+    // Files and folders opened from the file manager or command line. Each
+    // folder opens in the side panel (`leafmd .`), and files given alongside
+    // one open as tabs in that folder's window.
+    app.connect_open(move |app, given, _hint| {
+        let is_folder = |file: &gio::File| {
+            file.query_file_type(gio::FileQueryInfoFlags::NONE, gio::Cancellable::NONE)
+                == gio::FileType::Directory
+        };
+        let (folders, files): (Vec<_>, Vec<_>) = given.iter().cloned().partition(is_folder);
+        let folder_window = folders
+            .into_iter()
+            .map(|folder| window::open_folder(app, &windows, folder))
+            .last();
         for file in files {
-            window::open_file(app, &windows, file.clone(), None, None);
+            match &folder_window {
+                Some(win) => win.open_file_here(file, None),
+                None => window::open_file(app, &windows, file, None, None),
+            }
         }
     });
 
@@ -193,6 +209,8 @@ fn set_shortcuts(app: &adw::Application) {
         ("win.new", &["<Control>t"]),
         ("win.new-window", &["<Control>n"]),
         ("win.open", &["<Control>o"]),
+        ("win.open-folder", &["<Control><Shift>o"]),
+        ("win.side-panel", &["F9"]),
         ("win.save", &["<Control>s"]),
         ("win.save-as", &["<Control><Shift>s"]),
         ("win.help", &["F1"]),

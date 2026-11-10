@@ -13,7 +13,9 @@ use sourceview5::prelude::*;
 use crate::document::{self, Document};
 use crate::file_change::FileBanner;
 use crate::find::FindBar;
-use crate::opening::{self, Target, WindowFacts};
+use crate::folder_tree::{self, FilesPage};
+use crate::opening::{self, FolderFacts, Target, WindowFacts};
+use crate::side_panel::SidePanel;
 use crate::state::{self, SavedState, ViewMode};
 
 /// When a file is opening, the longest LeafMD waits for the formatted view to
@@ -25,7 +27,7 @@ const ABOUT_TEXT: &str = "LeafMD is a markdown viewer and editor that keeps thin
 
 Read a document cleanly formatted, work directly in the raw text, or see both side by side and watch your changes appear as you type.
 
-Rather than trying to do everything, LeafMD focuses on doing the essentials well. There are no plugins to manage, panels to arrange or settings to tune. It is just a fast, dependable app that feels obvious from the moment you open it, so you can spend your time on your writing instead of your tools.
+Rather than trying to do everything, LeafMD focuses on doing the essentials well. There are no plugins to manage or settings to tune. It is just a fast, dependable app that feels obvious from the moment you open it, so you can spend your time on your writing instead of your tools.
 
 LeafMD was created with the help of AI.";
 
@@ -89,6 +91,26 @@ pub fn open_file(
     }
 }
 
+/// Opens a folder from outside LeafMD (`leafmd .`) in the side panel, in the
+/// window the rule in opening.rs picks, and returns that window.
+pub fn open_folder(app: &adw::Application, windows: &Windows, folder: gio::File) -> Rc<Window> {
+    let list = windows.borrow().clone();
+    let facts: Vec<FolderFacts> = list
+        .iter()
+        .map(|win| FolderFacts {
+            has_folder: win.has_folder(&folder),
+            is_empty: win.is_empty() && win.folder.borrow().is_none(),
+        })
+        .collect();
+    let win = match opening::choose_window_for_folder(&facts) {
+        Target::AlreadyOpen(position) | Target::Use(position) => list[position].clone(),
+        Target::NewWindow => Window::open_new(app, windows),
+    };
+    win.choose_folder(folder);
+    win.window.present();
+    win
+}
+
 pub struct Window {
     pub window: adw::ApplicationWindow,
     /// Every window, including this one, so this one can open files and find
@@ -142,6 +164,18 @@ pub struct Window {
     close_confirmed: Cell<bool>,
     /// The banner that says another app changed the open file
     pub file_banner: FileBanner,
+    /// Holds the side panel on the left and everything else on the right. In a
+    /// narrow window it's "collapsed": the panel slides over the document instead.
+    split: adw::OverlaySplitView,
+    side_panel: SidePanel,
+    /// The Files page of the side panel
+    files: Rc<FilesPage>,
+    /// The folder the user chose for this window (with `leafmd .` or Open
+    /// Folder…). Until there is one, the Files page shows the selected document's.
+    folder: RefCell<Option<gio::File>>,
+    /// Whether the side panel should be beside the document when the window is
+    /// wide enough. In a narrow window it only slides out when asked.
+    panel_wanted: Cell<bool>,
 }
 
 impl Window {
@@ -183,6 +217,18 @@ impl Window {
         let header = adw::HeaderBar::new();
         header.set_title_widget(Some(&title));
 
+        // Opens and closes the side panel. It stays pressed in while the panel
+        // shows, because the "side-panel" action it runs is a yes or no setting.
+        // It's at the far left, nearest the panel, and stays in the header bar
+        // in narrow windows.
+        header.pack_start(
+            &gtk::ToggleButton::builder()
+                .icon_name("leafmd-side-panel-symbolic")
+                .tooltip_text("Side panel (F9)")
+                .action_name("win.side-panel")
+                .build(),
+        );
+
         // "Open" with a small arrow beside it that lists recent files. A word instead
         // of an icon, because folder icons vary a lot between icon themes.
         let recent_menu = gio::Menu::new();
@@ -213,6 +259,7 @@ impl Window {
         file_section.append(Some("New"), Some("win.new"));
         file_section.append(Some("New Window"), Some("win.new-window"));
         file_section.append(Some("Open…"), Some("win.open"));
+        file_section.append(Some("Open Folder…"), Some("win.open-folder"));
         file_section.append(Some("Close Document"), Some("win.close-document"));
         let save_section = gio::Menu::new();
         save_section.append(Some("Save"), Some("win.save"));
@@ -220,6 +267,9 @@ impl Window {
         let find_section = gio::Menu::new();
         find_section.append(Some("Find…"), Some("win.find"));
         find_section.append(Some("Find and Replace…"), Some("win.find-replace"));
+        // Shows a tick while the panel is open, because the action is a yes or no
+        let panel_section = gio::Menu::new();
+        panel_section.append(Some("Side Panel"), Some("win.side-panel"));
         let app_section = gio::Menu::new();
         app_section.append(Some("Help"), Some("win.help"));
         app_section.append(Some("Markdown Cheatsheet"), Some("win.cheatsheet"));
@@ -229,6 +279,7 @@ impl Window {
         menu.append_section(None, &file_section);
         menu.append_section(None, &save_section);
         menu.append_section(None, &find_section);
+        menu.append_section(None, &panel_section);
         menu.append_section(None, &app_section);
         header.pack_end(
             &gtk::MenuButton::builder()
@@ -343,26 +394,58 @@ impl Window {
         toolbar_view.add_top_bar(&format_bar);
         toolbar_view.add_top_bar(&find.bar);
         toolbar_view.set_content(Some(&toasts));
-        window.set_content(Some(&toolbar_view));
+
+        // ---- Side panel ----
+        let files = FilesPage::new();
+        let side_panel = SidePanel::new();
+        side_panel.add_page("files", "Files", "leafmd-folder-symbolic", &files.widget);
+        let panel_wanted = state::load_panel_open();
+        let split = adw::OverlaySplitView::builder()
+            .sidebar(&side_panel.widget)
+            .content(&toolbar_view)
+            .min_sidebar_width(240.0)
+            .max_sidebar_width(240.0)
+            .show_sidebar(panel_wanted)
+            // LeafMD decides when the panel shows as the window changes width
+            // (see setup_panel_signals), rather than libadwaita reopening it
+            // every time the window gets wide again
+            .pin_sidebar(true)
+            .build();
+        window.set_content(Some(&split));
+
+        // Below 920 pixels the panel would squeeze the document, so it slides
+        // over it instead. This keeps the document at least 680 pixels wide
+        // whenever the panel is beside it, which the header bar needs.
+        let narrow = adw::Breakpoint::new(
+            adw::BreakpointCondition::parse("max-width: 919sp")
+                .expect("the width rule is written correctly"),
+        );
+        narrow.add_setter(&split, "collapsed", Some(&true.to_value()));
+        window.add_breakpoint(narrow);
 
         // ---- Compact layout for narrow windows ----
-        // Below 640 pixels the header bar can't hold everything, so these buttons
+        // Below 680 pixels the header bar can't hold everything, so these buttons
         // move to a bar along the bottom. "sp" grows with GNOME's Large Text
         // setting, because the wide layout's words get wider with it too.
         //
         // Having a breakpoint also means the window's smallest size comes from
         // width_request above, rather than from what's inside it. So the wide
-        // layout has to fit in 640 pixels or its edges get cut off. It needs
-        // about 614 on a desktop with minimize and maximize buttons. Anything
+        // layout has to fit in 680 pixels or its edges get cut off. It needs
+        // about 650 on a desktop with minimize and maximize buttons. Anything
         // added to the header bar eats into that, and also needs moving here.
+        //
+        // Only one breakpoint applies at a time, the last one added that fits,
+        // so this one also slides the side panel over the document, like the
+        // one above.
         let bottom_bar = gtk::ActionBar::new();
         bottom_bar.set_visible(false);
         toolbar_view.add_bottom_bar(&bottom_bar);
         let compact = adw::Breakpoint::new(
-            adw::BreakpointCondition::parse("max-width: 639sp")
+            adw::BreakpointCondition::parse("max-width: 679sp")
                 .expect("the width rule is written correctly"),
         );
         compact.add_setter(&bottom_bar, "visible", Some(&true.to_value()));
+        compact.add_setter(&split, "collapsed", Some(&true.to_value()));
         find.add_compact_rules(&compact);
         {
             // The real buttons move, rather than there being a copy in each place,
@@ -443,6 +526,11 @@ impl Window {
             last_view: Cell::new(saved.view),
             close_confirmed: Cell::new(false),
             file_banner,
+            split,
+            side_panel,
+            files,
+            folder: RefCell::new(None),
+            panel_wanted: Cell::new(panel_wanted),
         });
 
         win.setup_actions(saved.view);
@@ -474,6 +562,7 @@ impl Window {
             win.new_sibling_window();
         });
         add("open", |win| win.ask_open());
+        add("open-folder", |win| win.ask_open_folder());
         add("close-document", |win| win.ask_close_document());
         add("close-tab", |win| win.close_tab());
         add("clear-recent", |win| win.clear_recent());
@@ -557,6 +646,20 @@ impl Window {
             self.window.add_action(&option);
         }
 
+        // The side panel: on or off. The button and the menu item show its state.
+        let panel = gio::SimpleAction::new_stateful(
+            "side-panel",
+            None,
+            &self.split.shows_sidebar().to_variant(),
+        );
+        let weak = Rc::downgrade(self);
+        panel.connect_activate(move |_, _| {
+            if let Some(win) = weak.upgrade() {
+                win.toggle_panel();
+            }
+        });
+        self.window.add_action(&panel);
+
         // "view" remembers which of the three views is active
         let view = gio::SimpleAction::new_stateful(
             "view",
@@ -592,6 +695,7 @@ impl Window {
 
     fn setup_signals(self: &Rc<Self>) {
         self.setup_tab_signals();
+        self.setup_panel_signals();
 
         // The banner's buttons act on the document it's showing
         let weak = Rc::downgrade(self);
@@ -641,6 +745,11 @@ impl Window {
                 win.reload_recent();
                 if let Some(doc) = win.current() {
                     doc.schedule_file_check();
+                }
+                // A folder outside the home folder doesn't send change notices,
+                // so the tree catches up with changes made in other apps now
+                if win.split.shows_sidebar() {
+                    win.files.catch_up();
                 }
             }
         });
@@ -697,6 +806,185 @@ impl Window {
             }
             glib::Propagation::Proceed
         });
+    }
+
+    // =====================================================================
+    // Side panel
+    // =====================================================================
+
+    fn setup_panel_signals(self: &Rc<Self>) {
+        // The panel showing or hiding, by any route: the button, the menu and
+        // F9 follow it, and the Files page catches up if it was out of date
+        let weak = Rc::downgrade(self);
+        self.split.connect_show_sidebar_notify(move |split| {
+            if let Some(win) = weak.upgrade() {
+                win.action("side-panel").set_state(&split.shows_sidebar().to_variant());
+                win.update_files_page();
+            }
+        });
+
+        // The window getting narrow enough that the panel slides over the
+        // document, or wide enough for it to sit beside it again. Narrow, the
+        // panel tucks away, and only comes out when asked. Wide, it's back if
+        // the user had it open.
+        let weak = Rc::downgrade(self);
+        self.split.connect_collapsed_notify(move |split| {
+            if let Some(win) = weak.upgrade() {
+                split.set_show_sidebar(!split.is_collapsed() && win.panel_wanted.get());
+            }
+        });
+
+        // Escape tucks the panel away while it's over the document. Checked
+        // before anything else sees the key, so it doesn't also close the find bar.
+        let keys = gtk::EventControllerKey::new();
+        keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+        let weak = Rc::downgrade(self);
+        keys.connect_key_pressed(move |_, key, _, _| {
+            match weak.upgrade() {
+                Some(win)
+                    if key == gdk::Key::Escape
+                        && win.split.is_collapsed()
+                        && win.split.shows_sidebar() =>
+                {
+                    win.split.set_show_sidebar(false);
+                    // Typing goes back to the document the panel was covering
+                    if let Some(doc) = win.current() {
+                        win.focus_document(&doc);
+                    }
+                    glib::Propagation::Stop
+                }
+                _ => glib::Propagation::Proceed,
+            }
+        });
+        self.window.add_controller(keys);
+
+        // Picking a file in the tree opens it like any file opened from this
+        // window. Over the document, the panel then tucks away.
+        let weak = Rc::downgrade(self);
+        self.files.connect_open(move |file| {
+            if let Some(win) = weak.upgrade() {
+                win.open_file_here(file, None);
+                if win.split.is_collapsed() {
+                    win.split.set_show_sidebar(false);
+                }
+            }
+        });
+    }
+
+    /// F9, the panel button or Side Panel in the menu. In a wide window this
+    /// is remembered, for this window, new windows and next time. In a narrow
+    /// one the panel is only sliding out for a moment, so nothing changes.
+    fn toggle_panel(&self) {
+        let show = !self.split.shows_sidebar();
+        if !self.split.is_collapsed() {
+            self.panel_wanted.set(show);
+            state::save_panel_open(show);
+        }
+        self.split.set_show_sidebar(show);
+    }
+
+    /// Shows the side panel and remembers it as open, for Open Folder… and
+    /// `leafmd .`, which ask to see a folder. That includes sliding it over
+    /// the document in a narrow window.
+    fn show_panel_for_folder(self: &Rc<Self>) {
+        self.panel_wanted.set(true);
+        state::save_panel_open(true);
+        self.split.set_show_sidebar(true);
+        // A window that isn't on screen yet doesn't know its width. If it turns
+        // out narrow, the panel tucks away as it appears, so it's brought out
+        // again once the window is showing.
+        if !self.window.is_mapped() {
+            let weak = Rc::downgrade(self);
+            let handler: Rc<Cell<Option<glib::SignalHandlerId>>> = Rc::default();
+            let id = {
+                let handler = handler.clone();
+                self.window.connect_map(move |window| {
+                    if let Some(id) = handler.take() {
+                        window.disconnect(id);
+                    }
+                    let weak = weak.clone();
+                    glib::idle_add_local_once(move || {
+                        if let Some(win) = weak.upgrade() {
+                            win.split.set_show_sidebar(true);
+                        }
+                    });
+                })
+            };
+            handler.set(Some(id));
+        }
+    }
+
+    /// Makes `folder` this window's chosen folder and shows it in the panel.
+    pub fn choose_folder(self: &Rc<Self>, folder: gio::File) {
+        *self.folder.borrow_mut() = Some(folder);
+        self.show_panel_for_folder();
+        self.update_files_page();
+    }
+
+    /// Whether this window's chosen folder is this one.
+    pub fn has_folder(&self, folder: &gio::File) -> bool {
+        self.folder.borrow().as_ref().is_some_and(|chosen| chosen.equal(folder))
+    }
+
+    /// Open Folder…: lets the user pick a folder for the side panel. The
+    /// picker shares it with LeafMD wherever it is, including outside home.
+    fn ask_open_folder(self: &Rc<Self>) {
+        // Start somewhere real: the tree's folder or the document's, else the
+        // home folder. Only folders in the home folder are used, because the
+        // dialog runs outside the sandbox and LeafMD's paths elsewhere (like a
+        // folder shared through the portal) don't mean the same thing there.
+        let home = gio::File::for_path(glib::home_dir());
+        let near = self
+            .files
+            .root()
+            .map(|(folder, _)| folder)
+            .or_else(|| self.current().and_then(|doc| doc.file.borrow().as_ref()?.parent()));
+        let start = near.filter(|folder| folder.has_prefix(&home) || folder.equal(&home)).unwrap_or(home);
+        let win = self.clone();
+        glib::spawn_future_local(async move {
+            let dialog = gtk::FileDialog::builder()
+                .title("Open Folder")
+                .modal(true)
+                .initial_folder(&start)
+                .build();
+            if let Ok(folder) = dialog.select_folder_future(Some(&win.window)).await {
+                win.choose_folder(folder);
+            }
+        });
+    }
+
+    /// Points the Files page at the folder to show (see
+    /// `folder_tree::folder_to_show` for the rules), and highlights the
+    /// selected tab's file. Nothing is read while the panel is hidden; it
+    /// catches up when shown.
+    fn update_files_page(self: &Rc<Self>) {
+        if !self.split.shows_sidebar() {
+            return;
+        }
+        let current = self.current().filter(|_| {
+            self.stack.visible_child_name().as_deref() == Some("document")
+        });
+        let file = current.and_then(|doc| doc.file.borrow().clone());
+        let chosen = self.folder.borrow().clone();
+        let showing = self.files.root().filter(|(_, was_chosen)| !was_chosen).map(|(folder, _)| folder);
+        // A new Untitled document has no folder, and nor does a tab for a few
+        // moments while its file is read. The tree stays where it is for those.
+        let has_document = self.tab_view.n_pages() > 0;
+        let (folder, is_chosen) = folder_tree::folder_to_show(
+            chosen.as_ref(),
+            file.as_ref(),
+            showing.as_ref(),
+            has_document,
+            folder_tree::can_show_unchosen,
+        );
+        self.files.set_root(folder.as_ref(), is_chosen);
+        let title = folder
+            .as_ref()
+            .and_then(|folder| folder.basename())
+            .map(|name| name.display().to_string())
+            .unwrap_or_else(|| "Files".to_string());
+        self.side_panel.set_title(&title);
+        self.files.set_highlight(file);
     }
 
     // =====================================================================
@@ -1917,6 +2205,12 @@ impl Window {
         self.current().is_some_and(|current| std::ptr::eq(&*current, doc))
     }
 
+    /// This window as the shared handle the rest of LeafMD holds. None while
+    /// it's being built or after it has closed.
+    fn rc(&self) -> Option<Rc<Self>> {
+        self.windows.borrow().iter().find(|win| std::ptr::eq(&***win, self)).cloned()
+    }
+
     fn action(&self, name: &str) -> gio::SimpleAction {
         self.window
             .lookup_action(name)
@@ -1926,6 +2220,10 @@ impl Window {
 
 
     pub fn update_title(&self) {
+        // The side panel follows the document whose name is showing
+        if let Some(win) = self.rc() {
+            win.update_files_page();
+        }
         let Some(doc) = self.current().filter(|_| {
             self.stack.visible_child_name().as_deref() == Some("document")
         }) else {
@@ -1962,7 +2260,7 @@ impl Window {
         const TERMINAL_ROW: &str = "From a terminal";
         const TERMINAL_SETUP_URL: &str = "https://leafmd.app/#terminal";
         let page = adw::PreferencesPage::new();
-        let sections: [(&str, &[(&str, &str)]); 6] = [
+        let sections: [(&str, &[(&str, &str)]); 7] = [
             (
                 "The Three Views",
                 &[
@@ -1993,6 +2291,17 @@ impl Window {
                 ],
             ),
             (
+                "Side Panel",
+                &[
+                    ("Opening the panel", "Press F9, click the button at the left end of the header bar, or choose Side Panel from the main menu. The panel stays open, in every window and next time you start LeafMD, until you close it the same way."),
+                    ("Files", "The panel shows a folder as a tree. Click a folder to open or close it, and click a file to open it in a tab. The open document's file is highlighted. The arrow keys move around the tree, Right and Left open and close folders, and Enter opens a file."),
+                    ("Which folder", "Until you choose a folder, the panel shows the folder of the document you're looking at, and moves when you switch to a document somewhere else. Open Folder… in the main menu (Ctrl+Shift+O), or leafmd . in a terminal, chooses a folder for the window. The panel shows it whenever you're looking at a document inside it, until you close the window."),
+                    ("Greyed-out files", "Images, PDFs and other files that aren't text are greyed out, because LeafMD can't open them. Hidden files, like .git, aren't listed."),
+                    ("Folders LeafMD can't see", "When you open a document from outside your home folder, LeafMD is given that one file, not the folder it's in. Choose the folder with Open Folder… to show its other files."),
+                    ("Narrow windows", "When the window is narrow, the panel slides over the document instead of sitting beside it, and tucks away when you pick a file or press Escape."),
+                ],
+            ),
+            (
                 "Formatting",
                 &[
                     ("Formatting bar", "In Raw and Split view, a row of buttons above the text adds markdown for you. Select some text and press Bold, for example, to put ** around it."),
@@ -2013,7 +2322,7 @@ impl Window {
                 "Files and Links",
                 &[
                     ("Opening files", "Use Open, drop a file onto the window, or double-click a markdown file in your file manager. It opens in a new tab, in the LeafMD window you used last."),
-                    (TERMINAL_ROW, "Type leafmd notes.md in a terminal to open a file. It takes a one-time setup, and Setup shows you how."),
+                    (TERMINAL_ROW, "Type leafmd notes.md in a terminal to open a file, or leafmd . to open the folder you're in, in the side panel. It takes a one-time setup, and Setup shows you how."),
                     ("Recent files", "The arrow next to Open lists the files you opened recently. When you start LeafMD, it reopens the saved files from the window you closed last, in the same tabs. Clear Recent Files empties the list, and LeafMD then has nothing to reopen."),
                     ("Closing a document", "Close Document in the main menu closes the selected tab. If it's the last one, the window stays open and LeafMD starts with no document next time. Closing the window instead (Ctrl+W on the last tab, or Ctrl+Q) brings its files back next time."),
                     ("Changes from other apps", "If another app changes or deletes the open file, a banner appears across the top of the window, and nothing changes until you choose. Reload brings in the new version, and Ignore keeps what you have. If you save a file that changed without you noticing, LeafMD asks first."),
@@ -2069,6 +2378,7 @@ impl Window {
                     ("Formatted view", "Ctrl+1"),
                     ("Raw text", "Ctrl+2"),
                     ("Split view", "Ctrl+3"),
+                    ("Side panel", "F9"),
                 ],
             ),
             (
@@ -2077,6 +2387,7 @@ impl Window {
                     ("New document", "Ctrl+T"),
                     ("New window", "Ctrl+N"),
                     ("Open", "Ctrl+O"),
+                    ("Open folder", "Ctrl+Shift+O"),
                     ("Save", "Ctrl+S"),
                     ("Save as", "Ctrl+Shift+S"),
                     ("Close window", "Ctrl+Q"),

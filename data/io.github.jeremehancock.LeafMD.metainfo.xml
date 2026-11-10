@@ -18,13 +18,14 @@
     </p>
     <p>
       Rather than trying to do everything, LeafMD focuses on doing the essentials
-      well. There are no plugins to manage, panels to arrange or settings to tune,
+      well. There are no plugins to manage or settings to tune,
       just a fast, dependable app that feels obvious from the moment you open it.
     </p>
     <ul>
       <li>Switch between formatted, raw and split views with one click or Ctrl+1, 2 and 3</li>
       <li>A formatted-only view for pure, distraction-free reading</li>
       <li>Tabs keep several documents in one window, and reopen when you start LeafMD again</li>
+      <li>An optional side panel shows the folder you're working in as a tree, for moving between documents</li>
       <li>Edit the raw text with the formatted view updating as you type</li>
       <li>A formatting bar adds bold, links, lists, headings, tables and more for you</li>
       <li>Lists continue themselves when you press Enter, and pasting a web address over text makes a link</li>
@@ -33,7 +34,7 @@
       <li>A banner tells you when another app changes your file, and nothing is overwritten without asking</li>
       <li>In split view, both sides scroll together</li>
       <li>Supports tables, task lists, footnotes and other GitHub-style markdown</li>
-      <li>Open files from a terminal with an optional short leafmd command</li>
+      <li>Open files, or a whole folder with leafmd ., from a terminal with an optional short leafmd command</li>
       <li>Follows your system's light or dark style</li>
     </ul>
   </description>
@@ -96,6 +97,19 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.7.0" date="2026-11-10">
+      <description>
+        <p>LeafMD now has a side panel that shows the folder you're working in, so the next document is one click away.</p>
+        <ul>
+          <li>Press F9, or click the new button at the left of the header bar, to open the side panel. It stays open until you close it</li>
+          <li>The panel shows a folder as a tree. Click a file to open it in a tab. The document you're looking at is highlighted</li>
+          <li>The tree follows the document you're looking at. To keep one folder in the panel while you work in it, choose it with Open Folder… (Ctrl+Shift+O) or run leafmd . in a terminal</li>
+          <li>Images, PDFs and other files LeafMD can't open are greyed out, and hidden files aren't listed</li>
+          <li>In a narrow window, the panel slides over the document</li>
+          <li>Split view now always starts with the divider in the middle, even after reopening a maximized window</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.6.0" date="2026-11-06">
       <description>
         <p>LeafMD now has tabs, so one window can hold everything you're working on.</p>

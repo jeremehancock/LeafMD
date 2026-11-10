@@ -1,0 +1,51 @@
+//! The side panel on the left of each window. It holds pages (only Files for
+//! now), shows one at a time, and has its own small header bar with a title.
+//!
+//! Showing, hiding and remembering the panel is the window's job (window.rs),
+//! because it depends on the window's width. This file only builds what's
+//! inside the panel, so a later feature can add a page with one call.
+
+use adw::prelude::*;
+
+pub struct SidePanel {
+    /// The whole panel, which the window puts in its split view
+    pub widget: adw::ToolbarView,
+    /// The title at the top of the panel, set by the page that's showing
+    title: adw::WindowTitle,
+    /// The pages, one showing at a time
+    stack: adw::ViewStack,
+    /// The bar for switching pages. Hidden while there's only one page, since
+    /// there's nothing to switch to.
+    switcher_bar: adw::ViewSwitcherBar,
+}
+
+impl SidePanel {
+    pub fn new() -> Self {
+        let title = adw::WindowTitle::new("Files", "");
+        let header = adw::HeaderBar::new();
+        header.set_title_widget(Some(&title));
+
+        let stack = adw::ViewStack::new();
+        // Along the bottom of the panel, like GNOME apps do in narrow spaces
+        let switcher_bar = adw::ViewSwitcherBar::builder().stack(&stack).build();
+
+        let widget = adw::ToolbarView::new();
+        widget.add_top_bar(&header);
+        widget.set_content(Some(&stack));
+        widget.add_bottom_bar(&switcher_bar);
+
+        Self { widget, title, stack, switcher_bar }
+    }
+
+    /// Adds a page. `name` is how LeafMD refers to it, `title` and `icon` are
+    /// what the page switcher shows once there are two or more pages.
+    pub fn add_page(&self, name: &str, title: &str, icon: &str, child: &impl IsA<gtk::Widget>) {
+        self.stack.add_titled_with_icon(child, Some(name), title, icon);
+        self.switcher_bar.set_reveal(self.stack.pages().n_items() > 1);
+    }
+
+    /// Sets the title at the top of the panel, like the folder's name for Files.
+    pub fn set_title(&self, title: &str) {
+        self.title.set_title(title);
+    }
+}
