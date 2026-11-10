@@ -420,22 +420,46 @@ impl Document {
         self.webview.set_visible(show_preview);
 
         if mode == ViewMode::Split {
-            // Split down the middle. Before the window is drawn its width is 0,
-            // so fall back to the window's planned width.
-            let width = match self.paned.width() {
-                0 => self.window().map_or(0, |win| match win.window.width() {
-                    0 => win.window.default_size().0,
-                    width => width,
-                }),
-                w => w,
-            };
-            self.paned.set_position(width / 2);
+            self.split_down_the_middle();
         }
         if show_preview {
             // The preview isn't updated while hidden, so catch it up now
             self.render_now();
         }
         self.tell_preview_view_mode();
+    }
+
+    /// Puts the divider between the raw text and the formatted view halfway
+    /// across.
+    ///
+    /// Until the split has been laid out on screen it has no width, which is
+    /// the case while LeafMD is starting and for tabs that haven't been
+    /// selected yet. Guessing from the window's size goes wrong then: a
+    /// window that opens maximized still reports its smaller, unmaximized
+    /// size, and the side panel takes some of the width. So instead this
+    /// waits for the split's first frame on screen, when its real width is
+    /// known, and centres the divider then.
+    fn split_down_the_middle(&self) {
+        let width = self.paned.width();
+        if width > 0 {
+            self.paned.set_position(width / 2);
+            return;
+        }
+        // Called once per frame while the split is on screen, until it
+        // returns Break
+        self.paned.add_tick_callback(|paned, _| {
+            let width = paned.width();
+            if width == 0 {
+                return glib::ControlFlow::Continue;
+            }
+            // Only if it's still split view: both sides showing
+            let both_showing = paned.start_child().is_some_and(|side| side.is_visible())
+                && paned.end_child().is_some_and(|side| side.is_visible());
+            if both_showing {
+                paned.set_position(width / 2);
+            }
+            glib::ControlFlow::Break
+        });
     }
 
     /// Double-click on the formatted side only jumps to the raw text in split view.
