@@ -30,12 +30,15 @@ Each feature is planned in detail with [OpenSpec](https://github.com/Fission-AI/
 - [x] **Distraction-free mode:** one switch (Ctrl+Shift+D, or the main menu) that hides the header bar, tabs, formatting bar, side panel and line numbers, leaving just your document. The bars slide back in when the pointer reaches the window's edge. Each window starts with it off. Full screen (F11) is separate, and the two can be used together
 - [ ] **Font and text size:** choose the font and size for the raw text and for the formatted view, in a small Preferences window. LeafMD's description promises "no settings to tune", so that wording changes with this
 - [x] **Reload when the file changes:** if another app changes the open file, LeafMD shows the new version. If there are unsaved changes too, it asks which to keep instead of overwriting anything
-- [ ] **Zoom:** Ctrl+plus, Ctrl+minus and Ctrl+0 make the text bigger, smaller or back to normal in both views, for a quick change without opening Preferences
-- [ ] **Word count:** the number of words (and reading time) shown somewhere unobtrusive
+- [ ] **Zoom:** Ctrl+plus, Ctrl+minus and Ctrl+0 make the text bigger, smaller or back to normal in both views, for a quick change without opening Preferences. Planned for the same release as Font and text size, since both change the same text size
+- [ ] **Headings in the side panel:** a Headings page in the side panel listing the document's headings, indented to match their level. Clicking one jumps to that section. It's the panel's second page, so it also adds a way to switch between Files and Headings
+- [ ] **Word count:** the number of words (and reading time) shown somewhere unobtrusive. Planned for the same release as Headings, since both keep track of what's in the document as you type
 - [x] **Tabs:** several documents in one window, with links and opened files getting a tab of their own, tabs that can be dragged between windows, and all of them reopening next time
 - [x] **Side panel with a folder tree** (F9): a panel on the left showing the folder you're working in, for moving between documents. `leafmd .` opens a folder in it from a terminal, and Open Folder… chooses one. It's closed until you open it, then stays open until you close it, and it's built so later features can add pages to it
 
 ## 5. Sharing
+
+These three are planned as one release, since they all start from the formatted document and Print and Export to PDF share most of their work.
 
 - [ ] **Print** (Ctrl+P): prints the formatted document
 - [ ] **Export to PDF:** saves the formatted document as a PDF
@@ -62,7 +65,6 @@ Each feature is planned in detail with [OpenSpec](https://github.com/Fission-AI/
 These might fit LeafMD, or might add more than they're worth. Each one needs a decision before it moves up.
 
 - Spell checking in the raw text
-- A headings menu for jumping to a section of a long document
 - Coloured syntax highlighting inside code blocks in the formatted view
 - Remembering where you were scrolled to in each file
 - Dropping an image onto the raw text inserts a markdown image link
