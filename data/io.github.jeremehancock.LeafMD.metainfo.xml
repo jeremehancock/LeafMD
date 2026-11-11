@@ -100,6 +100,17 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.11.0" date="2026-11-11">
+      <description>
+        <p>Make room for long names in the side panel.</p>
+        <ul>
+          <li>Drag the line between the side panel and the document to make the panel wider or narrower. LeafMD remembers the width for new windows and next time</li>
+          <li>When the window gets narrower, the panel shrinks first, so the document keeps its room</li>
+          <li>Hover over a file or folder in the side panel to see its whole name</li>
+          <li>Fixed LeafMD closing when a link was clicked on a desktop with nothing set up to open it. It now says it couldn't open the link</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.10.0" date="2026-11-11">
       <description>
         <p>Find your way around a document, and see how long it is.</p>
