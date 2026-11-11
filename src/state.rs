@@ -219,6 +219,56 @@ pub fn save_line_numbers(show: bool) {
     update_state_file(|file| file.set_boolean(EDITOR_GROUP, "line-numbers", show));
 }
 
+const PREFERENCES_GROUP: &str = "preferences";
+
+/// Which of the two fonts in Preferences.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum FontFor {
+    /// The raw text editor
+    Raw,
+    /// The formatted view
+    Formatted,
+}
+
+impl FontFor {
+    fn key(self) -> &'static str {
+        match self {
+            FontFor::Raw => "raw-font",
+            FontFor::Formatted => "formatted-font",
+        }
+    }
+}
+
+/// The font the user chose in Preferences, as a font description such as
+/// "Fira Code 12". None means they never chose one (or pressed Reset), so the
+/// starting font is used.
+pub fn load_font(which: FontFor) -> Option<String> {
+    let file = glib::KeyFile::new();
+    file.load_from_file(state_path(), glib::KeyFileFlags::NONE)
+        .ok()?;
+    font_in(&file, which)
+}
+
+fn font_in(file: &glib::KeyFile, which: FontFor) -> Option<String> {
+    let font = file.string(PREFERENCES_GROUP, which.key()).ok()?;
+    let font = font.trim();
+    (!font.is_empty()).then(|| font.to_string())
+}
+
+/// Remembers a font chosen in Preferences, or with None forgets it (Reset).
+pub fn save_font(which: FontFor, font: Option<&str>) {
+    update_state_file(|file| set_font_in(file, which, font));
+}
+
+fn set_font_in(file: &glib::KeyFile, which: FontFor, font: Option<&str>) {
+    match font {
+        Some(font) => file.set_string(PREFERENCES_GROUP, which.key(), font),
+        None => {
+            let _ = file.remove_key(PREFERENCES_GROUP, which.key());
+        }
+    }
+}
+
 /// Some files that belong in tabs, and which one is selected.
 #[derive(Debug, PartialEq)]
 pub struct TabList {
@@ -304,7 +354,10 @@ fn update_state_file(change: impl FnOnce(&glib::KeyFile)) {
 
 #[cfg(test)]
 mod tests {
-    use super::{TabList, line_numbers_in, panel_open_in, tabs_to_reopen, tabs_to_save};
+    use super::{
+        FontFor, TabList, font_in, line_numbers_in, panel_open_in, set_font_in, tabs_to_reopen,
+        tabs_to_save,
+    };
     use gtk::glib;
 
     fn key_file(text: &str) -> glib::KeyFile {
@@ -327,6 +380,26 @@ mod tests {
         assert!(!line_numbers_in(&key_file("[editor]\nline-numbers=false\n")));
         assert!(!line_numbers_in(&key_file("[editor]\nline-numbers=maybe\n")));
         assert!(line_numbers_in(&key_file("[editor]\nline-numbers=true\n")));
+    }
+
+    #[test]
+    fn fonts_start_unchosen() {
+        let file = key_file("[window]\nview=split\n");
+        assert_eq!(font_in(&file, FontFor::Raw), None);
+        assert_eq!(font_in(&file, FontFor::Formatted), None);
+        assert_eq!(font_in(&key_file("[preferences]\nraw-font=\n"), FontFor::Raw), None);
+    }
+
+    #[test]
+    fn a_chosen_font_comes_back_and_reset_forgets_it() {
+        let file = key_file("[window]\nview=split\n");
+        set_font_in(&file, FontFor::Raw, Some("Fira Code 12"));
+        assert_eq!(font_in(&file, FontFor::Raw).as_deref(), Some("Fira Code 12"));
+        assert_eq!(font_in(&file, FontFor::Formatted), None);
+        set_font_in(&file, FontFor::Raw, None);
+        assert_eq!(font_in(&file, FontFor::Raw), None);
+        // Forgetting a font that was never chosen is fine too
+        set_font_in(&file, FontFor::Formatted, None);
     }
 
     fn list(names: &[&str]) -> Vec<String> {

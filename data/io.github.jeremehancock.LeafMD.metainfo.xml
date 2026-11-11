@@ -18,8 +18,8 @@
     </p>
     <p>
       Rather than trying to do everything, LeafMD focuses on doing the essentials
-      well. There are no plugins to manage or settings to tune,
-      just a fast, dependable app that feels obvious from the moment you open it.
+      well. It is ready to use the moment you open it, and the few options it has
+      stay out of your way, so you can focus on reading and writing.
     </p>
     <ul>
       <li>Switch between formatted, raw and split views with one click or Ctrl+1, 2 and 3</li>
@@ -35,6 +35,7 @@
       <li>In split view, both sides scroll together</li>
       <li>Supports tables, task lists, footnotes and other GitHub-style markdown</li>
       <li>Open files, or a whole folder with leafmd ., from a terminal with an optional short leafmd command</li>
+      <li>Choose the fonts for the raw text and the formatted view, or zoom in and out with Ctrl+plus and Ctrl+minus</li>
       <li>Looks at home on GNOME, following your light or dark style and your accent colour</li>
     </ul>
   </description>
@@ -97,6 +98,16 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.9.0" date="2026-11-10">
+      <description>
+        <p>Make the text the size and style you like.</p>
+        <ul>
+          <li>Preferences (Ctrl+, or the main menu) lets you choose the font, style and size for the raw text and for the formatted view. Changes show straight away in every window, and Reset puts a font back</li>
+          <li>Zoom in and out with Ctrl+Plus and Ctrl+Minus, or hold Ctrl and turn the mouse wheel. Ctrl+0 goes back to normal, and the top of the main menu shows how far you've zoomed</li>
+          <li>Zoom covers every tab in a window, and starts at 100% each time LeafMD opens</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.8.0" date="2026-11-10">
       <description>
         <p>LeafMD has a fresh look that fits right in with GNOME, and a Distraction Free mode for when you just want your words.</p>

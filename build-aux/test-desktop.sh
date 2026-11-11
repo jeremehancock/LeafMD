@@ -382,6 +382,26 @@ click_window() { # <x> <y>
 }
 
 # Closes the focused window the way its close button does
+# Turns the mouse wheel one notch over wherever the pointer is (see
+# move_pointer), holding Ctrl if asked. Ctrl goes down a moment before the
+# wheel turns: pressed at the same instant, GTK didn't see it held.
+wheel() { # <up or down> [ctrl]
+    local direction=${1^^}
+    if [[ "${2:-}" == ctrl ]]; then
+        in_shell 'const C = imports.gi.Clutter;
+            globalThis.keyboard.notify_keyval(0, C.KEY_Control_L, C.KeyState.PRESSED); 0' > /dev/null
+        sleep 0.3
+    fi
+    in_shell "const C = imports.gi.Clutter;
+        globalThis.pointer.notify_discrete_scroll(0, C.ScrollDirection.$direction, C.ScrollSource.WHEEL); 0" > /dev/null
+    sleep 0.3
+    if [[ "${2:-}" == ctrl ]]; then
+        in_shell 'const C = imports.gi.Clutter;
+            globalThis.keyboard.notify_keyval(0, C.KEY_Control_L, C.KeyState.RELEASED); 0' > /dev/null
+    fi
+    sleep 0.3
+}
+
 close_window() {
     local before
     before=$(window_count)

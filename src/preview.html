@@ -34,7 +34,12 @@
   body {
     margin: 0;
     padding: 40px 28px 72px;
-    font: 16px/1.7 "Adwaita Sans", system-ui, Cantarell, "Noto Sans", sans-serif;
+    /* The font and size come from Preferences and the window's zoom: LeafMD
+       sets them as WebKit's "sans-serif" font and default size */
+    font: 1em/1.7 sans-serif;
+    /* The font's weight and slant from Preferences, such as Italic */
+    font-weight: var(--leafmd-weight, 400);
+    font-style: var(--leafmd-style, normal);
   }
   ::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); }
   #content { max-width: 44em; margin: 0 auto; overflow-wrap: break-word; }
@@ -55,7 +60,8 @@
     text-underline-offset: 3px;
   }
   a:hover { text-decoration-color: currentColor; }
-  code, pre { font-family: "Adwaita Mono", "Source Code Pro", "DejaVu Sans Mono", monospace; }
+  /* Code stays upright even when the chosen font is Italic */
+  code, pre { font-family: "Adwaita Mono", "Source Code Pro", "DejaVu Sans Mono", monospace; font-style: normal; }
   code { font-size: 0.88em; background: var(--card-strong); padding: 0.12em 0.4em; border-radius: 6px; }
   pre {
     background: var(--card); padding: 14px 18px; border-radius: 12px; overflow-x: auto;

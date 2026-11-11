@@ -6,11 +6,11 @@ The built-in help: the Help window, the list of keyboard shortcuts, the markdown
 ## Requirements
 
 ### Requirement: Main menu
-The main menu (the button at the right of the header bar) SHALL contain, in sections: New, New Window, Open…, Open Folder… and Close Document; Save and Save As…; Find… and Find and Replace…; Side Panel, Line Numbers, Distraction Free and Full Screen; Help, Markdown Cheatsheet, Keyboard Shortcuts and About LeafMD. Each item with a keyboard shortcut SHALL show it.
+The main menu (the button at the right of the header bar) SHALL start with the zoom row (Zoom Out, the zoom percentage, Zoom In), then contain, in sections: New, New Window, Open…, Open Folder… and Close Document; Save and Save As…; Find… and Find and Replace…; Side Panel, Line Numbers, Distraction Free and Full Screen; Preferences, Help, Markdown Cheatsheet, Keyboard Shortcuts and About LeafMD. Each item with a keyboard shortcut SHALL show it.
 
 #### Scenario: Opening the menu
 - **WHEN** the user clicks the main menu button
-- **THEN** the five sections are shown, separated by dividers, with New showing Ctrl+T, New Window showing Ctrl+N, Open Folder… showing Ctrl+Shift+O, Side Panel showing F9, Distraction Free showing Shift+Ctrl+D and Full Screen showing F11
+- **THEN** the zoom row is at the top, followed by the five sections, separated by dividers, with New showing Ctrl+T, New Window showing Ctrl+N, Open Folder… showing Ctrl+Shift+O, Side Panel showing F9, Distraction Free showing Shift+Ctrl+D, Full Screen showing F11 and Preferences showing Ctrl+,
 
 ### Requirement: Ticks in the main menu
 Side Panel SHALL show a tick while the panel is open, Line Numbers while that window shows line numbers, Distraction Free while that window is in it, and Full Screen while the window fills the screen.
@@ -28,7 +28,7 @@ Side Panel SHALL show a tick while the panel is open, Line Numbers while that wi
 - **THEN** Line Numbers has no tick, because that window isn't showing them
 
 ### Requirement: Help window
-Help (F1) SHALL open a window explaining, in plain language, the three views, editing, the formatting bar, find and replace, tabs, the side panel and its folder tree, Distraction Free and Full Screen, and files and links. Every user-visible feature SHALL be described there.
+Help (F1) SHALL open a window explaining, in plain language, the three views, editing, the formatting bar, find and replace, tabs, the side panel and its folder tree, Distraction Free and Full Screen, fonts and zoom, and files and links. Every user-visible feature SHALL be described there.
 
 #### Scenario: Pressing F1
 - **WHEN** the user presses F1
@@ -45,6 +45,10 @@ Help (F1) SHALL open a window explaining, in plain language, the three views, ed
 #### Scenario: Reading about Distraction Free
 - **WHEN** the user opens Help and looks for Distraction Free
 - **THEN** it explains Ctrl+Shift+D, what gets hidden, bringing the bars back with the pointer at the top edge or F10, leaving with Escape, and that F11 adds full screen
+
+#### Scenario: Reading about fonts and zoom
+- **WHEN** the user opens Help and looks for fonts and zoom
+- **THEN** it explains choosing the two fonts in Preferences (Ctrl+,), Reset, zooming with Ctrl+plus, Ctrl+minus, Ctrl+0 and Ctrl with the mouse wheel, that zoom covers the whole window, and that zoom is back to 100% each time LeafMD starts
 
 ### Requirement: Keyboard shortcuts window
 Keyboard Shortcuts (Ctrl+?) SHALL list every keyboard shortcut, grouped into Views, Files, Tabs, Formatting, Find and Help, with no search box, in the same style as the Help window.
@@ -68,6 +72,10 @@ Keyboard Shortcuts (Ctrl+?) SHALL list every keyboard shortcut, grouped into Vie
 #### Scenario: New document and new window keys
 - **WHEN** the user looks under Files
 - **THEN** "New document" shows "Ctrl+T" and "New window" shows "Ctrl+N"
+
+#### Scenario: Zoom and Preferences keys
+- **WHEN** the user looks under Views and Help
+- **THEN** Views lists "Zoom in" with "Ctrl+Plus or Ctrl+=", "Zoom out" with "Ctrl+Minus" and "Normal size" with "Ctrl+0", and Help lists "Preferences" with "Ctrl+,"
 
 ### Requirement: Markdown cheatsheet
 The Markdown Cheatsheet (Shift+F1, the Cheatsheet button on the formatting bar, or the main menu) SHALL show the most common markdown next to what it looks like, in six sections: Text, Headings, Lists, Links and Images, Blocks, and Paragraphs and More.

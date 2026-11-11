@@ -105,6 +105,8 @@ With Claude Code, `/ship` walks a change through all of this: the checks, trying
 | `src/side_panel.rs` | The side panel itself: its header and its pages, so a later feature can add a page with one call |
 | `src/folder_tree.rs` | The Files page of the side panel: the folder tree, which files are greyed out, highlighting the open document, and which folders LeafMD can see, with tests |
 | `src/document.rs` | One open document: the raw editor, the formatted view, links, saving and reloading, and noticing changes to its file |
+| `src/text_size.rs` | How big the text is and in which font: the two fonts from Preferences, each window's zoom on top of them, and the stylesheet that sets the raw text's font, with tests |
+| `src/preferences.rs` | The Preferences window: the raw text and formatted view fonts, and their Reset buttons |
 | `src/dialog.rs` | The questions about saving: a heading, some text and a row of equal buttons, laid out like gedit's |
 | `src/opening.rs` | The rules for which window a file or folder opens in and where a reopened tab goes, with tests |
 | `src/file_change.rs` | Noticing when another app changes the open file: what counts as a change, what the banner says, and the banner's widgets, with tests |
@@ -114,7 +116,7 @@ With Claude Code, `/ship` walks a change through all of this: the checks, trying
 | `src/render.rs` | Turns markdown into HTML (comrak), then removes anything unsafe (ammonia) |
 | `src/preview.html` | The page the formatted view is drawn into, including its light and dark styles |
 | `src/preview.js` | Double-click to jump, synced scrolling and find in the formatted view, run in a private script area the document can't reach |
-| `src/state.rs` | Remembers the last view, window size, recent files, tabs and whether the side panel is open in `~/.config/leafmd/state.ini`, and decides which tabs to save and reopen, with tests |
+| `src/state.rs` | Remembers the last view, window size, recent files, tabs, whether the side panel is open and the fonts chosen in Preferences in `~/.config/leafmd/state.ini`, and decides which tabs to save and reopen, with tests |
 | `data/*.desktop` | The app menu entry: name, icon, and the file types LeafMD opens |
 | `data/*.metainfo.xml` | The description, license and release notes shown in software centers |
 | `build-aux/` | The Flatpak recipe, the script that builds and installs it, `sdk-check.sh` (the checks GitHub runs), `flathub-lint.sh` and its exceptions file (Flathub's checker), `release-info.py` (reads the version and release notes, and checks they match), `build-site.py` (builds leafmd.app), `flatpak-repo-preview.sh` (a private copy of leafmd.app on this computer), `take-screenshots.sh` and `screenshot-settings-portal.py` (take the screenshots on a hidden desktop), `test-desktop.sh` (that hidden desktop, shared with the end-to-end tests), `end-to-end-tests.sh` and the scenarios in `end-to-end/` (the end-to-end tests), `screenshot-mode.sh` (GNOME's default look for taking screenshots by hand) and `leafmd-signing-key.gpg` (the public half of LeafMD's signing key) |

@@ -19,7 +19,8 @@ use crate::dialog::{Answer, Question};
 use crate::file_change::{self, Comparison, Version};
 use crate::format::{self, Inline, LineStyle};
 use crate::render;
-use crate::state::ViewMode;
+use crate::state::{FontFor, ViewMode};
+use crate::text_size;
 use crate::typing;
 use crate::window::{Window, file_filters};
 
@@ -103,6 +104,9 @@ pub struct Document {
     /// The file being shown, or None for a new, unsaved document.
     pub file: RefCell<Option<gio::File>>,
     pub view_mode: Cell<ViewMode>,
+    /// The zoom of the window showing this document, as a percentage. The
+    /// formatted view's text size and the raw text column's width follow it.
+    zoom: Cell<u32>,
     /// True once the empty preview page has loaded and can receive content.
     pub preview_ready: Cell<bool>,
     /// True while LeafMD itself is loading the preview page, so that load is allowed through.
@@ -159,6 +163,8 @@ impl Document {
         let source_view = sourceview5::View::with_buffer(&buffer);
         source_view.set_show_line_numbers(line_numbers_wanted());
         source_view.set_monospace(true);
+        // Its font and size come from the raw text stylesheet in text_size.rs
+        source_view.add_css_class("leafmd-raw");
         source_view.set_wrap_mode(gtk::WrapMode::WordChar);
         source_view.set_tab_width(4);
         source_view.set_auto_indent(true);
@@ -231,6 +237,7 @@ impl Document {
             find_state: RefCell::new(FindState::default()),
             file: RefCell::new(None),
             view_mode: Cell::new(initial_view),
+            zoom: Cell::new(text_size::ZOOM_NORMAL),
             preview_ready: Cell::new(false),
             preview_loading: Cell::new(false),
             render_scheduled: Cell::new(false),
@@ -250,6 +257,7 @@ impl Document {
             asking_to_replace: Cell::new(false),
         });
         doc.setup_signals();
+        doc.apply_fonts();
         OPEN_DOCUMENTS.with(|open| open.borrow_mut().push(doc.clone()));
         doc
     }
@@ -262,6 +270,11 @@ impl Document {
                 .find(|doc| doc.paned.upcast_ref::<gtk::Widget>() == widget)
                 .cloned()
         })
+    }
+
+    /// Every open document, in every window.
+    pub fn all() -> Vec<Rc<Self>> {
+        OPEN_DOCUMENTS.with(|open| open.borrow().clone())
     }
 
     /// The document has been closed: lets go of it, which also stops it
@@ -339,6 +352,7 @@ impl Document {
                 doc.run_js(PREVIEW_SCRIPT);
                 doc.tell_preview_view_mode();
                 doc.update_style();
+                doc.apply_fonts();
                 doc.render_now();
                 // A new file opened while the find bar is open: search it too
                 if let Some(win) = doc.window()
@@ -415,6 +429,27 @@ impl Document {
             }
         });
 
+        // Ctrl with the mouse wheel zooms the window, over either view. This
+        // listens on the area holding both views, before they see the wheel
+        // ("capture"), and lets ordinary scrolling (no Ctrl) through. DISCRETE
+        // adds up a touchpad's small movements into whole steps.
+        let wheel = gtk::EventControllerScroll::new(
+            gtk::EventControllerScrollFlags::VERTICAL | gtk::EventControllerScrollFlags::DISCRETE,
+        );
+        wheel.set_propagation_phase(gtk::PropagationPhase::Capture);
+        let weak = Rc::downgrade(self);
+        wheel.connect_scroll(move |wheel, _, dy| {
+            if !wheel.current_event_state().contains(gdk::ModifierType::CONTROL_MASK) || dy == 0.0 {
+                return glib::Propagation::Proceed;
+            }
+            if let Some(win) = weak.upgrade().and_then(|doc| doc.window()) {
+                let how = if dy < 0.0 { "in" } else { "out" };
+                let _ = WidgetExt::activate_action(&win.window, "win.zoom", Some(&how.to_variant()));
+            }
+            glib::Propagation::Stop
+        });
+        self.paned.add_controller(wheel);
+
         self.setup_typing_signals();
     }
 
@@ -464,10 +499,59 @@ impl Document {
         self.tell_preview_view_mode();
     }
 
+    /// Uses the window's zoom: the formatted view's text gets bigger or
+    /// smaller, and so does the raw text's column. (The raw text's own size
+    /// follows the window's zoom style name; see text_size.rs.)
+    pub fn set_zoom(&self, zoom: u32) {
+        if self.zoom.replace(zoom) != zoom {
+            self.apply_fonts();
+        }
+    }
+
+    /// Shows the fonts from Preferences at this document's zoom: sets the
+    /// formatted view's font through WebKit's settings (the page's text is in
+    /// the plain "sans-serif" font, which these settings decide), and measures
+    /// the raw text's column again.
+    pub fn apply_fonts(&self) {
+        let font = text_size::current_font(FontFor::Formatted);
+        let zoom = self.zoom.get();
+        if let Some(settings) = WebViewExt::settings(&self.webview) {
+            if let Some(family) = font.family() {
+                settings.set_sans_serif_font_family(&family);
+                settings.set_default_font_family(&family);
+            }
+            let pixels = text_size::pixels_at(&font, zoom);
+            settings.set_default_font_size(pixels);
+            // WebKit's own size for monospace text, kept in proportion (13 to 16,
+            // its usual) in case anything in the page falls back to it
+            settings.set_default_monospace_font_size((pixels * 13).div_ceil(16));
+        }
+        // WebKit's settings have no weight or slant, so those go to the page
+        // itself, which uses them for its text (see preview.html). Once the
+        // page has loaded; until then it's done when it finishes loading.
+        if self.preview_ready.get() {
+            self.run_js(&format!(
+                "document.documentElement.style.setProperty('--leafmd-weight', '{}');
+                 document.documentElement.style.setProperty('--leafmd-style', '{}');",
+                text_size::css_weight(&font),
+                text_size::css_style(&font)
+            ));
+        }
+        if self.view_mode.get() == ViewMode::Source {
+            let width = self.column_width();
+            self.source_clamp.set_maximum_size(width);
+            self.source_clamp.set_tightening_threshold(width);
+        }
+    }
+
     /// How wide the raw text's column is in the raw-only view: room for about
-    /// 80 characters in the editor's font, plus its margins and line numbers.
+    /// 80 characters in the editor's font at this document's zoom, plus its
+    /// margins and line numbers. The font is set on the measurement directly,
+    /// because the editor's own font only changes once GTK next redraws it.
     fn column_width(&self) -> i32 {
         let layout = self.source_view.create_pango_layout(Some("0000000000"));
+        let font = text_size::font_at(&text_size::current_font(FontFor::Raw), self.zoom.get());
+        layout.set_font_description(Some(&font));
         let ten_chars = layout.pixel_size().0.max(70);
         let margins = self.source_view.left_margin() + self.source_view.right_margin();
         let numbers = if self.source_view.shows_line_numbers() { ten_chars / 2 + 16 } else { 0 };
