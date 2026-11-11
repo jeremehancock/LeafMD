@@ -28,7 +28,7 @@ Side Panel SHALL show a tick while the panel is open, Line Numbers while that wi
 - **THEN** Line Numbers has no tick, because that window isn't showing them
 
 ### Requirement: Help window
-Help (F1) SHALL open a window explaining, in plain language, the three views, editing, the formatting bar, find and replace, tabs, the side panel and its folder tree, Distraction Free and Full Screen, fonts and zoom, and files and links. Every user-visible feature SHALL be described there.
+Help (F1) SHALL open a window explaining, in plain language, the three views, editing, the formatting bar, find and replace, tabs, the side panel with its folder tree and headings, the word count, Distraction Free and Full Screen, fonts and zoom, and files and links. Every user-visible feature SHALL be described there.
 
 #### Scenario: Pressing F1
 - **WHEN** the user presses F1
@@ -40,7 +40,7 @@ Help (F1) SHALL open a window explaining, in plain language, the three views, ed
 
 #### Scenario: Reading about the side panel
 - **WHEN** the user opens Help and looks for the side panel
-- **THEN** it explains opening and closing it with F9, that it stays open until closed, which folder the tree shows, Open Folder…, and why some files are greyed out
+- **THEN** it explains opening and closing it with F9, that it stays open until closed, which folder the tree shows, Open Folder…, why some files are greyed out, and switching between Files and Headings at the bottom of the panel
 
 #### Scenario: Reading about Distraction Free
 - **WHEN** the user opens Help and looks for Distraction Free
@@ -49,6 +49,10 @@ Help (F1) SHALL open a window explaining, in plain language, the three views, ed
 #### Scenario: Reading about fonts and zoom
 - **WHEN** the user opens Help and looks for fonts and zoom
 - **THEN** it explains choosing the two fonts in Preferences (Ctrl+,), Reset, zooming with Ctrl+plus, Ctrl+minus, Ctrl+0 and Ctrl with the mouse wheel, that zoom covers the whole window, and that zoom is back to 100% each time LeafMD starts
+
+#### Scenario: Reading about headings and the word count
+- **WHEN** the user opens Help and looks for headings or the word count
+- **THEN** it explains that the Headings page lists the document's headings, that clicking one jumps to it, that the section you're reading is highlighted, what the word count in the bottom-right corner counts, the 200 words a minute reading time, and that selecting text counts the selection
 
 ### Requirement: Keyboard shortcuts window
 Keyboard Shortcuts (Ctrl+?) SHALL list every keyboard shortcut, grouped into Views, Files, Tabs, Formatting, Find and Help, with no search box, in the same style as the Help window.
