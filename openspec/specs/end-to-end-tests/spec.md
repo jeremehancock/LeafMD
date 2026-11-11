@@ -10,7 +10,7 @@ LeafMD SHALL have an end-to-end test run started with `./build-aux/end-to-end-te
 
 #### Scenario: Everything passes
 - **WHEN** the owner runs `./build-aux/end-to-end-tests.sh` after `./build-aux/flatpak-install.sh`
-- **THEN** each scenario is listed with "passed", the last line reads "44 of 44 passed", and the command finishes with success
+- **THEN** each scenario is listed with "passed", the last line reads "46 of 46 passed", and the command finishes with success
 
 #### Scenario: LeafMD isn't installed
 - **WHEN** the owner runs it on a computer without LeafMD's Flatpak installed
@@ -28,7 +28,7 @@ The test run SHALL accept scenario names, and then run only those.
 - **THEN** it says there is no scenario by that name, lists the ones there are, and runs nothing
 
 ### Requirement: The tests act like a person
-The tests SHALL drive LeafMD only the way a person could: starting it with files, pressing keys, typing text and closing windows. They SHALL check results a person could also check: what is in a file on disk, the window's title, how many windows are open and what LeafMD saved for next time.
+The tests SHALL drive LeafMD only the way a person could: starting it with files, pressing keys, typing text, clicking and dragging with the pointer, and closing windows. They SHALL check results a person could also check: what is in a file on disk, the window's title, how many windows are open and what LeafMD saved for next time.
 
 #### Scenario: Checking a save
 - **WHEN** a scenario types "eggs" into an open file and presses Ctrl+S
@@ -60,11 +60,11 @@ Each scenario SHALL start with a new, empty home folder and fresh copies of its 
 - **THEN** LeafMD shows its start page, not a.md and b.md
 
 ### Requirement: What the tests cover
-The test run SHALL include at least 44 scenarios, covering typing, text and line styles, find and replace, saving and the unsaved-changes questions, files another app changed or deleted, tabs and windows, what LeafMD remembers, the side panel with its folder tree and headings, Distraction Free and full screen, and zoom. Each scenario SHALL be a file in `build-aux/end-to-end/` that starts by naming the spec it follows.
+The test run SHALL include at least 46 scenarios, covering typing, text and line styles, find and replace, saving and the unsaved-changes questions, files another app changed or deleted, tabs and windows, what LeafMD remembers, the side panel with its folder tree, headings and width, web links, Distraction Free and full screen, and zoom. Each scenario SHALL be a file in `build-aux/end-to-end/` that starts by naming the spec it follows.
 
 #### Scenario: Seeing what's covered
 - **WHEN** the owner looks in `build-aux/end-to-end/`
-- **THEN** there are 44 files, such as `close-unsaved-tabs.sh`, and each starts with a comment like "documents spec, Closing a window with several unsaved tabs"
+- **THEN** there are 46 files, such as `close-unsaved-tabs.sh`, and each starts with a comment like "documents spec, Closing a window with several unsaved tabs"
 
 #### Scenario: Unsaved changes are kept
 - **WHEN** the unsaved-guard scenario types "draft" into notes.md and presses Ctrl+Q without saving
@@ -117,6 +117,14 @@ The test run SHALL include at least 44 scenarios, covering typing, text and line
 #### Scenario: Escape leaves full screen first
 - **WHEN** the escape-full-screen-first scenario turns on Distraction Free with Ctrl+Shift+D and full screen with F11, then presses Escape
 - **THEN** full screen is off and Distraction Free is still on, and after a second Escape Distraction Free is off too
+
+#### Scenario: Resizing the side panel
+- **WHEN** the side-panel-width scenario opens the panel in a 1200 pixel window, drags the line between the panel and the document 80 pixels to the right, presses Ctrl+Q and starts LeafMD again, drags the panel to 400, then narrows the window bit by bit to 1000 pixels
+- **THEN** LeafMD saved a panel width of 320 for next time, the panel opens 320 pixels wide, and in the narrowed window the panel is 320 pixels wide again so the document keeps 680
+
+#### Scenario: A web link with nothing to open it
+- **WHEN** the web-link-no-portal scenario opens a document in Formatted view whose first line is a link to `https://example.com`, on the hidden desktop, which has no portal to hand links to a browser, and clicks the link
+- **THEN** LeafMD is still running with its window open, and its messages say it couldn't open the link
 
 ### Requirement: Run before every hand test
 `/ship` SHALL run the full test run after installing a new build and before asking the owner to try it. If any scenario fails, `/ship` SHALL stop and report the failure instead of asking the owner to test. The list `/ship` gives the owner to try SHALL leave out what the passing scenarios already checked.

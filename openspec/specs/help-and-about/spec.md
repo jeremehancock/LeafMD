@@ -40,7 +40,7 @@ Help (F1) SHALL open a window explaining, in plain language, the three views, ed
 
 #### Scenario: Reading about the side panel
 - **WHEN** the user opens Help and looks for the side panel
-- **THEN** it explains opening and closing it with F9, that it stays open until closed, which folder the tree shows, Open Folder…, why some files are greyed out, and switching between Files and Headings at the bottom of the panel
+- **THEN** it explains opening and closing it with F9, that it stays open until closed, dragging its edge to make it wider or narrower, which folder the tree shows, Open Folder…, why some files are greyed out, and switching between Files and Headings at the bottom of the panel
 
 #### Scenario: Reading about Distraction Free
 - **WHEN** the user opens Help and looks for Distraction Free
