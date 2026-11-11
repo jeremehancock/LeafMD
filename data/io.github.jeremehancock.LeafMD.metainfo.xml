@@ -31,6 +31,7 @@
       <li>Edit the raw text with the formatted view updating as you type</li>
       <li>A formatting bar adds bold, links, lists, headings, tables and more for you</li>
       <li>Lists continue themselves when you press Enter, and pasting a web address over text makes a link</li>
+      <li>Misspelt words are underlined as you type, with suggestions a right-click away</li>
       <li>A built-in markdown cheatsheet shows the common syntax at a glance</li>
       <li>Find and replace, in the raw text or the formatted document</li>
       <li>Print the formatted document, or export it as a PDF or as a single web page that opens in any browser</li>
@@ -101,6 +102,17 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.13.0" date="2026-11-11">
+      <description>
+        <p>LeafMD now checks your spelling as you write.</p>
+        <ul>
+          <li>Misspelt words in the raw text get a red wavy underline. Code and web addresses are left alone</li>
+          <li>Right-click an underlined word for suggested spellings, or choose Add to Dictionary or Ignore</li>
+          <li>Check Spelling in the main menu turns it off or on in every window, and Languages in the right-click menu switches language. It starts in your system's language</li>
+          <li>Help, Keyboard Shortcuts and the Markdown Cheatsheet no longer open with their first row outlined when opened from the keyboard</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.12.0" date="2026-11-11">
       <description>
         <p>Print your documents, or save them as a PDF or a web page.</p>

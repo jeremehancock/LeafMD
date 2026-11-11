@@ -281,6 +281,49 @@ pub fn save_line_numbers(show: bool) {
     update_state_file(|file| file.set_boolean(EDITOR_GROUP, "line-numbers", show));
 }
 
+/// Whether misspelt words in the raw text are underlined. On unless the user
+/// turned it off.
+pub fn load_spell_check() -> bool {
+    let file = glib::KeyFile::new();
+    if file
+        .load_from_file(state_path(), glib::KeyFileFlags::NONE)
+        .is_err()
+    {
+        return true;
+    }
+    spell_check_in(&file)
+}
+
+fn spell_check_in(file: &glib::KeyFile) -> bool {
+    file.boolean(EDITOR_GROUP, "spell-check").unwrap_or(true)
+}
+
+/// Remembers the user turning spell checking on or off.
+pub fn save_spell_check(on: bool) {
+    update_state_file(|file| file.set_boolean(EDITOR_GROUP, "spell-check", on));
+}
+
+/// The language the user chose for spell checking, such as "en_GB", or None
+/// if they never chose one (spell checking then follows the system's).
+pub fn load_spell_check_language() -> Option<String> {
+    let file = glib::KeyFile::new();
+    file.load_from_file(state_path(), glib::KeyFileFlags::NONE)
+        .ok()?;
+    spell_check_language_in(&file)
+}
+
+fn spell_check_language_in(file: &glib::KeyFile) -> Option<String> {
+    file.string(EDITOR_GROUP, "spell-check-language")
+        .ok()
+        .map(|language| language.to_string())
+        .filter(|language| !language.is_empty())
+}
+
+/// Remembers the language the user chose for spell checking.
+pub fn save_spell_check_language(language: &str) {
+    update_state_file(|file| file.set_string(EDITOR_GROUP, "spell-check-language", language));
+}
+
 const PREFERENCES_GROUP: &str = "preferences";
 
 /// Which of the two fonts in Preferences.
@@ -417,7 +460,7 @@ fn update_state_file(change: impl FnOnce(&glib::KeyFile)) {
 #[cfg(test)]
 mod tests {
     use super::{
-        FontFor, TabList, font_in, line_numbers_in, panel_open_in, panel_page_in, panel_width_in, set_font_in,
+        FontFor, TabList, font_in, line_numbers_in, spell_check_in, spell_check_language_in, panel_open_in, panel_page_in, panel_width_in, set_font_in,
         tabs_to_reopen, tabs_to_save,
     };
     use gtk::glib;
@@ -452,6 +495,23 @@ mod tests {
         assert!(!panel_open_in(&key_file("[side-panel]\nopen=false\n")));
         assert!(!panel_open_in(&key_file("[side-panel]\nopen=maybe\n")));
         assert!(panel_open_in(&key_file("[side-panel]\nopen=true\n")));
+    }
+
+    #[test]
+    fn spell_check_is_on_unless_turned_off() {
+        assert!(spell_check_in(&key_file("[window]\nview=source\n")));
+        assert!(spell_check_in(&key_file("[editor]\nspell-check=true\n")));
+        assert!(!spell_check_in(&key_file("[editor]\nspell-check=false\n")));
+    }
+
+    #[test]
+    fn spell_check_language_only_when_chosen() {
+        assert_eq!(spell_check_language_in(&key_file("[editor]\nline-numbers=true\n")), None);
+        assert_eq!(spell_check_language_in(&key_file("[editor]\nspell-check-language=\n")), None);
+        assert_eq!(
+            spell_check_language_in(&key_file("[editor]\nspell-check-language=es_ES\n")),
+            Some("es_ES".to_string())
+        );
     }
 
     #[test]

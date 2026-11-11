@@ -6,14 +6,14 @@ The built-in help: the Help window, the list of keyboard shortcuts, the markdown
 ## Requirements
 
 ### Requirement: Main menu
-The main menu (the button at the right of the header bar) SHALL start with the zoom row (Zoom Out, the zoom percentage, Zoom In), then contain, in sections: New, New Window, Open…, Open Folder… and Close Document; Save and Save As…; Print…, Export as PDF… and Export as HTML…; Find… and Find and Replace…; Side Panel, Line Numbers, Distraction Free and Full Screen; Preferences, Help, Markdown Cheatsheet, Keyboard Shortcuts and About LeafMD. Each item with a keyboard shortcut SHALL show it.
+The main menu (the button at the right of the header bar) SHALL start with the zoom row (Zoom Out, the percentage, Zoom In), then, in sections: New, New Window, Open…, Open Folder… and Close Document; Save and Save As…; Print…, Export as PDF… and Export as HTML…; Find… and Find and Replace…; Side Panel, Line Numbers, Check Spelling, Distraction Free and Full Screen; Preferences, Help, Markdown Cheatsheet, Keyboard Shortcuts and About LeafMD. Each item with a keyboard shortcut SHALL show it.
 
 #### Scenario: Opening the menu
 - **WHEN** the user clicks the main menu button
 - **THEN** the zoom row is at the top, followed by the six sections, separated by dividers, with New showing Ctrl+T, New Window showing Ctrl+N, Open Folder… showing Ctrl+Shift+O, Print… showing Ctrl+P, Side Panel showing F9, Distraction Free showing Shift+Ctrl+D, Full Screen showing F11 and Preferences showing Ctrl+,
 
 ### Requirement: Ticks in the main menu
-Side Panel SHALL show a tick while the panel is open, Line Numbers while that window shows line numbers, Distraction Free while that window is in it, and Full Screen while the window fills the screen.
+Side Panel SHALL show a tick while the panel is open, Line Numbers while that window shows line numbers, Check Spelling while spell checking is on, Distraction Free while that window is in it, and Full Screen while the window fills the screen.
 
 #### Scenario: Side Panel's tick
 - **WHEN** the side panel is open and the user opens the main menu
@@ -27,8 +27,12 @@ Side Panel SHALL show a tick while the panel is open, Line Numbers while that wi
 - **WHEN** line numbers are on, the user turns Distraction Free on and opens the main menu with F10
 - **THEN** Line Numbers has no tick, because that window isn't showing them
 
+#### Scenario: Check Spelling's tick
+- **WHEN** spell checking is on and the user opens the main menu
+- **THEN** Check Spelling has a tick, and choosing it turns spell checking off in every window
+
 ### Requirement: Help window
-Help (F1) SHALL open a window explaining, in plain language, the three views, editing, the formatting bar, find and replace, tabs, the side panel with its folder tree and headings, the word count, Distraction Free and Full Screen, fonts and zoom, printing and exporting, and files and links. Every user-visible feature SHALL be described there.
+Help (F1) SHALL open a window explaining, in plain language, the three views, editing, the formatting bar, find and replace, tabs, the side panel with its folder tree and headings, the word count, Distraction Free and Full Screen, fonts and zoom, spell checking, printing and exporting, and files and links. Every user-visible feature SHALL be described there.
 
 #### Scenario: Pressing F1
 - **WHEN** the user presses F1
@@ -57,6 +61,10 @@ Help (F1) SHALL open a window explaining, in plain language, the three views, ed
 #### Scenario: Reading about printing and exporting
 - **WHEN** the user opens Help and looks for printing or exporting
 - **THEN** it explains that Ctrl+P prints the formatted document whichever view is showing, that pages and PDFs are always light, that Export as PDF… and Export as HTML… are in the main menu, that the web page packs in pictures from the computer and follows the reader's light or dark style, and that unsaved changes are included
+
+#### Scenario: Reading about spell checking
+- **WHEN** the user opens Help and looks for spelling
+- **THEN** it explains that misspelt words in the raw text are underlined, that code and addresses aren't checked, that right-clicking a word offers suggestions, Add to Dictionary and Ignore, that Check Spelling in the main menu turns it off everywhere, and that Languages in the right-click menu changes the language
 
 ### Requirement: Keyboard shortcuts window
 Keyboard Shortcuts (Ctrl+?) SHALL list every keyboard shortcut, grouped into Views, Files, Tabs, Formatting, Find and Help, with no search box, in the same style as the Help window.

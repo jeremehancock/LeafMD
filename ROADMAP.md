@@ -36,6 +36,7 @@ Each feature is planned in detail with [OpenSpec](https://github.com/Fission-AI/
 - [x] **Tabs:** several documents in one window, with links and opened files getting a tab of their own, tabs that can be dragged between windows, and all of them reopening next time
 - [x] **Side panel with a folder tree** (F9): a panel on the left showing the folder you're working in, for moving between documents. `leafmd .` opens a folder in it from a terminal, and Open Folder… chooses one. It's closed until you open it, then stays open until you close it, and it's built so later features can add pages to it
 - [x] **Resizable side panel:** drag the panel's edge to make it wider or narrower, and the width is remembered. Hovering a name in Files shows it in full
+- [x] **Spell checking:** misspelt words in the raw text are underlined as you type, skipping code and web addresses. Right-click for suggestions, Add to Dictionary or Ignore. Check Spelling in the main menu turns it off everywhere, and the language follows your system unless you pick another
 
 ## 5. Sharing
 
@@ -58,14 +59,12 @@ These three are planned as one release, since they all start from the formatted 
 
 ## Later
 
-- [ ] Submit LeafMD to Flathub, so it can be installed from GNOME Software and other app stores
 - [ ] Translations into other languages
 
 ## Ideas, not decided
 
 These might fit LeafMD, or might add more than they're worth. Each one needs a decision before it moves up.
 
-- Spell checking in the raw text
 - Coloured syntax highlighting inside code blocks in the formatted view
 - Dropping an image onto the raw text inserts a markdown image link
 - A Snap package, so Ubuntu users can install LeafMD from Ubuntu's own App Center without setting up Flatpak. It would be a second package format to build and test for every release

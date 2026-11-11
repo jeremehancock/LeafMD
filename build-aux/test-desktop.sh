@@ -542,6 +542,29 @@ activate_action() { # <action> [word]
     sleep 0.5
 }
 
+# The same as action_state and activate_action, for actions that belong to
+# the whole app rather than one window, such as "spell-check"
+app_action_state() { # <action>
+    timeout 5 env -i DBUS_SESSION_BUS_ADDRESS="unix:path=$work/run/bus" \
+        gdbus call --session --dest "$app" --object-path /io/github/jeremehancock/LeafMD \
+        --method org.gtk.Actions.Describe "$1" 2> /dev/null |
+        sed -n -e "s/.*\[<\(true\|false\)>\].*/\1/p"
+}
+
+activate_app_action() { # <action>
+    timeout 5 env -i DBUS_SESSION_BUS_ADDRESS="unix:path=$work/run/bus" \
+        gdbus call --session --dest "$app" --object-path /io/github/jeremehancock/LeafMD \
+        --method org.gtk.Actions.Activate "$1" '[]' '{}' > /dev/null 2>&1 ||
+        fail "couldn't run LeafMD's $1 action"
+    sleep 0.5
+}
+
+expect_app_action_state() { # <action> <state>
+    local action=$1 want=$2
+    wait_until 5 '[[ "$(app_action_state "$action")" == "$want" ]]' ||
+        fail "LeafMD's $action is '$(app_action_state "$action")', not '$want'"
+}
+
 # Puts text on the hidden desktop's clipboard, ready for Ctrl+V
 copy_text() { # <text>
     local text

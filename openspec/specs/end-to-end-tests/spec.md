@@ -60,11 +60,11 @@ Each scenario SHALL start with a new, empty home folder and fresh copies of its 
 - **THEN** LeafMD shows its start page, not a.md and b.md
 
 ### Requirement: What the tests cover
-The test run SHALL include at least 47 scenarios, covering typing, text and line styles, find and replace, saving and the unsaved-changes questions, files another app changed or deleted, tabs and windows, what LeafMD remembers, the side panel with its folder tree, headings and width, web links, Distraction Free and full screen, zoom, and when Print and the exports can be used. Each scenario SHALL be a file in `build-aux/end-to-end/` that starts by naming the spec it follows.
+The test run SHALL include at least 49 scenarios, covering typing, text and line styles, find and replace, saving and the unsaved-changes questions, files another app changed or deleted, tabs and windows, what LeafMD remembers, the side panel with its folder tree, headings and width, web links, Distraction Free and full screen, zoom, when Print and the exports can be used, and spell checking. Each scenario SHALL be a file in `build-aux/end-to-end/` that starts by naming the spec it follows.
 
 #### Scenario: Seeing what's covered
 - **WHEN** the owner looks in `build-aux/end-to-end/`
-- **THEN** there are 47 files, such as `close-unsaved-tabs.sh`, and each starts with a comment like "documents spec, Closing a window with several unsaved tabs"
+- **THEN** there are 49 files, such as `close-unsaved-tabs.sh`, and each starts with a comment like "documents spec, Closing a window with several unsaved tabs"
 
 #### Scenario: Unsaved changes are kept
 - **WHEN** the unsaved-guard scenario types "draft" into notes.md and presses Ctrl+Q without saving
@@ -129,6 +129,14 @@ The test run SHALL include at least 47 scenarios, covering typing, text and line
 #### Scenario: Print needs a document
 - **WHEN** the print-needs-document scenario closes the only document, then opens notes.md
 - **THEN** Print, Export as PDF and Export as HTML are greyed out while "No Document Open" shows, and can be chosen once notes.md is open
+
+#### Scenario: Choosing a spelling suggestion
+- **WHEN** the spell-check-suggestion scenario opens "The garden needs mroe water.", puts the cursor in "mroe", opens the right-click menu with the Menu key, chooses the first suggestion and saves, then presses Ctrl+Z once and saves again
+- **THEN** the file first says "more", then "mroe" again
+
+#### Scenario: Spell checking remembered
+- **WHEN** the spell-check-remembered scenario finds spell checking on, turns it off with Check Spelling, presses Ctrl+Q and starts LeafMD again
+- **THEN** spell checking is still off, and turning it off and on never showed an unsaved-changes dot
 
 ### Requirement: Run before every hand test
 `/ship` SHALL run the full test run after installing a new build and before asking the owner to try it. If any scenario fails, `/ship` SHALL stop and report the failure instead of asking the owner to test. The list `/ship` gives the owner to try SHALL leave out what the passing scenarios already checked.
