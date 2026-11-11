@@ -1,4 +1,5 @@
 mod dialog;
+mod export;
 mod document;
 mod file_change;
 mod find;
@@ -239,6 +240,7 @@ fn set_shortcuts(app: &adw::Application) {
         ("win.fullscreen", &["F11"]),
         ("win.save", &["<Control>s"]),
         ("win.save-as", &["<Control><Shift>s"]),
+        ("win.print", &["<Control>p"]),
         ("win.help", &["F1"]),
         ("win.cheatsheet", &["<Shift>F1"]),
         ("win.shortcuts", &["<Control>question"]),

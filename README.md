@@ -63,6 +63,7 @@ LeafMD follows your system's light or dark style, and the formatted view uses th
 - **Find and replace** (Ctrl+F, Ctrl+H, the magnifying glass button, or the main menu): highlights every match with a count like "3 of 12". It searches the raw text in Raw and Split view, and the formatted text in Formatted view. Replace one match or all of them, and undo Replace All with one Ctrl+Z. Options: match case, and whole words only.
 - **Recent files:** the arrow next to **Open** lists the 10 files you opened most recently. When you start LeafMD, it reopens the saved files from the window you closed last, in the same tabs, as long as they're still on that list. **Clear Recent Files** empties the list, and LeafMD then has nothing to reopen.
 - **Changes from other apps:** if another app changes or deletes the open file, a banner offers to reload it or ignore the change. Nothing changes until you choose, and Save asks before replacing a version you haven't seen.
+- **Print and export** (in the main menu): **Print…** (Ctrl+P) prints the formatted document, whichever view is showing. **Export as PDF…** saves it as a PDF that looks the same as the printout, and **Export as HTML…** saves it as one web page that opens in any browser, with pictures from your computer packed inside so it still works after being emailed. Printed pages and PDFs are always dark text on white, at the size set in Preferences; the web page goes light or dark to match whoever opens it. Unsaved changes are included.
 - **Close Document** (in the main menu) closes the selected tab. If it's the last one, the window stays open and LeafMD starts with no document next time.
 - **Help** (F1) explains all of this inside the app, and **Keyboard Shortcuts** (Ctrl+?) lists every shortcut.
 
@@ -83,6 +84,7 @@ LeafMD follows your system's light or dark style, and the formatted view uses th
 | Ctrl+Shift+O | Open folder in the side panel |
 | Ctrl+S | Save |
 | Ctrl+Shift+S | Save as |
+| Ctrl+P | Print the formatted document |
 | Ctrl+W | Close tab, or the window if it's the last tab (asks first if there are unsaved changes) |
 | Ctrl+Q | Close window with all its tabs (asks first if there are unsaved changes) |
 | Ctrl+Tab, Ctrl+Page Down or Ctrl+Alt+Page Down | Next tab |
@@ -146,7 +148,7 @@ Flatpak's documentation has more on [how the sandbox shares files](https://docs.
 
 ## Safety
 
-Markdown files can contain web page code, including scripts. LeafMD never runs them: anything unsafe is removed before a document is shown, scripts are switched off in the formatted view as well, and links open in your browser instead of inside LeafMD. The details are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#safety-in-the-formatted-view).
+Markdown files can contain web page code, including scripts. LeafMD never runs them: anything unsafe is removed before a document is shown, scripts are switched off in the formatted view as well, and links open in your browser instead of inside LeafMD. Exported web pages contain no scripts either. The details are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#safety-in-the-formatted-view).
 
 ## Help and feedback
 

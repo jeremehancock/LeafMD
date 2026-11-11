@@ -11,6 +11,7 @@ use gtk::{gdk, gio, glib};
 use sourceview5::prelude::*;
 
 use crate::document::{self, Document};
+use crate::export;
 use crate::file_change::FileBanner;
 use crate::find::FindBar;
 use crate::folder_tree::{self, FilesPage};
@@ -34,10 +35,13 @@ Rather than trying to do everything, LeafMD focuses on doing the essentials well
 LeafMD was created with the help of AI.";
 
 /// Actions that only make sense while a document is open.
-const DOCUMENT_ACTIONS: [&str; 8] = [
+const DOCUMENT_ACTIONS: [&str; 11] = [
     "close-document",
     "save",
     "save-as",
+    "print",
+    "export-pdf",
+    "export-html",
     "view",
     "find",
     "find-replace",
@@ -302,6 +306,10 @@ impl Window {
         let save_section = gio::Menu::new();
         save_section.append(Some("Save"), Some("win.save"));
         save_section.append(Some("Save As…"), Some("win.save-as"));
+        let share_section = gio::Menu::new();
+        share_section.append(Some("Print…"), Some("win.print"));
+        share_section.append(Some("Export as PDF…"), Some("win.export-pdf"));
+        share_section.append(Some("Export as HTML…"), Some("win.export-html"));
         let find_section = gio::Menu::new();
         find_section.append(Some("Find…"), Some("win.find"));
         find_section.append(Some("Find and Replace…"), Some("win.find-replace"));
@@ -327,6 +335,7 @@ impl Window {
         menu.append_section(None, &zoom_section);
         menu.append_section(None, &file_section);
         menu.append_section(None, &save_section);
+        menu.append_section(None, &share_section);
         menu.append_section(None, &find_section);
         menu.append_section(None, &panel_section);
         menu.append_section(None, &app_section);
@@ -417,6 +426,7 @@ impl Window {
             .autohide(true)
             .expand_tabs(true)
             .build();
+        keep_selected_tab_in_view(&tab_bar);
 
         let open_button = gtk::Button::builder()
             .label("Open File…")
@@ -721,6 +731,22 @@ impl Window {
                 glib::spawn_future_local(async move {
                     doc.save_as().await;
                 });
+            }
+        });
+        // Print and the two exports always use the formatted document (export.rs)
+        add("print", |win| {
+            if let Some(doc) = win.current() {
+                export::print(&doc);
+            }
+        });
+        add("export-pdf", |win| {
+            if let Some(doc) = win.current() {
+                glib::spawn_future_local(async move { export::export_pdf(&doc).await });
+            }
+        });
+        add("export-html", |win| {
+            if let Some(doc) = win.current() {
+                glib::spawn_future_local(async move { export::export_html(&doc).await });
             }
         });
         add("help", |win| win.show_help());
@@ -2907,7 +2933,7 @@ impl Window {
         const TERMINAL_ROW: &str = "From a terminal";
         const TERMINAL_SETUP_URL: &str = "https://leafmd.app/#terminal";
         let page = adw::PreferencesPage::new();
-        let sections: [(&str, &[(&str, &str)]); 9] = [
+        let sections: [(&str, &[(&str, &str)]); 10] = [
             (
                 "The Three Views",
                 &[
@@ -2991,6 +3017,15 @@ impl Window {
                 ],
             ),
             (
+                "Printing and Exporting",
+                &[
+                    ("Print", "Press Ctrl+P, or choose Print… from the main menu, to print the formatted document. It prints formatted whichever view is showing, even Raw."),
+                    ("Export as PDF", "Choose Export as PDF… from the main menu to save the formatted document as a PDF, next to the file unless you choose another place. It looks the same as printing it would."),
+                    ("Export as HTML", "Choose Export as HTML… to save the formatted document as one web page that opens in any browser. Pictures from your computer are packed inside it, so it still shows them after being emailed or moved, while online pictures stay links. The page is light or dark to match the reader's own setting."),
+                    ("How it looks", "Printed pages and PDFs are always dark text on white, and use the font and size from Preferences, whatever the zoom. What's printed or exported is the text as it is now, including changes you haven't saved."),
+                ],
+            ),
+            (
                 "Files and Links",
                 &[
                     ("Opening files", "Use Open, drop a file onto the window, or double-click a markdown file in your file manager. It opens in a new tab, in the LeafMD window you used last."),
@@ -3069,6 +3104,7 @@ impl Window {
                     ("Open folder", "Ctrl+Shift+O"),
                     ("Save", "Ctrl+S"),
                     ("Save as", "Ctrl+Shift+S"),
+                    ("Print", "Ctrl+P"),
                     ("Close window", "Ctrl+Q"),
                 ],
             ),
@@ -3348,6 +3384,69 @@ impl Window {
 /// hidden, so the inner bars don't have it.
 /// The zoom row at the top of the main menu, like GNOME Text Editor's: Zoom
 /// Out, the zoom as a percentage (clicking it goes back to 100%), and Zoom In.
+/// Keeps the selected tab in view when the tab bar gets narrower.
+///
+/// The tab bar scrolls to a tab when it's selected, but not when the window
+/// is made narrower, which can leave the selected tab scrolled out of sight
+/// until another one is picked. libadwaita has no way to ask it to scroll to a
+/// tab, so this looks inside the tab bar: its tabs sit in a scrolled area, and
+/// when that area's visible width shrinks, it's scrolled just enough to show
+/// the selected tab (the one in GTK's "selected" state). If a future
+/// libadwaita builds its tab bar differently and nothing is found, this does
+/// nothing and the tab bar behaves as it always did.
+fn keep_selected_tab_in_view(tab_bar: &adw::TabBar) {
+    // Two scrolled areas: one for pinned tabs (LeafMD has none) and one for
+    // the rest, which holds the tabs
+    for scroller in descendants(tab_bar.upcast_ref())
+        .into_iter()
+        .filter_map(|widget| widget.downcast::<gtk::ScrolledWindow>().ok())
+    {
+        let adjustment = scroller.hadjustment();
+        let visible = Rc::new(Cell::new(adjustment.page_size()));
+        adjustment.connect_page_size_notify(move |adjustment| {
+            let narrower = adjustment.page_size() < visible.get();
+            visible.set(adjustment.page_size());
+            if !narrower {
+                return;
+            }
+            // Once GTK has finished laying the tabs out at the new width
+            let scroller = scroller.clone();
+            glib::idle_add_local_once(move || scroll_to_selected_tab(&scroller));
+        });
+    }
+}
+
+fn scroll_to_selected_tab(scroller: &gtk::ScrolledWindow) {
+    let Some(tabs) = scroller.child() else { return };
+    let selected = descendants(&tabs).into_iter().find(|widget| {
+        widget.type_().name() == "AdwTab" && widget.state_flags().contains(gtk::StateFlags::SELECTED)
+    });
+    let Some(bounds) = selected.and_then(|tab| tab.compute_bounds(scroller)) else {
+        return;
+    };
+    // Where the tab is, measured along everything the bar can scroll through
+    let adjustment = scroller.hadjustment();
+    let start = adjustment.value() + f64::from(bounds.x());
+    let end = start + f64::from(bounds.width());
+    if start < adjustment.value() {
+        adjustment.set_value(start);
+    } else if end > adjustment.value() + adjustment.page_size() {
+        adjustment.set_value(end - adjustment.page_size());
+    }
+}
+
+/// Every widget inside this one, at any depth.
+fn descendants(widget: &gtk::Widget) -> Vec<gtk::Widget> {
+    let mut found = Vec::new();
+    let mut child = widget.first_child();
+    while let Some(current) = child {
+        found.push(current.clone());
+        found.extend(descendants(&current));
+        child = current.next_sibling();
+    }
+    found
+}
+
 fn zoom_row(percentage: &gtk::Button) -> gtk::Box {
     let row = gtk::Box::builder()
         .orientation(gtk::Orientation::Horizontal)

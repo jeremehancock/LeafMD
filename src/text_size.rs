@@ -160,7 +160,7 @@ pub fn css_style(font: &pango::FontDescription) -> &'static str {
 }
 
 /// A font family written safely inside CSS quotes.
-fn css_family(family: &str) -> String {
+pub fn css_family(family: &str) -> String {
     let escaped: String = family
         .chars()
         .filter(|c| !c.is_control())
