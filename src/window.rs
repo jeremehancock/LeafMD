@@ -16,7 +16,7 @@ use crate::find::FindBar;
 use crate::folder_tree::{self, FilesPage};
 use crate::headings::HeadingsPage;
 use crate::opening::{self, FolderFacts, Target, WindowFacts};
-use crate::side_panel::SidePanel;
+use crate::side_panel::{SidePanel, WidthWatcher};
 use crate::state::{self, SavedState, ViewMode};
 use crate::text_size;
 
@@ -196,6 +196,18 @@ pub struct Window {
     /// Whether the side panel should be beside the document when the window is
     /// wide enough. In a narrow window it only slides out when asked.
     panel_wanted: Cell<bool>,
+    /// The side panel's width as the user last dragged it in this window (or
+    /// as it was remembered when the window opened). The panel shows narrower
+    /// when the window hasn't room for it, without changing this.
+    panel_width: Cell<i32>,
+    /// Holds the split view and notices how wide it's made
+    split_holder: WidthWatcher,
+    /// The width the split view was last given, or 0 before the window is
+    /// first laid out
+    holder_width: Cell<i32>,
+    /// The see-through strip on the document's left edge for dragging the
+    /// panel wider or narrower. Only there while the panel is beside the document.
+    resize_handle: gtk::Box,
     /// How big the text is in this window, as a percentage: 100 is the size
     /// set in Preferences. Every tab in the window shares it, and it's never
     /// saved, so each window starts at 100.
@@ -469,18 +481,37 @@ impl Window {
         side_panel.add_page("headings", "Headings", "leafmd-headings-symbolic", &headings.widget);
         side_panel.set_visible_page(state::load_panel_page());
         let panel_wanted = state::load_panel_open();
+
+        // The strip for dragging the panel wider or narrower: see
+        // setup_panel_resizing. It lies over the document's left edge rather
+        // than the panel's right edge, where the panel's lists have their
+        // scrollbars. It's see-through, so the line between them looks the same.
+        let resize_handle = gtk::Box::builder()
+            .width_request(6)
+            .halign(gtk::Align::Start)
+            .cursor(&gdk::Cursor::from_name("col-resize", None).expect("GTK knows the resize pointer"))
+            .visible(false)
+            .build();
+        let content = gtk::Overlay::new();
+        content.set_child(Some(&toolbar_view));
+        content.add_overlay(&resize_handle);
+
         let split = adw::OverlaySplitView::builder()
             .sidebar(&side_panel.widget)
-            .content(&toolbar_view)
-            .min_sidebar_width(240.0)
-            .max_sidebar_width(240.0)
+            .content(&content)
+            .min_sidebar_width(f64::from(state::PANEL_WIDTH))
+            .max_sidebar_width(f64::from(state::PANEL_WIDTH))
             .show_sidebar(panel_wanted)
             // LeafMD decides when the panel shows as the window changes width
             // (see setup_panel_signals), rather than libadwaita reopening it
             // every time the window gets wide again
             .pin_sidebar(true)
             .build();
-        window.set_content(Some(&split));
+        // The split view sits in a holder whose only job is to notice the
+        // width it's given, so the panel can give up room before the document
+        // does (see setup_panel_resizing)
+        let split_holder = WidthWatcher::new(&split);
+        window.set_content(Some(&split_holder));
 
         // Below 920 pixels the panel would squeeze the document, so it slides
         // over it instead. This keeps the document at least 680 pixels wide
@@ -602,6 +633,10 @@ impl Window {
             word_label,
             folder: RefCell::new(None),
             panel_wanted: Cell::new(panel_wanted),
+            panel_width: Cell::new(state::load_panel_width()),
+            split_holder,
+            holder_width: Cell::new(0),
+            resize_handle,
             controls: toolbar_view,
             menu_button,
             distraction_free: Cell::new(false),
@@ -855,6 +890,7 @@ impl Window {
     fn setup_signals(self: &Rc<Self>) {
         self.setup_tab_signals();
         self.setup_panel_signals();
+        self.setup_panel_resizing();
         self.setup_distraction_free();
 
         // The banner's buttons act on the document it's showing
@@ -1004,6 +1040,131 @@ impl Window {
     // =====================================================================
     // Side panel
     // =====================================================================
+
+    /// Dragging the panel's edge, and keeping the document at least 680
+    /// pixels wide while the panel is beside it.
+    fn setup_panel_resizing(self: &Rc<Self>) {
+        // Each time the window is laid out, the panel's width is worked out
+        // for the new width before the panel and document are laid out, so
+        // the two always add up. (Waiting until afterwards, as this first did,
+        // never caught up while a window was being dragged narrower by hand,
+        // because GTK is busy drawing the whole time.)
+        let weak = Rc::downgrade(self);
+        self.split_holder.connect_resized(move |width| {
+            if let Some(win) = weak.upgrade()
+                && win.holder_width.replace(width) != width
+            {
+                win.update_panel_width();
+            }
+        });
+
+        // Dragging the strip on the document's left edge. The drag is watched
+        // from the box holding everything, which stays put, rather than from
+        // the strip, which moves with the panel's edge as it's dragged, so how
+        // far the pointer has moved is measured from somewhere fixed.
+        // It's checked before anything else sees the press, so a press on the
+        // strip doesn't also place the cursor in the document.
+        let drag = gtk::GestureDrag::new();
+        drag.set_propagation_phase(gtk::PropagationPhase::Capture);
+        // The panel's width when the drag started, or None when the press
+        // wasn't on the strip, which leaves it to the document as usual
+        let start_width: Rc<Cell<Option<i32>>> = Rc::default();
+        let weak = Rc::downgrade(self);
+        let start = start_width.clone();
+        drag.connect_drag_begin(move |drag, x, y| {
+            let Some(win) = weak.upgrade() else { return };
+            let on_handle = win.resize_handle.is_visible()
+                && win
+                    .split_holder
+                    .pick(x, y, gtk::PickFlags::DEFAULT)
+                    .is_some_and(|widget| widget == win.resize_handle);
+            if on_handle {
+                start.set(Some(win.shown_panel_width()));
+                drag.set_state(gtk::EventSequenceState::Claimed);
+            } else {
+                start.set(None);
+                drag.set_state(gtk::EventSequenceState::Denied);
+            }
+        });
+        let weak = Rc::downgrade(self);
+        let start = start_width.clone();
+        drag.connect_drag_update(move |_, offset_x, _| {
+            let (Some(win), Some(start)) = (weak.upgrade(), start.get()) else { return };
+            let wanted = start + offset_x.round() as i32;
+            win.panel_width.set(wanted.clamp(state::PANEL_WIDTH_MIN, win.panel_width_limit()));
+            win.update_panel_width();
+        });
+        let weak = Rc::downgrade(self);
+        drag.connect_drag_end(move |_, _, _| {
+            // Saved once the drag is over, and only if the width changed (a
+            // click on the strip without moving changes nothing)
+            if let (Some(win), Some(start)) = (weak.upgrade(), start_width.take())
+                && win.panel_width.get() != start
+            {
+                state::save_panel_width(win.panel_width.get());
+            }
+        });
+        self.split_holder.add_controller(drag);
+
+        // The strip is only there while the panel sits beside the document
+        let weak = Rc::downgrade(self);
+        self.split.connect_show_sidebar_notify(move |_| {
+            if let Some(win) = weak.upgrade() {
+                win.update_panel_width();
+            }
+        });
+        let weak = Rc::downgrade(self);
+        self.split.connect_collapsed_notify(move |_| {
+            if let Some(win) = weak.upgrade() {
+                win.update_panel_width();
+            }
+        });
+        self.update_panel_width();
+    }
+
+    /// The most the panel can be beside the document: 400 pixels, or less if
+    /// the document would then be narrower than 680 (which the header bar
+    /// needs), but never less than 240. "sp" grows with GNOME's Large Text
+    /// setting, like the 920sp at which the panel starts sliding over the
+    /// document, so the two agree.
+    fn panel_width_limit(&self) -> i32 {
+        // Before the window is first laid out it has no width yet. Assume
+        // there's room, rather than starting at 240 and jumping a moment later.
+        let width = self.holder_width.get();
+        if width == 0 {
+            return state::PANEL_WIDTH_MAX;
+        }
+        let document_min = adw::LengthUnit::Sp.to_px(680.0, Some(&self.split_holder.settings()));
+        let room = width - document_min.round() as i32;
+        room.clamp(state::PANEL_WIDTH, state::PANEL_WIDTH_MAX)
+    }
+
+    /// The width the panel shows at right now: the chosen width beside the
+    /// document (or less if the window hasn't room), and 240 while it slides
+    /// over the document in a narrow window.
+    fn shown_panel_width(&self) -> i32 {
+        if self.split.is_collapsed() {
+            state::PANEL_WIDTH
+        } else {
+            self.panel_width.get().min(self.panel_width_limit())
+        }
+    }
+
+    /// Sets the panel to the width it should show at, and shows the strip
+    /// for dragging it only while the panel sits beside the document.
+    fn update_panel_width(&self) {
+        let width = f64::from(self.shown_panel_width());
+        // The smallest width can't be more than the largest, so whichever
+        // would cross the other goes second
+        if width > self.split.max_sidebar_width() {
+            self.split.set_max_sidebar_width(width);
+            self.split.set_min_sidebar_width(width);
+        } else {
+            self.split.set_min_sidebar_width(width);
+            self.split.set_max_sidebar_width(width);
+        }
+        self.resize_handle.set_visible(!self.split.is_collapsed() && self.split.shows_sidebar());
+    }
 
     fn setup_panel_signals(self: &Rc<Self>) {
         // A window that opens on the Headings page says so from the start
@@ -2783,6 +2944,7 @@ impl Window {
                 "Side Panel",
                 &[
                     ("Opening the panel", "Press F9, click the button at the left end of the header bar, or choose Side Panel from the main menu. The panel stays open, in every window and next time you start LeafMD, until you close it the same way."),
+                    ("Making it wider", "Drag the line between the panel and the document to make the panel wider or narrower, to see more of long names. LeafMD remembers the width for new windows and next time. If the window gets too narrow, the panel shrinks first, so the document keeps its room."),
                     ("Files and Headings", "The panel has two pages. Switch between them with the buttons along its bottom. The panel opens on the page you used last."),
                     ("Files", "The panel shows a folder as a tree. Click a folder to open or close it, and click a file to open it in a tab. The open document's file is highlighted. The arrow keys move around the tree, Right and Left open and close folders, and Enter opens a file."),
                     ("Which folder", "Until you choose a folder, the panel shows the folder of the document you're looking at, and moves when you switch to a document somewhere else. Open Folder… in the main menu (Ctrl+Shift+O), or leafmd . in a terminal, chooses a folder for the window. The panel shows it whenever you're looking at a document inside it, until you close the window."),

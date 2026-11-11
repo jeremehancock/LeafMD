@@ -25,7 +25,7 @@
       <li>Switch between formatted, raw and split views with one click or Ctrl+1, 2 and 3</li>
       <li>A formatted-only view for pure, distraction-free reading, and a Distraction Free mode that hides everything but your document</li>
       <li>Tabs keep several documents in one window, and reopen when you start LeafMD again</li>
-      <li>An optional side panel shows the folder you're working in as a tree, for moving between documents</li>
+      <li>An optional, resizable side panel shows the folder you're working in as a tree, for moving between documents</li>
       <li>The side panel's Headings page lists the document's headings, so any section is one click away</li>
       <li>A word count and reading time sit quietly in the corner, and count your selection too</li>
       <li>Edit the raw text with the formatted view updating as you type</li>
@@ -100,6 +100,17 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.11.0" date="2026-11-11">
+      <description>
+        <p>Make room for long names in the side panel.</p>
+        <ul>
+          <li>Drag the line between the side panel and the document to make the panel wider or narrower. LeafMD remembers the width for new windows and next time</li>
+          <li>When the window gets narrower, the panel shrinks first, so the document keeps its room</li>
+          <li>Hover over a file or folder in the side panel to see its whole name</li>
+          <li>Fixed LeafMD closing when a link was clicked on a desktop with nothing set up to open it. It now says it couldn't open the link</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.10.0" date="2026-11-11">
       <description>
         <p>Find your way around a document, and see how long it is.</p>

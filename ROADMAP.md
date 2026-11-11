@@ -35,6 +35,7 @@ Each feature is planned in detail with [OpenSpec](https://github.com/Fission-AI/
 - [x] **Word count:** the number of words (and reading time) shown somewhere unobtrusive. Planned for the same release as Headings, since both keep track of what's in the document as you type
 - [x] **Tabs:** several documents in one window, with links and opened files getting a tab of their own, tabs that can be dragged between windows, and all of them reopening next time
 - [x] **Side panel with a folder tree** (F9): a panel on the left showing the folder you're working in, for moving between documents. `leafmd .` opens a folder in it from a terminal, and Open Folder… chooses one. It's closed until you open it, then stays open until you close it, and it's built so later features can add pages to it
+- [x] **Resizable side panel:** drag the panel's edge to make it wider or narrower, and the width is remembered. Hovering a name in Files shows it in full
 
 ## 5. Sharing
 
@@ -66,6 +67,5 @@ These might fit LeafMD, or might add more than they're worth. Each one needs a d
 
 - Spell checking in the raw text
 - Coloured syntax highlighting inside code blocks in the formatted view
-- Remembering where you were scrolled to in each file
 - Dropping an image onto the raw text inserts a markdown image link
 - A Snap package, so Ubuntu users can install LeafMD from Ubuntu's own App Center without setting up Flatpak. It would be a second package format to build and test for every release

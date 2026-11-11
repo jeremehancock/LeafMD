@@ -225,6 +225,39 @@ pub fn save_panel_page(page: &str) {
     update_state_file(|file| file.set_string(PANEL_GROUP, "page", page));
 }
 
+/// The side panel's width when nobody has resized it, in pixels
+pub const PANEL_WIDTH: i32 = 240;
+/// How narrow and how wide dragging its edge can make the side panel
+pub const PANEL_WIDTH_MIN: i32 = 200;
+pub const PANEL_WIDTH_MAX: i32 = 400;
+
+/// How wide new windows make the side panel: the width the user dragged it to
+/// last, or 240.
+pub fn load_panel_width() -> i32 {
+    let file = glib::KeyFile::new();
+    if file
+        .load_from_file(state_path(), glib::KeyFileFlags::NONE)
+        .is_err()
+    {
+        return PANEL_WIDTH;
+    }
+    panel_width_in(&file)
+}
+
+/// A saved width that isn't a number, or is outside what dragging allows
+/// (say someone edited the file by hand), counts as no width saved.
+fn panel_width_in(file: &glib::KeyFile) -> i32 {
+    file.integer(PANEL_GROUP, "width")
+        .ok()
+        .filter(|width| (PANEL_WIDTH_MIN..=PANEL_WIDTH_MAX).contains(width))
+        .unwrap_or(PANEL_WIDTH)
+}
+
+/// Remembers the width the user dragged the side panel to.
+pub fn save_panel_width(width: i32) {
+    update_state_file(|file| file.set_integer(PANEL_GROUP, "width", width));
+}
+
 const EDITOR_GROUP: &str = "editor";
 
 /// Whether the raw text shows line numbers. Off unless the user turned them on.
@@ -384,8 +417,8 @@ fn update_state_file(change: impl FnOnce(&glib::KeyFile)) {
 #[cfg(test)]
 mod tests {
     use super::{
-        FontFor, TabList, font_in, line_numbers_in, panel_open_in, panel_page_in, set_font_in, tabs_to_reopen,
-        tabs_to_save,
+        FontFor, TabList, font_in, line_numbers_in, panel_open_in, panel_page_in, panel_width_in, set_font_in,
+        tabs_to_reopen, tabs_to_save,
     };
     use gtk::glib;
 
@@ -400,6 +433,17 @@ mod tests {
         assert_eq!(panel_page_in(&key_file("[side-panel]\npage=headings\n")), "headings");
         assert_eq!(panel_page_in(&key_file("[side-panel]\nopen=true\n")), "files");
         assert_eq!(panel_page_in(&key_file("[side-panel]\npage=outline\n")), "files");
+    }
+
+    #[test]
+    fn the_side_panel_opens_at_the_width_chosen_last_or_240() {
+        assert_eq!(panel_width_in(&key_file("[side-panel]\nwidth=320\n")), 320);
+        assert_eq!(panel_width_in(&key_file("[side-panel]\nwidth=200\n")), 200);
+        assert_eq!(panel_width_in(&key_file("[side-panel]\nwidth=400\n")), 400);
+        assert_eq!(panel_width_in(&key_file("[side-panel]\nopen=true\n")), 240);
+        assert_eq!(panel_width_in(&key_file("[side-panel]\nwidth=wide\n")), 240);
+        assert_eq!(panel_width_in(&key_file("[side-panel]\nwidth=900\n")), 240);
+        assert_eq!(panel_width_in(&key_file("[side-panel]\nwidth=100\n")), 240);
     }
 
     #[test]
