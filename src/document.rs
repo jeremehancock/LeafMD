@@ -21,6 +21,8 @@ use crate::file_change::{self, Comparison, Version};
 use crate::format::{self, Inline, LineStyle};
 use crate::headings::{self, Heading};
 use crate::render;
+use crate::raw_view::RawView;
+use crate::spelling;
 use crate::state::{FontFor, ViewMode};
 use crate::text_size;
 use crate::typing;
@@ -141,6 +143,8 @@ pub struct Document {
     source_clamp: adw::ClampScrollable,
     pub source_view: sourceview5::View,
     pub buffer: sourceview5::Buffer,
+    /// Underlines misspelt words in the raw text (see spelling.rs)
+    spelling: libspelling::TextBufferAdapter,
     pub webview: webkit6::WebView,
     /// What to look for in the raw text, and how (match case, whole words)
     pub search_settings: sourceview5::SearchSettings,
@@ -227,7 +231,10 @@ impl Document {
         let flash_tag = gtk::TextTag::new(Some("leafmd-flash"));
         buffer.tag_table().add(&flash_tag);
 
-        let source_view = sourceview5::View::with_buffer(&buffer);
+        // GtkSourceView's editor with LeafMD's own wave under misspelt words
+        let raw_view = RawView::with_buffer(&buffer);
+        let spelling = spelling::attach(&raw_view, &buffer);
+        let source_view = raw_view.upcast::<sourceview5::View>();
         source_view.set_show_line_numbers(line_numbers_wanted());
         source_view.set_monospace(true);
         // Its font and size come from the raw text stylesheet in text_size.rs
@@ -300,6 +307,7 @@ impl Document {
             source_clamp,
             source_view,
             buffer,
+            spelling,
             webview,
             search_settings,
             search_context,
@@ -640,6 +648,11 @@ impl Document {
         let margins = self.source_view.left_margin() + self.source_view.right_margin();
         let numbers = if self.source_view.shows_line_numbers() { ten_chars / 2 + 16 } else { 0 };
         ten_chars * 8 + margins + numbers
+    }
+
+    /// Turns spell checking on or off for this document's raw text.
+    pub fn check_spelling(&self, on: bool) {
+        self.spelling.set_enabled(on);
     }
 
     /// Shows or hides the raw text's line numbers. The raw-only column widens

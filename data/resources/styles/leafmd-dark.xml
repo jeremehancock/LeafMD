@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- LeafMD's colours for the raw text in dark mode. Everything comes from
      GNOME's Adwaita-dark editor scheme except the line numbers and the
-     current line, which are quieter so they don't compete with the text. -->
+     current line, which are quieter so they don't compete with the text,
+     and misspelt words: LeafMD draws its own wave under those
+     (src/raw_view.rs), so the spell checker's thin underline is off here. -->
 <style-scheme id="leafmd-dark" name="LeafMD Dark" version="1.0" parent-scheme="Adwaita-dark">
   <metadata>
     <property name="variant">dark</property>
@@ -10,4 +12,5 @@
   <style name="current-line" background="#212124"/>
   <style name="current-line-number" background="#1D1D20" foreground="#9A9996"/>
   <style name="line-numbers" background="#1D1D20" foreground="#4A4A50"/>
+  <style name="def:misspelled-word" underline="none"/>
 </style-scheme>

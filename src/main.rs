@@ -8,8 +8,10 @@ mod format;
 mod headings;
 mod opening;
 mod preferences;
+mod raw_view;
 mod render;
 mod side_panel;
+mod spelling;
 mod state;
 mod text_size;
 mod typing;
@@ -187,6 +189,21 @@ fn main() -> glib::ExitCode {
         }
     });
     app.add_action(&line_numbers);
+
+    // Check Spelling in the main menu and in the raw text's right-click menu:
+    // one choice for every window and tab, remembered like Line Numbers.
+    let spell_check =
+        gio::SimpleAction::new_stateful("spell-check", None, &state::load_spell_check().to_variant());
+    let w = windows.clone();
+    spell_check.connect_change_state(move |action, value| {
+        let Some(on) = value.and_then(|v| v.get::<bool>()) else { return };
+        action.set_state(&on.to_variant());
+        state::save_spell_check(on);
+        for win in w.borrow().iter() {
+            win.update_spell_check(on);
+        }
+    });
+    app.add_action(&spell_check);
 
     let w = windows.clone();
     app.connect_activate(move |app| {

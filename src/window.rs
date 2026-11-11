@@ -317,6 +317,8 @@ impl Window {
         let panel_section = gio::Menu::new();
         panel_section.append(Some("Side Panel"), Some("win.side-panel"));
         panel_section.append(Some("Line Numbers"), Some("win.line-numbers"));
+        // Shared by every window, so it's the app's action rather than the window's
+        panel_section.append(Some("Check Spelling"), Some("app.spell-check"));
         panel_section.append(Some("Distraction Free"), Some("win.distraction-free"));
         panel_section.append(Some("Full Screen"), Some("win.fullscreen"));
         let app_section = gio::Menu::new();
@@ -2880,6 +2882,13 @@ impl Window {
 
     /// Shows or hides line numbers in every document, and ticks Line Numbers
     /// in the menu to match. Called when the setting or Distraction Free changes.
+    /// Turns spell checking on or off in every document in this window.
+    pub fn update_spell_check(&self, on: bool) {
+        for doc in self.documents() {
+            doc.check_spelling(on);
+        }
+    }
+
     pub fn update_line_numbers(&self) {
         let show = self.wants_line_numbers();
         for doc in self.documents() {
@@ -2953,6 +2962,7 @@ impl Window {
                     ("Jump to a word", "In Split view, double-click a word on the formatted side to select it in the raw text."),
                     ("Lists", "In a list, Enter starts the next item for you: another bullet, the next number, or an unticked checkbox. Press Enter on an empty item to end the list, or Shift+Enter for a new line without a marker."),
                     ("Pasting a link", "Select some text and paste a web address over it to turn the text into a link. Pasting anything else replaces the text as usual."),
+                    ("Spelling", "Misspelt words in the raw text get a red wavy underline. Code and web addresses aren't checked. Right-click an underlined word for suggested spellings, or choose Add to Dictionary to stop it being underlined for good, or Ignore to stop it until LeafMD closes. Check Spelling in the main menu turns it off or on in every window. Languages in the right-click menu changes the language, from the ones your system has dictionaries for."),
                     ("Word count", "The bottom-right corner shows how many words the document has, and about how long it takes to read at 200 words a minute. It counts the words a reader sees: markdown marks and link addresses aren't counted, but code is. Select some text, in the raw text or the formatted view, to count just that, such as 35 of 1,240 words."),
                 ],
             ),
@@ -3064,13 +3074,63 @@ impl Window {
         let content = adw::ToolbarView::new();
         content.add_top_bar(&adw::HeaderBar::new());
         content.set_content(Some(&page));
-        adw::Dialog::builder()
+        let dialog = adw::Dialog::builder()
             .title("Help")
             .content_width(520)
             .content_height(640)
             .child(&content)
-            .build()
-            .present(Some(&self.window));
+            .build();
+        self.present_reading_dialog(&dialog);
+    }
+
+    /// Shows one of LeafMD's reading dialogs (Help, Keyboard Shortcuts and the
+    /// cheatsheet) without a focus outline on its first row.
+    ///
+    /// When a dialog opens, GTK puts the keyboard's focus on the first thing in
+    /// it that can take focus, which in these dialogs is the first row. If the
+    /// dialog was opened from the keyboard (F1, say), GTK has already decided the
+    /// keyboard is in use and draws its blue focus outline around that row,
+    /// which looks like the row was picked. Hiding the outline doesn't move the
+    /// focus: the arrow keys and Page Down still scroll straight away, and the
+    /// outline comes back as soon as the keyboard moves between rows, the same
+    /// as after opening the dialog with the mouse.
+    fn present_reading_dialog(&self, dialog: &adw::Dialog) {
+        // Letting go of a key after the focus has moved turns the outline back
+        // on. That can happen after the dialog appears: a quick F1 is let go
+        // first, but the Ctrl and Shift of Ctrl+? are often still held. So the
+        // outline is hidden once the dialog is on screen, and again each time
+        // a key is let go, until a key is pressed in the dialog (moving around
+        // with Down or Tab, which should show it).
+        let hide_outline = {
+            let window = self.window.downgrade();
+            move || {
+                let window = window.clone();
+                // After GTK's own handling of the key, which is what turns it on
+                glib::idle_add_local_once(move || {
+                    if let Some(window) = window.upgrade() {
+                        window.set_focus_visible(false);
+                    }
+                });
+            }
+        };
+        let keys_used = Rc::new(Cell::new(false));
+        let keys = gtk::EventControllerKey::builder()
+            .propagation_phase(gtk::PropagationPhase::Capture)
+            .build();
+        let used = keys_used.clone();
+        keys.connect_key_pressed(move |_, _, _, _| {
+            used.set(true);
+            glib::Propagation::Proceed
+        });
+        let hide = hide_outline.clone();
+        keys.connect_key_released(move |_, _, _, _| {
+            if !keys_used.get() {
+                hide();
+            }
+        });
+        dialog.add_controller(keys);
+        dialog.connect_map(move |_| hide_outline());
+        dialog.present(Some(&self.window));
     }
 
     /// Lists every keyboard shortcut.
@@ -3171,13 +3231,13 @@ impl Window {
         let content = adw::ToolbarView::new();
         content.add_top_bar(&adw::HeaderBar::new());
         content.set_content(Some(&page));
-        adw::Dialog::builder()
+        let dialog = adw::Dialog::builder()
             .title("Keyboard Shortcuts")
             .content_width(520)
             .content_height(640)
             .child(&content)
-            .build()
-            .present(Some(&self.window));
+            .build();
+        self.present_reading_dialog(&dialog);
     }
 
     /// The most common markdown, with what each one looks like.
@@ -3281,13 +3341,13 @@ impl Window {
         let content = adw::ToolbarView::new();
         content.add_top_bar(&adw::HeaderBar::new());
         content.set_content(Some(&page));
-        adw::Dialog::builder()
+        let dialog = adw::Dialog::builder()
             .title("Markdown Cheatsheet")
             .content_width(600)
             .content_height(680)
             .child(&content)
-            .build()
-            .present(Some(&self.window));
+            .build();
+        self.present_reading_dialog(&dialog);
     }
 
     fn show_about(&self) {

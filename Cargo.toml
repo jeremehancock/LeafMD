@@ -12,6 +12,9 @@ gtk = { package = "gtk4", version = "0.11", features = ["v4_12"] }
 adw = { package = "libadwaita", version = "0.9", features = ["v1_8"] }
 # GtkSourceView: the raw text editor (syntax colouring, line numbers, undo)
 sourceview5 = "0.11"
+# libspelling: underlines misspelt words in the raw text and offers
+# corrections on right-click (the same library GNOME Text Editor uses)
+libspelling = "0.5"
 # WebKitGTK: shows the formatted view
 webkit6 = "0.6"
 # Markdown to HTML. Default features are turned off to skip its command-line tool.

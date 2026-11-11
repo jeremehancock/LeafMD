@@ -56,6 +56,7 @@ LeafMD follows your system's light or dark style, and the formatted view uses th
 - **Markdown cheatsheet** (Shift+F1, or the Cheatsheet button) shows the most common markdown next to what it looks like.
 - **Lists continue as you type:** press Enter in a list and the next bullet, number or unticked checkbox is added for you. Enter on an empty item ends the list, and Shift+Enter starts a plain line instead.
 - **Paste a link over text:** select some text and paste a web address to turn it into `[text](address)`.
+- **Spell checking:** misspelt words in the raw text get a red wavy underline as you type. Code and web addresses are skipped. Right-click an underlined word for suggestions, **Add to Dictionary** or **Ignore**. **Check Spelling** in the main menu turns it off or on everywhere, and **Languages** in the right-click menu switches language. It starts in your system's language (or US English), and offers the languages your system has dictionaries for.
 
 - In split view, **scrolling either side** scrolls the other to the same spot.
 - In split view, **double-click** a word on the formatted side to select that same word in the raw text. Its line lights up briefly so you can spot it.

@@ -9,8 +9,10 @@ Built with Rust, GTK4 and libadwaita. The app itself uses no npm or Node.js (onl
 System libraries needed (Manjaro/Arch package names):
 
 ```
-sudo pacman -S rust gtk4 libadwaita gtksourceview5 webkitgtk-6.0
+sudo pacman -S rust gtk4 libadwaita gtksourceview5 webkitgtk-6.0 libspelling
 ```
+
+`libspelling` is the spell checker for the raw text (the same one GNOME Text Editor uses). The GNOME runtime doesn't include it, so the Flatpak recipe builds it first, from the release named in `build-aux/io.github.jeremehancock.LeafMD.json`, and the dictionaries come from the runtime. Only English dictionaries are always there; Flatpak adds other languages' dictionaries when your system is set up for those languages.
 
 Then, from the top folder:
 
@@ -47,7 +49,7 @@ Pushes are checked and built as a Flatpak on GitHub (`.github/workflows/ci.yml`)
 ./build-aux/sdk-check.sh
 ```
 
-On GitHub, these checks reuse the Rust libraries compiled by an earlier run, so only LeafMD's own code is compiled again. The Flatpak build never uses those files, and a release skips them altogether, so its checks and its build both start from scratch.
+Before the checks, it builds libspelling inside the SDK (the same release the Flatpak recipe uses, downloaded and checked against the recipe's checksum) into `target/sdk-libspelling`, and reuses that build until the release changes. On GitHub, these checks reuse the Rust libraries compiled by an earlier run, so only LeafMD's own code is compiled again. The Flatpak build never uses those files, and a release skips them altogether, so its checks and its build both start from scratch.
 
 LeafMD isn't on Flathub, but it keeps meeting Flathub's rules. To run Flathub's own checker (`flatpak-builder-lint`) on the Flatpak recipe and the app store description:
 
@@ -106,6 +108,8 @@ With Claude Code, `/ship` walks a change through all of this: the checks, trying
 | `src/folder_tree.rs` | The Files page of the side panel: the folder tree, which files are greyed out, highlighting the open document, and which folders LeafMD can see, with tests |
 | `src/headings.rs` | Finding a document's headings, and the Headings page of the side panel that lists them, jumps to them and highlights the section you're reading, with tests |
 | `src/word_count.rs` | Counting the words a reader would see, and the wording of the label in the document's corner ("1,240 words · 7 min read"), with tests |
+| `src/raw_view.rs` | The raw text editor: GtkSourceView's editor plus LeafMD's own wavy red underline under misspelt words, drawn a little below the letters because GTK's built-in one is too small to see well |
+| `src/spelling.rs` | Spell checking in the raw text: the one spell checker every document shares, picking its language (the one the user chose, else the system's, else US English), joining it to each document's text and right-click menu, and keeping Check Spelling the same in every window |
 | `src/document.rs` | One open document: the raw editor, the formatted view, links, saving and reloading, and noticing changes to its file |
 | `src/text_size.rs` | How big the text is and in which font: the two fonts from Preferences, each window's zoom on top of them, and the stylesheet that sets the raw text's font, with tests |
 | `src/preferences.rs` | The Preferences window: the raw text and formatted view fonts, and their Reset buttons |
