@@ -381,6 +381,28 @@ click_window() { # <x> <y>
     sleep 0.3
 }
 
+# Presses the button at a point in the focused window (measured like
+# click_window), moves the pointer sideways by <dx> pixels in five steps, the
+# way a hand would, and lets go. Negative <dx> drags to the left.
+drag_window() { # <x> <y> <dx>
+    in_shell "let f = $focused.get_frame_rect();
+        globalThis.pointer.notify_absolute_motion(0, f.x + ($1), f.y + ($2)); 0" > /dev/null
+    sleep 0.3
+    in_shell 'const C = imports.gi.Clutter;
+        globalThis.pointer.notify_button(0, C.BUTTON_PRIMARY, C.ButtonState.PRESSED); 0' > /dev/null
+    sleep 0.2
+    local step
+    for step in 1 2 3 4 5; do
+        in_shell "let f = $focused.get_frame_rect();
+            globalThis.pointer.notify_absolute_motion(0, f.x + ($1) + ($3) * $step / 5, f.y + ($2)); 0" > /dev/null
+        sleep 0.1
+    done
+    sleep 0.2
+    in_shell 'const C = imports.gi.Clutter;
+        globalThis.pointer.notify_button(0, C.BUTTON_PRIMARY, C.ButtonState.RELEASED); 0' > /dev/null
+    sleep 0.3
+}
+
 # Closes the focused window the way its close button does
 # Turns the mouse wheel one notch over wherever the pointer is (see
 # move_pointer), holding Ctrl if asked. Ctrl goes down a moment before the

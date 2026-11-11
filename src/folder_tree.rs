@@ -345,13 +345,17 @@ impl FilesPage {
             let openable = folder || can_open(info.attribute_string("standard::fast-content-type").as_deref());
             icon.set_icon_name(Some(if folder { "leafmd-folder-symbolic" } else { "leafmd-document-symbolic" }));
             // A file LeafMD can't open is greyed out, can't be highlighted or
-            // opened, and says why when hovered
+            // opened, and says why when hovered. Anything else shows its whole
+            // name when hovered, since a long one is cut short to fit the panel.
+            // The tooltip goes on the whole row, not just the name, which can
+            // end well before the pointer does.
             if openable {
                 line.remove_css_class("dim-label");
             } else {
                 line.add_css_class("dim-label");
             }
-            line.set_tooltip_text(if openable { None } else { Some(CANT_OPEN) });
+            let name = info.display_name();
+            expander.set_tooltip_text(Some(if openable { name.as_str() } else { CANT_OPEN }));
             item.set_selectable(openable);
             item.set_activatable(openable);
         });

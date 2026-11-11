@@ -26,6 +26,53 @@ use crate::typing;
 use crate::word_count;
 use crate::window::{Window, file_filters};
 
+/// Opens a web address or file in its usual app: a web link in the default
+/// browser, a PDF in the PDF viewer, and so on. Returns why, in a few words,
+/// if it couldn't.
+///
+/// Inside Flatpak, GIO asks the desktop to do it through its "portal" (a
+/// desktop service that opens things on a sandboxed app's behalf). With no
+/// portal running, GIO doesn't return an error but stops LeafMD altogether
+/// (an assertion inside GLib's own portal code fails). So LeafMD first asks
+/// the portal for its version, which also starts it if it isn't running yet,
+/// and only hands it the link if it answers. (GTK's UriLauncher was tried
+/// instead of GIO, but its requests failed with "The application launch
+/// failed" inside Flatpak, while GIO's route works.)
+async fn open_in_usual_app(uri: &str, context: &gdk::AppLaunchContext) -> Result<(), String> {
+    let in_flatpak = std::path::Path::new("/.flatpak-info").exists();
+    if in_flatpak && !portal_answers().await {
+        eprintln!("LeafMD: could not open link: the desktop portal didn't answer");
+        return Err("no app is available to open it".to_string());
+    }
+    gio::AppInfo::launch_default_for_uri_future(uri, Some(context))
+        .await
+        .map_err(|err| {
+            eprintln!("LeafMD: could not open link: {err}");
+            err.message().to_string()
+        })
+}
+
+/// Whether the desktop's portal for opening links is there to ask. Waits up
+/// to two seconds for an answer; when the portal is there, it comes back in
+/// a few milliseconds.
+async fn portal_answers() -> bool {
+    let Ok(bus) = gio::bus_get_future(gio::BusType::Session).await else {
+        return false;
+    };
+    bus.call_future(
+        Some("org.freedesktop.portal.Desktop"),
+        "/org/freedesktop/portal/desktop",
+        "org.freedesktop.DBus.Properties",
+        "Get",
+        Some(&("org.freedesktop.portal.OpenURI", "version").to_variant()),
+        None,
+        gio::DBusCallFlags::NONE,
+        2000,
+    )
+    .await
+    .is_ok()
+}
+
 /// The empty page (styles only) that the formatted view is drawn into.
 const PREVIEW_PAGE: &str = include_str!("preview.html");
 
@@ -1333,19 +1380,15 @@ impl Document {
             // A link to another file, like [License](LICENSE)
             self.open_local_link(&uri);
         } else if action.navigation_type() == webkit6::NavigationType::LinkClicked {
-            // Opens the link in your default browser. Inside Flatpak, GIO asks the
-            // desktop to do it through a "portal". (GTK's UriLauncher was tried first,
-            // but its requests failed with "The application launch failed", while
-            // this route works.)
+            // Opens the link in your default browser (see open_in_usual_app).
             // If it fails, say so instead of doing nothing.
             let context = WidgetExt::display(&self.webview).app_launch_context();
             let weak = Rc::downgrade(self);
             glib::spawn_future_local(async move {
-                if let Err(err) = gio::AppInfo::launch_default_for_uri_future(&uri, Some(&context)).await
+                if let Err(why) = open_in_usual_app(&uri, &context).await
                     && let Some(doc) = weak.upgrade()
                 {
-                    eprintln!("LeafMD: could not open link: {err}");
-                    doc.toast(&format!("Couldn't open the link: {}", err.message()));
+                    doc.toast(&format!("Couldn't open the link: {why}"));
                 }
             });
         } else if uri.starts_with("file://")
@@ -1402,10 +1445,8 @@ impl Document {
                 }
             } else {
                 let context = WidgetExt::display(&doc.webview).app_launch_context();
-                if let Err(err) =
-                    gio::AppInfo::launch_default_for_uri_future(&file.uri(), Some(&context)).await
-                {
-                    doc.toast(&format!("Couldn't open the link: {}", err.message()));
+                if let Err(why) = open_in_usual_app(&file.uri(), &context).await {
+                    doc.toast(&format!("Couldn't open the link: {why}"));
                 }
             }
         });
