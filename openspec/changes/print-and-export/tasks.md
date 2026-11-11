@@ -38,7 +38,7 @@
 
 - [x] 7.1 Run `cargo build`, `cargo test`, `cargo clippy --all-targets -- -D warnings`, `./build-aux/sdk-check.sh`, `./build-aux/flathub-lint.sh` and `openspec validate --strict print-and-export`, with no failures or warnings
 - [x] 7.2 Rebuild and install the Flatpak with `./build-aux/flatpak-install.sh`, then run `./build-aux/end-to-end-tests.sh` and check every scenario passes (46, or 47 if task 4.2 added one)
-- [ ] 7.3 Ask the owner to close every LeafMD window, reopen it and try what the tests can't: Ctrl+P printing to a real printer (or Print to File) from the Raw view in dark style, Export as PDF and Export as HTML through the real save dialogs, opening the HTML in a browser in light and dark style and after moving it elsewhere, and narrowing a window with many tabs
+- [x] 7.3 Ask the owner to close every LeafMD window, reopen it and try what the tests can't: Ctrl+P printing to a real printer (or Print to File) from the Raw view in dark style, Export as PDF and Export as HTML through the real save dialogs, opening the HTML in a browser in light and dark style and after moving it elsewhere, and narrowing a window with many tabs
 
 ## Workflow follow-up
 
