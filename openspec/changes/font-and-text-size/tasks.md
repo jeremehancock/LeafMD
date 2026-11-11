@@ -39,7 +39,7 @@
 
 - [x] 6.1 Run `cargo build`, `cargo test`, `cargo clippy --all-targets -- -D warnings`, `./build-aux/sdk-check.sh`, `./build-aux/flathub-lint.sh` and `openspec validate --strict font-and-text-size`, with no failures or warnings
 - [x] 6.2 Rebuild and install the Flatpak with `./build-aux/flatpak-install.sh`, then run `./build-aux/end-to-end-tests.sh` and check it ends with "41 of 41 passed"
-- [ ] 6.3 Ask the owner to close every LeafMD window, reopen it and try what the tests can't: the Preferences window and font picker, Reset, the fonts showing in every window at once, following GNOME's monospace font, the zoom row in the menu, 
+- [x] 6.3 Ask the owner to close every LeafMD window, reopen it and try what the tests can't: the Preferences window and font picker, Reset, the fonts showing in every window at once, following GNOME's monospace font, the zoom row in the menu, 
 
 ## Workflow follow-up
 
