@@ -26,6 +26,8 @@
       <li>A formatted-only view for pure, distraction-free reading, and a Distraction Free mode that hides everything but your document</li>
       <li>Tabs keep several documents in one window, and reopen when you start LeafMD again</li>
       <li>An optional side panel shows the folder you're working in as a tree, for moving between documents</li>
+      <li>The side panel's Headings page lists the document's headings, so any section is one click away</li>
+      <li>A word count and reading time sit quietly in the corner, and count your selection too</li>
       <li>Edit the raw text with the formatted view updating as you type</li>
       <li>A formatting bar adds bold, links, lists, headings, tables and more for you</li>
       <li>Lists continue themselves when you press Enter, and pasting a web address over text makes a link</li>
@@ -98,6 +100,17 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.10.0" date="2026-11-11">
+      <description>
+        <p>Find your way around a document, and see how long it is.</p>
+        <ul>
+          <li>The side panel has a new Headings page listing the document's headings. Click one to jump straight there, and the section you're reading is highlighted as you scroll</li>
+          <li>Switch between Files and Headings with the buttons along the bottom of the side panel. It opens on the page you used last</li>
+          <li>The bottom-right corner shows the word count and reading time. Select some text to count just that</li>
+          <li>With Distraction Free and Full Screen both on, Escape now leaves Full Screen first, and a second Escape leaves Distraction Free</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.9.0" date="2026-11-10">
       <description>
         <p>Make the text the size and style you like.</p>

@@ -2,22 +2,31 @@
 
 use comrak::{Options, markdown_to_html};
 
-/// Converts markdown to HTML, then strips anything unsafe from it.
-///
-/// Raw HTML inside the markdown is allowed through the converter on purpose
-/// (lots of READMEs use it for things like centred images), and the cleaning
-/// step afterwards removes scripts, event handlers, iframes and so on.
-pub fn markdown_to_safe_html(markdown: &str) -> String {
+/// The markdown features LeafMD understands (GitHub-style extras on top of
+/// plain markdown). The formatted view, the Headings page and the word count
+/// all read markdown with these, so they agree on what's a table, a heading
+/// or a checklist.
+pub fn markdown_options() -> Options<'static> {
     let mut options = Options::default();
     // GitHub-style extras
     options.extension.strikethrough = true;
     options.extension.table = true;
     options.extension.autolink = true;
     options.extension.tasklist = true;
+    options.extension.footnotes = true;
+    options
+}
+
+/// Converts markdown to HTML, then strips anything unsafe from it.
+///
+/// Raw HTML inside the markdown is allowed through the converter on purpose
+/// (lots of READMEs use it for things like centred images), and the cleaning
+/// step afterwards removes scripts, event handlers, iframes and so on.
+pub fn markdown_to_safe_html(markdown: &str) -> String {
+    let mut options = markdown_options();
     // Marks checklist items with class="task-list-item", so the formatted
     // view can show just the checkbox on them instead of a bullet as well
     options.render.tasklist_classes = true;
-    options.extension.footnotes = true;
     // Gives each heading an id so links like [see below](#install) work
     options.extension.header_id_prefix = Some(String::new());
     options.render.r#unsafe = true;

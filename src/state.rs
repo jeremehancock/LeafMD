@@ -196,6 +196,35 @@ pub fn save_panel_open(open: bool) {
     update_state_file(|file| file.set_boolean(PANEL_GROUP, "open", open));
 }
 
+/// The side panel's pages, by the names LeafMD knows them by
+pub const PANEL_PAGES: [&str; 2] = ["files", "headings"];
+
+/// Which page new windows open the side panel on: the one the user chose
+/// last, or Files.
+pub fn load_panel_page() -> &'static str {
+    let file = glib::KeyFile::new();
+    if file
+        .load_from_file(state_path(), glib::KeyFileFlags::NONE)
+        .is_err()
+    {
+        return PANEL_PAGES[0];
+    }
+    panel_page_in(&file)
+}
+
+fn panel_page_in(file: &glib::KeyFile) -> &'static str {
+    let saved = file.string(PANEL_GROUP, "page").ok();
+    PANEL_PAGES
+        .into_iter()
+        .find(|page| saved.as_deref() == Some(*page))
+        .unwrap_or(PANEL_PAGES[0])
+}
+
+/// Remembers the page the user chose in the side panel.
+pub fn save_panel_page(page: &str) {
+    update_state_file(|file| file.set_string(PANEL_GROUP, "page", page));
+}
+
 const EDITOR_GROUP: &str = "editor";
 
 /// Whether the raw text shows line numbers. Off unless the user turned them on.
@@ -355,7 +384,7 @@ fn update_state_file(change: impl FnOnce(&glib::KeyFile)) {
 #[cfg(test)]
 mod tests {
     use super::{
-        FontFor, TabList, font_in, line_numbers_in, panel_open_in, set_font_in, tabs_to_reopen,
+        FontFor, TabList, font_in, line_numbers_in, panel_open_in, panel_page_in, set_font_in, tabs_to_reopen,
         tabs_to_save,
     };
     use gtk::glib;
@@ -364,6 +393,13 @@ mod tests {
         let file = glib::KeyFile::new();
         file.load_from_data(text, glib::KeyFileFlags::NONE).expect("test state file reads");
         file
+    }
+
+    #[test]
+    fn the_side_panel_opens_on_the_page_chosen_last_or_files() {
+        assert_eq!(panel_page_in(&key_file("[side-panel]\npage=headings\n")), "headings");
+        assert_eq!(panel_page_in(&key_file("[side-panel]\nopen=true\n")), "files");
+        assert_eq!(panel_page_in(&key_file("[side-panel]\npage=outline\n")), "files");
     }
 
     #[test]

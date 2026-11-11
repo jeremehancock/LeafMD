@@ -10,9 +10,9 @@ file does, and docs/PUBLISHING.md covers releases and leafmd.app.
 `openspec/specs/` describes how LeafMD behaves today, one folder per area
 (views, documents, recent-files, windows, tabs, links, formatted-view,
 formatting-bar, find-replace, smart-typing, help-and-about, distribution,
-desktop-integration, side-panel, folder-tree, distraction-free,
-end-to-end-tests). Read the relevant spec before changing behaviour, and don't
-change behaviour a spec describes without saying so.
+desktop-integration, side-panel, folder-tree, headings, word-count,
+distraction-free, end-to-end-tests). Read the relevant spec before changing
+behaviour, and don't change behaviour a spec describes without saying so.
 
 - **Features and behaviour changes** (anything from ROADMAP.md, or anything a
   user would notice): start with `/opsx:propose`, get the owner's approval of

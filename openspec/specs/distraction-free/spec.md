@@ -21,11 +21,15 @@ LeafMD SHALL turn Distraction Free on and off for the current window with Ctrl+S
 - **THEN** the window opens with all its bars showing
 
 ### Requirement: What Distraction Free hides
-In Distraction Free, LeafMD SHALL hide the header bar, the tab bar, the formatting bar, the bottom bar of a narrow window, the side panel and the line numbers. The find bar and the banner about a file changed by another app SHALL still appear when needed.
+In Distraction Free, LeafMD SHALL hide the header bar, the tab bar, the formatting bar, the bottom bar of a narrow window, the side panel, the word count and the line numbers. The find bar and the banner about a file changed by another app SHALL still appear when needed.
 
 #### Scenario: The side panel
 - **WHEN** the side panel is open and the user turns Distraction Free on
 - **THEN** the panel is hidden, and turning Distraction Free off brings it back
+
+#### Scenario: The word count
+- **WHEN** the bottom-right corner says "1,240 words · 7 min read" and the user presses Ctrl+Shift+D
+- **THEN** the word count disappears, and pressing Ctrl+Shift+D again brings it back
 
 #### Scenario: Finding text
 - **WHEN** the user presses Ctrl+F in Distraction Free
@@ -77,7 +81,7 @@ Turning Distraction Free on SHALL hide the window's line numbers. Choosing Line 
 - **THEN** the new document has no line numbers
 
 ### Requirement: Leaving with Escape
-Escape SHALL leave Distraction Free and Full Screen together. Anything that already uses Escape SHALL come first: an open find bar closes, a side panel sliding over the document tucks away, and an open menu closes.
+Escape SHALL leave Full Screen first, and a second Escape SHALL leave Distraction Free. Anything that already uses Escape SHALL come first: an open find bar closes, a side panel sliding over the document tucks away, and an open menu closes.
 
 #### Scenario: Plain Escape
 - **WHEN** the window is in Distraction Free with the cursor in the raw text and the user presses Escape
@@ -89,4 +93,4 @@ Escape SHALL leave Distraction Free and Full Screen together. Anything that alre
 
 #### Scenario: Both on
 - **WHEN** the window is in Distraction Free and Full Screen and the user presses Escape
-- **THEN** it leaves both at once
+- **THEN** the window leaves full screen with the bars still hidden, and a second Escape brings the bars back and leaves Distraction Free

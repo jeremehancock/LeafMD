@@ -1,5 +1,6 @@
-//! The side panel on the left of each window. It holds pages (only Files for
-//! now), shows one at a time, and has its own small header bar with a title.
+//! The side panel on the left of each window. It holds pages (Files and
+//! Headings), shows one at a time, and has its own small header bar with a
+//! title and a switcher along its bottom for choosing the page.
 //!
 //! Showing, hiding and remembering the panel is the window's job (window.rs),
 //! because it depends on the window's width. This file only builds what's
@@ -47,5 +48,27 @@ impl SidePanel {
     /// Sets the title at the top of the panel, like the folder's name for Files.
     pub fn set_title(&self, title: &str) {
         self.title.set_title(title);
+    }
+
+    /// Shows the page called `name`, if there is one.
+    pub fn set_visible_page(&self, name: &str) {
+        if self.stack.child_by_name(name).is_some() {
+            self.stack.set_visible_child_name(name);
+        }
+    }
+
+    /// The name of the page showing.
+    pub fn visible_page(&self) -> String {
+        self.stack.visible_child_name().map(|name| name.to_string()).unwrap_or_default()
+    }
+
+    /// Runs `changed` with the page's name whenever another page is shown,
+    /// whether by the switcher or by LeafMD.
+    pub fn connect_page_changed(&self, changed: impl Fn(&str) + 'static) {
+        self.stack.connect_visible_child_name_notify(move |stack| {
+            if let Some(name) = stack.visible_child_name() {
+                changed(&name);
+            }
+        });
     }
 }
