@@ -18,8 +18,8 @@
     </p>
     <p>
       Rather than trying to do everything, LeafMD focuses on doing the essentials
-      well. There are no plugins to manage or settings to tune,
-      just a fast, dependable app that feels obvious from the moment you open it.
+      well. It is ready to use the moment you open it, and the few options it has
+      stay out of your way, so you can focus on reading and writing.
     </p>
     <ul>
       <li>Switch between formatted, raw and split views with one click or Ctrl+1, 2 and 3</li>
@@ -35,6 +35,7 @@
       <li>In split view, both sides scroll together</li>
       <li>Supports tables, task lists, footnotes and other GitHub-style markdown</li>
       <li>Open files, or a whole folder with leafmd ., from a terminal with an optional short leafmd command</li>
+      <li>Choose the fonts for the raw text and the formatted view, or zoom in and out with Ctrl+plus and Ctrl+minus</li>
       <li>Looks at home on GNOME, following your light or dark style and your accent colour</li>
     </ul>
   </description>

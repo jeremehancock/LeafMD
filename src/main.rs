@@ -5,9 +5,11 @@ mod find;
 mod folder_tree;
 mod format;
 mod opening;
+mod preferences;
 mod render;
 mod side_panel;
 mod state;
+mod text_size;
 mod typing;
 mod window;
 
@@ -241,6 +243,11 @@ fn set_shortcuts(app: &adw::Application) {
         ("win.view::preview", &["<Control>1"]),
         ("win.view::source", &["<Control>2"]),
         ("win.view::split", &["<Control>3"]),
+        // Zoom, in both views. Ctrl+= is Ctrl+plus without Shift on most keyboards.
+        ("win.zoom::in", &["<Control>plus", "<Control>equal", "<Control>KP_Add"]),
+        ("win.zoom::out", &["<Control>minus", "<Control>KP_Subtract"]),
+        ("win.zoom::reset", &["<Control>0", "<Control>KP_0"]),
+        ("win.preferences", &["<Control>comma"]),
         // Formatting the raw text (only works in Raw and Split view)
         ("win.format::bold", &["<Control>b"]),
         ("win.format::italic", &["<Control>i"]),

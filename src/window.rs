@@ -17,6 +17,7 @@ use crate::folder_tree::{self, FilesPage};
 use crate::opening::{self, FolderFacts, Target, WindowFacts};
 use crate::side_panel::SidePanel;
 use crate::state::{self, SavedState, ViewMode};
+use crate::text_size;
 
 /// When a file is opening, the longest LeafMD waits for the formatted view to
 /// finish drawing before showing the document anyway.
@@ -27,7 +28,7 @@ const ABOUT_TEXT: &str = "LeafMD is a markdown viewer and editor that keeps thin
 
 Read a document cleanly formatted, work directly in the raw text, or see both side by side and watch your changes appear as you type.
 
-Rather than trying to do everything, LeafMD focuses on doing the essentials well. There are no plugins to manage or settings to tune. It is just a fast, dependable app that feels obvious from the moment you open it, so you can spend your time on your writing instead of your tools.
+Rather than trying to do everything, LeafMD focuses on doing the essentials well. It is ready to use the moment you open it, and the few options it has stay out of your way, so you can focus on reading and writing.
 
 LeafMD was created with the help of AI.";
 
@@ -190,6 +191,12 @@ pub struct Window {
     /// Whether the side panel should be beside the document when the window is
     /// wide enough. In a narrow window it only slides out when asked.
     panel_wanted: Cell<bool>,
+    /// How big the text is in this window, as a percentage: 100 is the size
+    /// set in Preferences. Every tab in the window shares it, and it's never
+    /// saved, so each window starts at 100.
+    zoom: Cell<u32>,
+    /// The percentage in the zoom row at the top of the main menu
+    zoom_label: gtk::Button,
 }
 
 impl Window {
@@ -288,11 +295,19 @@ impl Window {
         panel_section.append(Some("Distraction Free"), Some("win.distraction-free"));
         panel_section.append(Some("Full Screen"), Some("win.fullscreen"));
         let app_section = gio::Menu::new();
+        app_section.append(Some("Preferences"), Some("win.preferences"));
         app_section.append(Some("Help"), Some("win.help"));
         app_section.append(Some("Markdown Cheatsheet"), Some("win.cheatsheet"));
         app_section.append(Some("Keyboard Shortcuts"), Some("win.shortcuts"));
         app_section.append(Some("About LeafMD"), Some("win.about"));
+        // The zoom row at the top: a placeholder item that the row's widgets
+        // fill in, once the menu button has made its popover (below)
+        let zoom_section = gio::Menu::new();
+        let zoom_item = gio::MenuItem::new(None, None);
+        zoom_item.set_attribute_value("custom", Some(&"zoom".to_variant()));
+        zoom_section.append_item(&zoom_item);
         let menu = gio::Menu::new();
+        menu.append_section(None, &zoom_section);
         menu.append_section(None, &file_section);
         menu.append_section(None, &save_section);
         menu.append_section(None, &find_section);
@@ -305,6 +320,17 @@ impl Window {
             .tooltip_text("Main Menu")
             .build();
         header.pack_end(&menu_button);
+        let zoom_label = gtk::Button::builder()
+            .label("100%")
+            .tooltip_text("Normal size (Ctrl+0)")
+            .action_name("win.zoom")
+            .action_target(&"reset".to_variant())
+            .css_classes(["flat"])
+            .hexpand(true)
+            .build();
+        if let Some(popover) = menu_button.popover().and_downcast::<gtk::PopoverMenu>() {
+            popover.add_child(&zoom_row(&zoom_label), "zoom");
+        }
         // GNOME's rounded switcher with LeafMD's own icons. Each toggle is named
         // after its view ("preview", "source", "split"); hovering shows the name.
         let view_switcher = adw::ToggleGroup::new();
@@ -559,7 +585,11 @@ impl Window {
             distraction_free: Cell::new(false),
             distraction_free_numbers: Cell::new(false),
             menu_from_key: Cell::new(false),
+            zoom: Cell::new(text_size::ZOOM_NORMAL),
+            zoom_label,
         });
+        text_size::install();
+        win.window.add_css_class(&text_size::zoom_class(text_size::ZOOM_NORMAL));
 
         win.setup_actions(saved.view);
         win.setup_signals();
@@ -730,6 +760,26 @@ impl Window {
                 win.action("fullscreen").set_state(&window.is_fullscreen().to_variant());
             }
         });
+
+        // Zoom: "in", "out" or "reset". Its state is the percentage as text
+        // ("110"), which the zoom row in the menu shows.
+        let zoom = gio::SimpleAction::new_stateful(
+            "zoom",
+            Some(glib::VariantTy::STRING),
+            &text_size::ZOOM_NORMAL.to_string().to_variant(),
+        );
+        let weak = Rc::downgrade(self);
+        zoom.connect_activate(move |_, param| {
+            if let (Some(win), Some(how)) = (weak.upgrade(), param.and_then(|p| p.str())) {
+                win.set_zoom(text_size::zoom_after(win.zoom.get(), how));
+            }
+        });
+        self.window.add_action(&zoom);
+        // Separate actions for the menu row's two buttons, so each can be greyed
+        // out on its own at the smallest and largest sizes
+        add("zoom-in", |win| win.set_zoom(text_size::zoom_after(win.zoom.get(), "in")));
+        add("zoom-out", |win| win.set_zoom(text_size::zoom_after(win.zoom.get(), "out")));
+        add("preferences", |win| crate::preferences::show(&win.window));
 
         // "view" remembers which of the three views is active
         let view = gio::SimpleAction::new_stateful(
@@ -1315,6 +1365,7 @@ impl Window {
             }
             doc.set_window(Rc::downgrade(&win));
             doc.show_line_numbers(win.wants_line_numbers());
+            doc.set_zoom(win.zoom.get());
             win.update_tab(&doc);
             win.reveal_document();
             win.selected_tab_changed();
@@ -1372,6 +1423,20 @@ impl Window {
         }
     }
 
+    /// Makes the text in every tab of this window bigger or smaller: swaps the
+    /// window's zoom style name (for the raw text) and tells each document (for
+    /// the formatted view and the raw text's column).
+    fn set_zoom(&self, zoom: u32) {
+        let old = self.zoom.replace(zoom);
+        self.window.remove_css_class(&text_size::zoom_class(old));
+        self.window.add_css_class(&text_size::zoom_class(zoom));
+        text_size::zoom_documents(&self.documents(), zoom);
+        self.action("zoom").set_state(&zoom.to_string().to_variant());
+        self.zoom_label.set_label(&format!("{zoom}%"));
+        self.action("zoom-in").set_enabled(zoom < text_size::ZOOM_MAX);
+        self.action("zoom-out").set_enabled(zoom > text_size::ZOOM_MIN);
+    }
+
     /// Every document in this window, in tab order.
     fn documents(&self) -> Vec<Rc<Document>> {
         (0..self.tab_view.n_pages())
@@ -1389,6 +1454,7 @@ impl Window {
         let doc = Document::new(view);
         doc.set_window(Rc::downgrade(self));
         doc.source_view.set_show_line_numbers(self.wants_line_numbers());
+        doc.set_zoom(self.zoom.get());
         doc.apply_view(view);
         doc.update_style();
         doc
@@ -2571,7 +2637,7 @@ impl Window {
         const TERMINAL_ROW: &str = "From a terminal";
         const TERMINAL_SETUP_URL: &str = "https://leafmd.app/#terminal";
         let page = adw::PreferencesPage::new();
-        let sections: [(&str, &[(&str, &str)]); 8] = [
+        let sections: [(&str, &[(&str, &str)]); 9] = [
             (
                 "The Three Views",
                 &[
@@ -2622,6 +2688,15 @@ impl Window {
                     ("Still there when needed", "Find (Ctrl+F) and the banner about a file changed by another app still appear. Choosing Line Numbers from the menu shows them here too."),
                     ("Leaving", "Press Escape or Ctrl+Shift+D, or choose Distraction Free again. Everything comes back as it was."),
                     ("Full screen", "Press F11, or choose Full Screen from the main menu, to fill the screen. It works with or without Distraction Free; use both for nothing but your text. Escape leaves both."),
+                ],
+            ),
+            (
+                "Fonts and Zoom",
+                &[
+                    ("Fonts", "Choose Preferences from the main menu, or press Ctrl+comma, to pick the font and size for the raw text and for the formatted view. Changes show straight away in every window, and LeafMD remembers them."),
+                    ("Starting fonts", "The raw text starts in the monospace font set in GNOME Settings, and keeps following it until you choose another. The formatted view starts in Adwaita Sans. The Reset button beside a font you've changed puts it back."),
+                    ("Zoom", "Ctrl+plus makes the text bigger and Ctrl+minus smaller, in both views, and Ctrl+0 goes back to normal. Holding Ctrl and turning the mouse wheel does the same. The row at the top of the main menu shows how far you've zoomed, and clicking the percentage goes back to 100%."),
+                    ("Which tabs", "Zoom covers every tab in that window, including tabs you open or move there later. Other windows keep their own zoom. Each time LeafMD starts, zoom is back to 100%; for a lasting change, use Preferences."),
                 ],
             ),
             (
@@ -2705,6 +2780,10 @@ impl Window {
                     ("Distraction Free", "Ctrl+Shift+D"),
                     ("Full screen", "F11"),
                     ("Leave Distraction Free and full screen", "Escape"),
+                    ("Zoom in", "Ctrl+Plus or Ctrl+="),
+                    ("Zoom out", "Ctrl+Minus"),
+                    ("Normal size", "Ctrl+0"),
+                    ("Zoom with the mouse", "Ctrl+wheel"),
                 ],
             ),
             (
@@ -2752,6 +2831,7 @@ impl Window {
             (
                 "Help",
                 &[
+                    ("Preferences", "Ctrl+,"),
                     ("Help", "F1"),
                     ("Markdown cheatsheet", "Shift+F1"),
                     ("Keyboard shortcuts", "Ctrl+?"),
@@ -2992,6 +3072,33 @@ impl Window {
 /// libadwaita leaves a 6 pixel gap under a top bar, which suits a header bar
 /// but would sit between the document and the inner bars even while they're
 /// hidden, so the inner bars don't have it.
+/// The zoom row at the top of the main menu, like GNOME Text Editor's: Zoom
+/// Out, the zoom as a percentage (clicking it goes back to 100%), and Zoom In.
+fn zoom_row(percentage: &gtk::Button) -> gtk::Box {
+    let row = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .spacing(6)
+        .margin_start(6)
+        .margin_end(6)
+        .build();
+    let zoom_out = gtk::Button::builder()
+        .icon_name("zoom-out-symbolic")
+        .tooltip_text("Zoom out (Ctrl+Minus)")
+        .action_name("win.zoom-out")
+        .css_classes(["flat", "circular"])
+        .build();
+    let zoom_in = gtk::Button::builder()
+        .icon_name("zoom-in-symbolic")
+        .tooltip_text("Zoom in (Ctrl+Plus)")
+        .action_name("win.zoom-in")
+        .css_classes(["flat", "circular"])
+        .build();
+    row.append(&zoom_out);
+    row.append(percentage);
+    row.append(&zoom_in);
+    row
+}
+
 fn load_window_style() {
     static LOADED: std::sync::Once = std::sync::Once::new();
     LOADED.call_once(|| {

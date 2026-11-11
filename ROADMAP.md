@@ -28,9 +28,9 @@ Each feature is planned in detail with [OpenSpec](https://github.com/Fission-AI/
 ## 4. Reading and writing comfort
 
 - [x] **Distraction-free mode:** one switch (Ctrl+Shift+D, or the main menu) that hides the header bar, tabs, formatting bar, side panel and line numbers, leaving just your document. The bars slide back in when the pointer reaches the window's edge. Each window starts with it off. Full screen (F11) is separate, and the two can be used together
-- [ ] **Font and text size:** choose the font and size for the raw text and for the formatted view, in a small Preferences window. LeafMD's description promises "no settings to tune", so that wording changes with this
+- [x] **Font and text size:** choose the font and size for the raw text and for the formatted view, in a small Preferences window. LeafMD's description used to promise "no settings to tune", and now says it's great out of the box with its few options kept out of the way
 - [x] **Reload when the file changes:** if another app changes the open file, LeafMD shows the new version. If there are unsaved changes too, it asks which to keep instead of overwriting anything
-- [ ] **Zoom:** Ctrl+plus, Ctrl+minus and Ctrl+0 make the text bigger, smaller or back to normal in both views, for a quick change without opening Preferences. Planned for the same release as Font and text size, since both change the same text size
+- [x] **Zoom:** Ctrl+plus, Ctrl+minus and Ctrl+0 make the text bigger, smaller or back to normal in both views, for a quick change without opening Preferences. Planned for the same release as Font and text size, since both change the same text size
 - [ ] **Headings in the side panel:** a Headings page in the side panel listing the document's headings, indented to match their level. Clicking one jumps to that section. It's the panel's second page, so it also adds a way to switch between Files and Headings
 - [ ] **Word count:** the number of words (and reading time) shown somewhere unobtrusive. Planned for the same release as Headings, since both keep track of what's in the document as you type
 - [x] **Tabs:** several documents in one window, with links and opened files getting a tab of their own, tabs that can be dragged between windows, and all of them reopening next time
