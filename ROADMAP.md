@@ -41,9 +41,9 @@ Each feature is planned in detail with [OpenSpec](https://github.com/Fission-AI/
 
 These three are planned as one release, since they all start from the formatted document and Print and Export to PDF share most of their work.
 
-- [ ] **Print** (Ctrl+P): prints the formatted document
-- [ ] **Export to PDF:** saves the formatted document as a PDF
-- [ ] **Export to HTML:** saves a single, self-contained web page with LeafMD's styles, which opens in any browser
+- [x] **Print** (Ctrl+P): prints the formatted document
+- [x] **Export to PDF:** saves the formatted document as a PDF
+- [x] **Export to HTML:** saves a single, self-contained web page with LeafMD's styles, which opens in any browser
 
 ## 6. First public release
 

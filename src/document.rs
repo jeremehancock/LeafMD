@@ -16,6 +16,7 @@ use sourceview5::prelude::*;
 use webkit6::prelude::*;
 
 use crate::dialog::{Answer, Question};
+use crate::export;
 use crate::file_change::{self, Comparison, Version};
 use crate::format::{self, Inline, LineStyle};
 use crate::headings::{self, Heading};
@@ -40,7 +41,7 @@ use crate::window::{Window, file_filters};
 /// failed" inside Flatpak, while GIO's route works.)
 async fn open_in_usual_app(uri: &str, context: &gdk::AppLaunchContext) -> Result<(), String> {
     let in_flatpak = std::path::Path::new("/.flatpak-info").exists();
-    if in_flatpak && !portal_answers().await {
+    if in_flatpak && !portal_answers("org.freedesktop.portal.OpenURI").await {
         eprintln!("LeafMD: could not open link: the desktop portal didn't answer");
         return Err("no app is available to open it".to_string());
     }
@@ -52,10 +53,10 @@ async fn open_in_usual_app(uri: &str, context: &gdk::AppLaunchContext) -> Result
         })
 }
 
-/// Whether the desktop's portal for opening links is there to ask. Waits up
-/// to two seconds for an answer; when the portal is there, it comes back in
-/// a few milliseconds.
-async fn portal_answers() -> bool {
+/// Whether one of the desktop's portals (such as OpenURI for opening links,
+/// or Print) is there to ask. Waits up to two seconds for an answer; when the
+/// portal is there, it comes back in a few milliseconds.
+pub async fn portal_answers(interface: &str) -> bool {
     let Ok(bus) = gio::bus_get_future(gio::BusType::Session).await else {
         return false;
     };
@@ -64,7 +65,7 @@ async fn portal_answers() -> bool {
         "/org/freedesktop/portal/desktop",
         "org.freedesktop.DBus.Properties",
         "Get",
-        Some(&("org.freedesktop.portal.OpenURI", "version").to_variant()),
+        Some(&(interface, "version").to_variant()),
         None,
         gio::DBusCallFlags::NONE,
         2000,
@@ -72,9 +73,6 @@ async fn portal_answers() -> bool {
     .await
     .is_ok()
 }
-
-/// The empty page (styles only) that the formatted view is drawn into.
-const PREVIEW_PAGE: &str = include_str!("preview.html");
 
 /// A column width so large it never narrows the raw text.
 const UNCLAMPED: i32 = 1_000_000;
@@ -957,7 +955,7 @@ impl Document {
             });
         self.preview_ready.set(false);
         self.preview_loading.set(true);
-        self.webview.load_html(PREVIEW_PAGE, base.as_deref());
+        self.webview.load_html(export::preview_page(), base.as_deref());
     }
 
     /// The tab has been selected: draws the formatted view if it was waiting.

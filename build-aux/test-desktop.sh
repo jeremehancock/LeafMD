@@ -551,6 +551,21 @@ copy_text() { # <text>
     sleep 0.3
 }
 
+# Whether one of the first window's actions can be used right now ("true"),
+# or is greyed out ("false"), as GTK shares it on the message bus
+action_enabled() { # <action>
+    timeout 5 env -i DBUS_SESSION_BUS_ADDRESS="unix:path=$work/run/bus" \
+        gdbus call --session --dest "$app" --object-path /io/github/jeremehancock/LeafMD/window/1 \
+        --method org.gtk.Actions.Describe "$1" 2> /dev/null |
+        sed -n "s/^((\(true\|false\),.*/\1/p"
+}
+
+expect_action_enabled() { # <action> <true or false>
+    local action=$1 want=$2
+    wait_until 5 '[[ "$(action_enabled "$action")" == "$want" ]]' ||
+        fail "the window's $action can be used: '$(action_enabled "$action")', not '$want'"
+}
+
 expect_action_state() { # <action> <state> [window number]
     local action=$1 want=$2 number=${3:-1}
     wait_until 5 '[[ "$(action_state "$action" "$number")" == "$want" ]]' ||

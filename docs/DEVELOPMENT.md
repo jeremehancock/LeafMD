@@ -115,8 +115,10 @@ With Claude Code, `/ship` walks a change through all of this: the checks, trying
 | `src/find.rs` | The find and replace bar's buttons and boxes |
 | `src/format.rs` | What each formatting button does to the text (bold, lists, headings, tables and so on), with tests |
 | `src/typing.rs` | Help while typing: what Enter does in a list, spotting code blocks, and spotting a pasted web address, with tests |
-| `src/render.rs` | Turns markdown into HTML (comrak), then removes anything unsafe (ammonia). Also holds the markdown features LeafMD understands, shared with the headings and word count |
-| `src/preview.html` | The page the formatted view is drawn into, including its light and dark styles |
+| `src/render.rs` | Turns markdown into HTML (comrak), then removes anything unsafe (ammonia), for the formatted view and for printing and exporting. Also holds the markdown features LeafMD understands, shared with the headings and word count |
+| `src/preview.html` | The empty page the formatted view is drawn into. Its styles are placed into it from `preview.css` |
+| `src/preview.css` | The formatted view's styles, light and dark, plus the rules for paper. Shared with printed pages, PDFs and exported web pages, so they all look the same |
+| `src/export.rs` | Print, Export as PDF and Export as HTML: the document as a standalone page with no scripts (pictures packed in for the web page), printed or turned into a PDF from a hidden copy of the formatted view, with tests |
 | `src/preview.js` | Double-click to jump, synced scrolling, find, and reporting the selected text for the word count in the formatted view, run in a private script area the document can't reach |
 | `src/state.rs` | Remembers the last view, window size, recent files, tabs, whether the side panel is open and on which page, and the fonts chosen in Preferences in `~/.config/leafmd/state.ini`, and decides which tabs to save and reopen, with tests |
 | `data/*.desktop` | The app menu entry: name, icon, and the file types LeafMD opens |
@@ -143,6 +145,8 @@ Markdown files can contain raw HTML, including scripts. LeafMD protects against 
 1. Everything unsafe (scripts, event handlers, iframes) is stripped from the HTML before it's shown.
 2. Scripts inside the page are switched off in the web view as well.
 3. The formatted view can never leave LeafMD's own page. Clicking a link opens it in your browser instead, and links to headings in the same document just scroll.
+
+Printing and exporting use the same cleaned HTML. Exported web pages carry no scripts at all, not even LeafMD's own, and the hidden page used for printing has scripts switched off and can't go anywhere either.
 
 ## App ID
 

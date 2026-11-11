@@ -33,6 +33,7 @@
       <li>Lists continue themselves when you press Enter, and pasting a web address over text makes a link</li>
       <li>A built-in markdown cheatsheet shows the common syntax at a glance</li>
       <li>Find and replace, in the raw text or the formatted document</li>
+      <li>Print the formatted document, or export it as a PDF or as a single web page that opens in any browser</li>
       <li>A banner tells you when another app changes your file, and nothing is overwritten without asking</li>
       <li>In split view, both sides scroll together</li>
       <li>Supports tables, task lists, footnotes and other GitHub-style markdown</li>
