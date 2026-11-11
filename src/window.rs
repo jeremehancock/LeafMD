@@ -14,6 +14,7 @@ use crate::document::{self, Document};
 use crate::file_change::FileBanner;
 use crate::find::FindBar;
 use crate::folder_tree::{self, FilesPage};
+use crate::headings::HeadingsPage;
 use crate::opening::{self, FolderFacts, Target, WindowFacts};
 use crate::side_panel::SidePanel;
 use crate::state::{self, SavedState, ViewMode};
@@ -185,6 +186,10 @@ pub struct Window {
     side_panel: SidePanel,
     /// The Files page of the side panel
     files: Rc<FilesPage>,
+    /// The Headings page of the side panel
+    headings: Rc<HeadingsPage>,
+    /// The word count in the document's bottom-right corner
+    word_label: gtk::Label,
     /// The folder the user chose for this window (with `leafmd .` or Open
     /// Folder…). Until there is one, the Files page shows the selected document's.
     folder: RefCell<Option<gio::File>>,
@@ -423,7 +428,19 @@ impl Window {
             .build();
         stack.add_named(&empty_page, Some("empty"));
         stack.add_named(&adw::Bin::new(), Some("loading"));
-        stack.add_named(&tab_view, Some("document"));
+        // The word count floats in the document's bottom-right corner. It's
+        // part of the document page, so it goes when no document is open.
+        // Clicks go straight through it to the text underneath.
+        let word_label = gtk::Label::builder()
+            .halign(gtk::Align::End)
+            .valign(gtk::Align::End)
+            .can_target(false)
+            .css_classes(["leafmd-word-count"])
+            .build();
+        let document_overlay = gtk::Overlay::new();
+        document_overlay.set_child(Some(&tab_view));
+        document_overlay.add_overlay(&word_label);
+        stack.add_named(&document_overlay, Some("document"));
 
         let toasts = adw::ToastOverlay::new();
         toasts.set_child(Some(&stack));
@@ -446,8 +463,11 @@ impl Window {
 
         // ---- Side panel ----
         let files = FilesPage::new();
+        let headings = HeadingsPage::new();
         let side_panel = SidePanel::new();
         side_panel.add_page("files", "Files", "leafmd-folder-symbolic", &files.widget);
+        side_panel.add_page("headings", "Headings", "leafmd-headings-symbolic", &headings.widget);
+        side_panel.set_visible_page(state::load_panel_page());
         let panel_wanted = state::load_panel_open();
         let split = adw::OverlaySplitView::builder()
             .sidebar(&side_panel.widget)
@@ -578,6 +598,8 @@ impl Window {
             split,
             side_panel,
             files,
+            headings,
+            word_label,
             folder: RefCell::new(None),
             panel_wanted: Cell::new(panel_wanted),
             controls: toolbar_view,
@@ -717,6 +739,22 @@ impl Window {
             }
         });
         self.window.add_action(&panel);
+
+        // Which page the side panel shows: "files" or "headings". The
+        // switcher at the bottom of the panel changes it; this action lets it
+        // be read and set from outside too (the end-to-end tests do).
+        let panel_page = gio::SimpleAction::new_stateful(
+            "side-panel-page",
+            Some(glib::VariantTy::STRING),
+            &self.side_panel.visible_page().to_variant(),
+        );
+        let weak = Rc::downgrade(self);
+        panel_page.connect_activate(move |_, param| {
+            if let (Some(win), Some(page)) = (weak.upgrade(), param.and_then(|p| p.str())) {
+                win.side_panel.set_visible_page(page);
+            }
+        });
+        self.window.add_action(&panel_page);
 
         // Line Numbers in the menu, ticked while this window shows them
         let line_numbers = gio::SimpleAction::new_stateful(
@@ -968,6 +1006,9 @@ impl Window {
     // =====================================================================
 
     fn setup_panel_signals(self: &Rc<Self>) {
+        // A window that opens on the Headings page says so from the start
+        self.update_panel_title();
+
         // The panel showing or hiding, by any route: the button, the menu and
         // F9 follow it, and the Files page catches up if it was out of date
         let weak = Rc::downgrade(self);
@@ -1041,23 +1082,49 @@ impl Window {
                     });
                     glib::Propagation::Stop
                 }
-                // Then it leaves Full Screen and Distraction Free together, once
-                // the find bar (which closes with Escape too) is out of the way
+                // Then, once the find bar (which closes with Escape too) is out
+                // of the way, it steps back one mode at a time: Full Screen
+                // first, then Distraction Free with the next press
                 Some(win)
                     if key == gdk::Key::Escape
                         && !win.find.bar.is_search_mode()
                         && (win.distraction_free.get() || win.window.is_fullscreen()) =>
                 {
-                    if win.distraction_free.get() {
+                    if win.window.is_fullscreen() {
+                        win.window.set_fullscreened(false);
+                    } else {
                         win.action("distraction-free").activate(None);
                     }
-                    win.window.set_fullscreened(false);
                     glib::Propagation::Stop
                 }
                 _ => glib::Propagation::Proceed,
             }
         });
         self.window.add_controller(keys);
+
+        // Another page chosen in the panel: remembered for new windows and
+        // next time, and the title at the top follows it
+        let weak = Rc::downgrade(self);
+        self.side_panel.connect_page_changed(move |page| {
+            let Some(win) = weak.upgrade() else { return };
+            win.action("side-panel-page").set_state(&page.to_variant());
+            state::save_panel_page(page);
+            win.update_panel_title();
+        });
+
+        // Picking a heading jumps to it. Over the document, the panel then
+        // tucks away, the same as after picking a file.
+        let weak = Rc::downgrade(self);
+        self.headings.connect_jump(move |line| {
+            let Some(win) = weak.upgrade() else { return };
+            if win.split.is_collapsed() {
+                win.split.set_show_sidebar(false);
+            }
+            if let Some(doc) = win.current() {
+                doc.jump_to_line(line);
+                win.headings.set_top_line(line as f64);
+            }
+        });
 
         // Picking a file in the tree opens it like any file opened from this
         // window. Over the document, the panel then tucks away.
@@ -1090,6 +1157,7 @@ impl Window {
         self.reveal_controls(!on);
         self.distraction_free_numbers.set(false);
         self.update_line_numbers();
+        self.word_label.set_visible(!on);
         if on {
             self.split.set_show_sidebar(false);
         } else {
@@ -1268,13 +1336,48 @@ impl Window {
             folder_tree::can_show_unchosen,
         );
         self.files.set_root(folder.as_ref(), is_chosen);
-        let title = folder
-            .as_ref()
-            .and_then(|folder| folder.basename())
-            .map(|name| name.display().to_string())
-            .unwrap_or_else(|| "Files".to_string());
-        self.side_panel.set_title(&title);
+        self.update_panel_title();
         self.files.set_highlight(file);
+    }
+
+    /// The title at the top of the side panel: the Files page's folder name,
+    /// or "Headings".
+    fn update_panel_title(&self) {
+        let title = if self.side_panel.visible_page() == "headings" {
+            "Headings".to_string()
+        } else {
+            self.files
+                .root()
+                .and_then(|(folder, _)| folder.basename())
+                .map(|name| name.display().to_string())
+                .unwrap_or_else(|| "Files".to_string())
+        };
+        self.side_panel.set_title(&title);
+    }
+
+    // =====================================================================
+    // Headings and word count
+    // =====================================================================
+
+    /// The selected document's headings or word count changed (after typing,
+    /// or a file loading): the Headings page and the label catch up.
+    pub fn document_facts_changed(&self, doc: &Document) {
+        self.headings.show(Some(&doc.headings()));
+        self.headings.set_top_line(doc.top_line());
+        self.update_word_label();
+    }
+
+    /// Shows the selected document's word count, or its selection's.
+    pub fn update_word_label(&self) {
+        if let Some(doc) = self.current() {
+            self.word_label.set_label(&doc.word_label());
+        }
+    }
+
+    /// The selected document scrolled: the Headings page highlights the
+    /// section now at the top.
+    pub fn top_line_changed(&self, line: f64) {
+        self.headings.set_top_line(line);
     }
 
     // =====================================================================
@@ -1503,6 +1606,7 @@ impl Window {
         self.update_format_bar();
         self.update_title();
         doc.update_file_banner();
+        self.document_facts_changed(&doc);
         // In case the file changed somewhere that doesn't send change notices
         doc.schedule_file_check();
     }
@@ -1644,6 +1748,7 @@ impl Window {
         self.loading_find.set(false);
         self.file_banner.hide();
         self.stack.set_visible_child_name("empty");
+        self.headings.show(None);
         self.set_document_actions_enabled(false);
         // After switching page, so the title goes back to "LeafMD"
         self.update_title();
@@ -1762,6 +1867,10 @@ impl Window {
         doc.apply_view(mode);
         self.last_view.set(mode);
         self.update_format_bar();
+        // A selection only counts while the raw text shows, and the section
+        // at the top now comes from whichever view is showing
+        self.update_word_label();
+        self.headings.set_top_line(doc.top_line());
         // An open find bar now searches whichever text is showing
         if self.find.bar.is_search_mode() {
             self.refresh_find();
@@ -2657,6 +2766,7 @@ impl Window {
                     ("Jump to a word", "In Split view, double-click a word on the formatted side to select it in the raw text."),
                     ("Lists", "In a list, Enter starts the next item for you: another bullet, the next number, or an unticked checkbox. Press Enter on an empty item to end the list, or Shift+Enter for a new line without a marker."),
                     ("Pasting a link", "Select some text and paste a web address over it to turn the text into a link. Pasting anything else replaces the text as usual."),
+                    ("Word count", "The bottom-right corner shows how many words the document has, and about how long it takes to read at 200 words a minute. It counts the words a reader sees: markdown marks and link addresses aren't counted, but code is. Select some text, in the raw text or the formatted view, to count just that, such as 35 of 1,240 words."),
                 ],
             ),
             (
@@ -2673,21 +2783,23 @@ impl Window {
                 "Side Panel",
                 &[
                     ("Opening the panel", "Press F9, click the button at the left end of the header bar, or choose Side Panel from the main menu. The panel stays open, in every window and next time you start LeafMD, until you close it the same way."),
+                    ("Files and Headings", "The panel has two pages. Switch between them with the buttons along its bottom. The panel opens on the page you used last."),
                     ("Files", "The panel shows a folder as a tree. Click a folder to open or close it, and click a file to open it in a tab. The open document's file is highlighted. The arrow keys move around the tree, Right and Left open and close folders, and Enter opens a file."),
                     ("Which folder", "Until you choose a folder, the panel shows the folder of the document you're looking at, and moves when you switch to a document somewhere else. Open Folder… in the main menu (Ctrl+Shift+O), or leafmd . in a terminal, chooses a folder for the window. The panel shows it whenever you're looking at a document inside it, until you close the window."),
                     ("Greyed-out files", "Images, PDFs and other files that aren't text are greyed out, because LeafMD can't open them. Hidden files, like .git, aren't listed."),
                     ("Folders LeafMD can't see", "When you open a document from outside your home folder, LeafMD is given that one file, not the folder it's in. Choose the folder with Open Folder… to show its other files."),
-                    ("Narrow windows", "When the window is narrow, the panel slides over the document instead of sitting beside it, and tucks away when you pick a file or press Escape."),
+                    ("Headings", "Lists the document's headings, indented to match their level. Click one, or press Enter on it, to jump there. In Raw and Split view the cursor goes to the start of the heading, ready for typing. As you scroll, the heading of the section you're reading is highlighted."),
+                    ("Narrow windows", "When the window is narrow, the panel slides over the document instead of sitting beside it, and tucks away when you pick a file or a heading, or press Escape."),
                 ],
             ),
             (
                 "Distraction Free",
                 &[
-                    ("Just your document", "Press Ctrl+Shift+D, or choose Distraction Free from the main menu, to hide the header bar, tabs, formatting bar, side panel and line numbers. Only that window changes, and every window starts with it off."),
+                    ("Just your document", "Press Ctrl+Shift+D, or choose Distraction Free from the main menu, to hide the header bar, tabs, formatting bar, side panel, word count and line numbers. Only that window changes, and every window starts with it off."),
                     ("Getting the bars back", "Move the pointer to the top or bottom edge of the window and the bars slide in over the document. They slide away when you move back to your text. F10 brings them in with the main menu open."),
                     ("Still there when needed", "Find (Ctrl+F) and the banner about a file changed by another app still appear. Choosing Line Numbers from the menu shows them here too."),
                     ("Leaving", "Press Escape or Ctrl+Shift+D, or choose Distraction Free again. Everything comes back as it was."),
-                    ("Full screen", "Press F11, or choose Full Screen from the main menu, to fill the screen. It works with or without Distraction Free; use both for nothing but your text. Escape leaves both."),
+                    ("Full screen", "Press F11, or choose Full Screen from the main menu, to fill the screen. It works with or without Distraction Free; use both for nothing but your text. Escape leaves full screen first, and a second Escape leaves Distraction Free."),
                 ],
             ),
             (
@@ -2779,7 +2891,7 @@ impl Window {
                     ("Side panel", "F9"),
                     ("Distraction Free", "Ctrl+Shift+D"),
                     ("Full screen", "F11"),
-                    ("Leave Distraction Free and full screen", "Escape"),
+                    ("Leave full screen, then Distraction Free", "Escape"),
                     ("Zoom in", "Ctrl+Plus or Ctrl+="),
                     ("Zoom out", "Ctrl+Minus"),
                     ("Normal size", "Ctrl+0"),
@@ -3111,6 +3223,17 @@ fn load_window_style() {
              toolbarview.leafmd-distraction-free > .bottom-bar {
                 background-color: var(--headerbar-bg-color);
                 box-shadow: 0 1px 3px rgb(0 0 6 / 12%);
+            }
+            /* The word count: small, faint text on a see-through patch of the
+               document's own background, so it stays readable over text
+               without drawing the eye. The right margin clears the scroll bar. */
+            label.leafmd-word-count {
+                margin: 0 18px 10px 0;
+                padding: 2px 8px;
+                border-radius: 6px;
+                font-size: 0.8em;
+                color: color-mix(in srgb, var(--view-fg-color) 55%, transparent);
+                background-color: var(--view-bg-color);
             }
             toolbarview.leafmd-inner-bars > .top-bar,
             toolbarview.leafmd-inner-bars > .top-bar > windowhandle,

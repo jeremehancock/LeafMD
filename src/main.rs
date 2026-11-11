@@ -4,6 +4,7 @@ mod file_change;
 mod find;
 mod folder_tree;
 mod format;
+mod headings;
 mod opening;
 mod preferences;
 mod render;
@@ -12,6 +13,7 @@ mod state;
 mod text_size;
 mod typing;
 mod window;
+mod word_count;
 
 use std::ffi::{OsStr, OsString};
 use std::io::IsTerminal;

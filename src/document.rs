@@ -18,10 +18,12 @@ use webkit6::prelude::*;
 use crate::dialog::{Answer, Question};
 use crate::file_change::{self, Comparison, Version};
 use crate::format::{self, Inline, LineStyle};
+use crate::headings::{self, Heading};
 use crate::render;
 use crate::state::{FontFor, ViewMode};
 use crate::text_size;
 use crate::typing;
+use crate::word_count;
 use crate::window::{Window, file_filters};
 
 /// The empty page (styles only) that the formatted view is drawn into.
@@ -147,6 +149,26 @@ pub struct Document {
     saves_running: Cell<u32>,
     /// True while "Replace the Other Version?" is open, so saving again can't open a second one.
     asking_to_replace: Cell<bool>,
+
+    /// The document's headings, for the side panel's Headings page. Worked out
+    /// after typing pauses, with the word count.
+    headings: RefCell<Vec<Heading>>,
+    /// How many words the whole document has
+    words: Cell<usize>,
+    /// How many words are selected in the raw text, or None with no selection
+    words_selected: Cell<Option<usize>>,
+    /// The same for the formatted view
+    words_selected_formatted: Cell<Option<usize>>,
+    /// True when text was selected in the formatted view more recently than
+    /// in the raw text, so it's the selection Split view counts
+    formatted_selection_newer: Cell<bool>,
+    /// True while counting the selection is waiting for the next idle moment
+    selection_count_queued: Cell<bool>,
+    /// The source line at the top of the formatted view, as it last reported
+    preview_top_line: Cell<f64>,
+    /// True while telling the window the line at the top is waiting for the
+    /// next idle moment, so scrolling tells it at most once a frame
+    top_line_queued: Cell<bool>,
 }
 
 impl Document {
@@ -169,7 +191,9 @@ impl Document {
         source_view.set_tab_width(4);
         source_view.set_auto_indent(true);
         source_view.set_top_margin(16);
-        source_view.set_bottom_margin(16);
+        // Room under the last line, so it can scroll clear of the word count
+        // in the bottom-right corner
+        source_view.set_bottom_margin(48);
         source_view.set_left_margin(18);
         source_view.set_right_margin(18);
         // A little air between lines, the same within a wrapped line as between lines
@@ -255,6 +279,14 @@ impl Document {
             file_generation: Cell::new(0),
             saves_running: Cell::new(0),
             asking_to_replace: Cell::new(false),
+            headings: RefCell::new(Vec::new()),
+            words: Cell::new(0),
+            words_selected: Cell::new(None),
+            words_selected_formatted: Cell::new(None),
+            formatted_selection_newer: Cell::new(false),
+            selection_count_queued: Cell::new(false),
+            preview_top_line: Cell::new(1.0),
+            top_line_queued: Cell::new(false),
         });
         doc.setup_signals();
         doc.apply_fonts();
@@ -400,6 +432,8 @@ impl Document {
         self.source_scroll.vadjustment().connect_value_changed(move |_| {
             if let Some(doc) = weak.upgrade() {
                 doc.sync_preview_to_editor();
+                // The Headings page highlights the section at the top
+                doc.queue_top_line_report();
             }
         });
 
@@ -422,11 +456,16 @@ impl Document {
         });
         let weak = Rc::downgrade(self);
         self.buffer.connect_mark_set(move |buffer, _, mark| {
-            if *mark == buffer.get_insert()
-                && let Some(doc) = weak.upgrade()
-            {
+            let is_insert = *mark == buffer.get_insert();
+            if !is_insert && *mark != buffer.selection_bound() {
+                return;
+            }
+            let Some(doc) = weak.upgrade() else { return };
+            if is_insert {
                 doc.find_count_changed();
             }
+            // Selecting text counts the selection's words
+            doc.queue_selection_count();
         });
 
         // Ctrl with the mouse wheel zooms the window, over either view. This
@@ -890,6 +929,7 @@ impl Document {
             if let Some(doc) = weak.upgrade() {
                 doc.render_scheduled.set(false);
                 doc.render_now();
+                doc.update_headings_and_count();
             }
         });
     }
@@ -939,6 +979,12 @@ impl Document {
                 }
             }
             Some("scroll") => {
+                if let Some(line) = message["line"].as_f64() {
+                    self.preview_top_line.set(line);
+                    if self.view_mode.get() == ViewMode::Preview {
+                        self.report_top_line();
+                    }
+                }
                 let now = Instant::now();
                 if self.view_mode.get() != ViewMode::Split
                     || now < self.ignore_preview_scroll_until.get()
@@ -953,6 +999,16 @@ impl Document {
                 } else if let Some(line) = message["line"].as_f64() {
                     self.scroll_editor_to_line(line);
                 }
+            }
+            // Text selected (or no longer selected) in the formatted view
+            Some("selection") => {
+                let text = message["text"].as_str().unwrap_or("");
+                let selected = (!text.is_empty()).then(|| word_count::count_plain_words(text));
+                self.words_selected_formatted.set(selected);
+                if selected.is_some() {
+                    self.formatted_selection_newer.set(true);
+                }
+                self.tell_window_selection_changed();
             }
             // The result of searching the formatted view
             Some("find") if self.searching_preview() => {
@@ -1057,6 +1113,158 @@ impl Document {
         adjustment.set_value(target.clamp(0.0, max));
     }
 
+    /// The source line (fractional, counting from 1) at the top of the raw
+    /// text: 12.5 means halfway through line 12.
+    fn raw_line_at_top(&self) -> f64 {
+        let top = self.source_scroll.vadjustment().value();
+        let (iter, line_top) = self.source_view.line_at_y(top as i32);
+        let (_, height) = self.source_view.line_yrange(&iter);
+        let fraction = if height > 0 {
+            ((top - line_top as f64) / height as f64).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        (iter.line() + 1) as f64 + fraction
+    }
+
+    /// The source line at the top of whichever view is showing, for the
+    /// Headings page to highlight the section being read. The raw text
+    /// decides in Raw and Split view.
+    pub fn top_line(&self) -> f64 {
+        if self.view_mode.get() == ViewMode::Preview {
+            self.preview_top_line.get()
+        } else {
+            self.raw_line_at_top()
+        }
+    }
+
+    /// Tells the window the line at the top changed, once the current burst
+    /// of scrolling has been handled.
+    fn queue_top_line_report(self: &Rc<Self>) {
+        if self.view_mode.get() == ViewMode::Preview || self.top_line_queued.replace(true) {
+            return;
+        }
+        let weak = Rc::downgrade(self);
+        glib::idle_add_local_once(move || {
+            if let Some(doc) = weak.upgrade() {
+                doc.top_line_queued.set(false);
+                doc.report_top_line();
+            }
+        });
+    }
+
+    fn report_top_line(&self) {
+        if let Some(win) = self.window()
+            && win.is_current(self)
+        {
+            win.top_line_changed(self.top_line());
+        }
+    }
+
+    /// Clicking a heading on the Headings page: scrolls so the line starting
+    /// at `line` (counting from 1) is at the top of whichever view is showing.
+    /// With the raw text showing, the cursor goes to the start of that line and
+    /// typing goes there; otherwise the formatted view gets the keyboard.
+    pub fn jump_to_line(&self, line: usize) {
+        // Both sides are moved here, so the synced scrolling mustn't move them
+        // again in answer
+        let now = Instant::now();
+        self.ignore_editor_scroll_until.set(now + SYNC_QUIET);
+        self.ignore_preview_scroll_until.set(now + SYNC_QUIET);
+        let mode = self.view_mode.get();
+        if mode != ViewMode::Preview
+            && let Some(start) = self.buffer.iter_at_line(line as i32 - 1)
+        {
+            self.buffer.place_cursor(&start);
+            // Waits until GTK knows how tall the lines above are, so it lands
+            // on the right spot even far down a long document
+            self.source_view
+                .scroll_to_mark(&self.buffer.get_insert(), 0.0, true, 0.0, 0.0);
+            self.source_view.grab_focus();
+        }
+        if mode != ViewMode::Source {
+            self.preview_top_line.set(line as f64);
+            self.run_js(&format!("window.leafmd && window.leafmd.scrollToLine({line}, false);"));
+            if mode == ViewMode::Preview {
+                self.webview.grab_focus();
+            }
+        }
+    }
+
+    // =====================================================================
+    // Headings and word count
+    // =====================================================================
+
+    /// Works out the headings and word count from the text as it is now, and
+    /// tells the window if this is the tab it's showing.
+    pub fn update_headings_and_count(&self) {
+        let text = self.text();
+        *self.headings.borrow_mut() = headings::find(&text);
+        self.words.set(word_count::count_words(&text));
+        if let Some(win) = self.window()
+            && win.is_current(self)
+        {
+            win.document_facts_changed(self);
+        }
+    }
+
+    pub fn headings(&self) -> Vec<Heading> {
+        self.headings.borrow().clone()
+    }
+
+    /// The words for the label in the corner: the whole document's count and
+    /// reading time, or the selection's count while raw text is selected.
+    pub fn word_label(&self) -> String {
+        // Only a selection on a side that's showing counts. In Split view,
+        // where both sides can have one, the side selected most recently wins.
+        let raw = self.words_selected.get();
+        let formatted = self.words_selected_formatted.get();
+        let selected = match self.view_mode.get() {
+            ViewMode::Source => raw,
+            ViewMode::Preview => formatted,
+            ViewMode::Split if self.formatted_selection_newer.get() => formatted,
+            ViewMode::Split => raw,
+        };
+        word_count::label_text(self.words.get(), selected)
+    }
+
+    /// A selection changed: the label in the corner catches up.
+    fn tell_window_selection_changed(&self) {
+        if let Some(win) = self.window()
+            && win.is_current(self)
+        {
+            win.update_word_label();
+        }
+    }
+
+    /// Counts the selected words at the next idle moment, so dragging a
+    /// selection across a long document counts once a frame, not on every
+    /// small movement.
+    fn queue_selection_count(self: &Rc<Self>) {
+        if self.selection_count_queued.replace(true) {
+            return;
+        }
+        let weak = Rc::downgrade(self);
+        glib::idle_add_local_once(move || {
+            let Some(doc) = weak.upgrade() else { return };
+            doc.selection_count_queued.set(false);
+            let selected = doc
+                .buffer
+                .selection_bounds()
+                .map(|(start, end)| word_count::count_words(&doc.buffer.text(&start, &end, false)));
+            if doc.words_selected.replace(selected) != selected {
+                // Only selecting something makes this side the most recent.
+                // A selection merely going away (the cursor moving, or a
+                // double-click on the formatted side jumping here) doesn't
+                // take over from the formatted side.
+                if selected.is_some() {
+                    doc.formatted_selection_newer.set(false);
+                }
+                doc.tell_window_selection_changed();
+            }
+        });
+    }
+
     /// Called when the raw text scrolls: moves the formatted view to the same spot.
     fn sync_preview_to_editor(&self) {
         let now = Instant::now();
@@ -1069,15 +1277,7 @@ impl Document {
         let adjustment = self.source_scroll.vadjustment();
         let top = adjustment.value();
         let at_bottom = top > 0.0 && top >= adjustment.upper() - adjustment.page_size() - 1.0;
-
-        let (iter, line_top) = self.source_view.line_at_y(top as i32);
-        let (_, height) = self.source_view.line_yrange(&iter);
-        let fraction = if height > 0 {
-            ((top - line_top as f64) / height as f64).clamp(0.0, 1.0)
-        } else {
-            0.0
-        };
-        let line = (iter.line() + 1) as f64 + fraction;
+        let line = self.raw_line_at_top();
 
         // About to scroll the formatted view: ignore the scroll events that causes
         self.ignore_preview_scroll_until.set(now + SYNC_QUIET);
@@ -1546,6 +1746,9 @@ impl Document {
         self.buffer.place_cursor(&self.buffer.start_iter());
         self.source_view
             .scroll_to_iter(&mut self.buffer.start_iter(), 0.0, false, 0.0, 0.0);
+        // A file just loaded: its headings and count show straight away,
+        // rather than after the pause that typing waits for
+        self.update_headings_and_count();
     }
 
     /// Like set_text, but for reloading the same document: the cursor and scroll

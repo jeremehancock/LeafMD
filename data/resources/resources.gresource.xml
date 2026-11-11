@@ -26,6 +26,7 @@
     <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-new-symbolic.svg</file>
     <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-side-panel-symbolic.svg</file>
     <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-folder-symbolic.svg</file>
+    <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-headings-symbolic.svg</file>
     <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-document-symbolic.svg</file>
     <file preprocess="xml-stripblanks">styles/leafmd.xml</file>
     <file preprocess="xml-stripblanks">styles/leafmd-dark.xml</file>

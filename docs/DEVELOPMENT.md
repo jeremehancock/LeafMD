@@ -102,8 +102,10 @@ With Claude Code, `/ship` walks a change through all of this: the checks, trying
 |---|---|
 | `src/main.rs` | Starts the app, gives the terminal back when started from one, sets up keyboard shortcuts, opens files and folders passed on the command line |
 | `src/window.rs` | The window: toolbar, formatting bar, find and replace, recent files, showing and remembering the side panel, each window's chosen folder, Help, cheatsheet and About |
-| `src/side_panel.rs` | The side panel itself: its header and its pages, so a later feature can add a page with one call |
+| `src/side_panel.rs` | The side panel itself: its header, its pages and the switcher along its bottom for choosing one |
 | `src/folder_tree.rs` | The Files page of the side panel: the folder tree, which files are greyed out, highlighting the open document, and which folders LeafMD can see, with tests |
+| `src/headings.rs` | Finding a document's headings, and the Headings page of the side panel that lists them, jumps to them and highlights the section you're reading, with tests |
+| `src/word_count.rs` | Counting the words a reader would see, and the wording of the label in the document's corner ("1,240 words · 7 min read"), with tests |
 | `src/document.rs` | One open document: the raw editor, the formatted view, links, saving and reloading, and noticing changes to its file |
 | `src/text_size.rs` | How big the text is and in which font: the two fonts from Preferences, each window's zoom on top of them, and the stylesheet that sets the raw text's font, with tests |
 | `src/preferences.rs` | The Preferences window: the raw text and formatted view fonts, and their Reset buttons |
@@ -113,10 +115,10 @@ With Claude Code, `/ship` walks a change through all of this: the checks, trying
 | `src/find.rs` | The find and replace bar's buttons and boxes |
 | `src/format.rs` | What each formatting button does to the text (bold, lists, headings, tables and so on), with tests |
 | `src/typing.rs` | Help while typing: what Enter does in a list, spotting code blocks, and spotting a pasted web address, with tests |
-| `src/render.rs` | Turns markdown into HTML (comrak), then removes anything unsafe (ammonia) |
+| `src/render.rs` | Turns markdown into HTML (comrak), then removes anything unsafe (ammonia). Also holds the markdown features LeafMD understands, shared with the headings and word count |
 | `src/preview.html` | The page the formatted view is drawn into, including its light and dark styles |
-| `src/preview.js` | Double-click to jump, synced scrolling and find in the formatted view, run in a private script area the document can't reach |
-| `src/state.rs` | Remembers the last view, window size, recent files, tabs, whether the side panel is open and the fonts chosen in Preferences in `~/.config/leafmd/state.ini`, and decides which tabs to save and reopen, with tests |
+| `src/preview.js` | Double-click to jump, synced scrolling, find, and reporting the selected text for the word count in the formatted view, run in a private script area the document can't reach |
+| `src/state.rs` | Remembers the last view, window size, recent files, tabs, whether the side panel is open and on which page, and the fonts chosen in Preferences in `~/.config/leafmd/state.ini`, and decides which tabs to save and reopen, with tests |
 | `data/*.desktop` | The app menu entry: name, icon, and the file types LeafMD opens |
 | `data/*.metainfo.xml` | The description, license and release notes shown in software centers |
 | `build-aux/` | The Flatpak recipe, the script that builds and installs it, `sdk-check.sh` (the checks GitHub runs), `flathub-lint.sh` and its exceptions file (Flathub's checker), `release-info.py` (reads the version and release notes, and checks they match), `build-site.py` (builds leafmd.app), `flatpak-repo-preview.sh` (a private copy of leafmd.app on this computer), `take-screenshots.sh` and `screenshot-settings-portal.py` (take the screenshots on a hidden desktop), `test-desktop.sh` (that hidden desktop, shared with the end-to-end tests), `end-to-end-tests.sh` and the scenarios in `end-to-end/` (the end-to-end tests), `screenshot-mode.sh` (GNOME's default look for taking screenshots by hand) and `leafmd-signing-key.gpg` (the public half of LeafMD's signing key) |

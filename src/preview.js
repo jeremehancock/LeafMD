@@ -263,6 +263,24 @@
     }
   }
 
+  // Tell LeafMD what's selected, for the word count in the corner. At most
+  // once per frame while a selection is being dragged, and only when it
+  // changed. The text is what the reader sees, with no markdown in it.
+  let selectionQueued = false;
+  let lastSelection = "";
+  document.addEventListener("selectionchange", () => {
+    if (selectionQueued) return;
+    selectionQueued = true;
+    requestAnimationFrame(() => {
+      selectionQueued = false;
+      const selection = window.getSelection();
+      const text = selection && !selection.isCollapsed ? selection.toString() : "";
+      if (text === lastSelection) return;
+      lastSelection = text;
+      post({ kind: "selection", text });
+    });
+  });
+
   window.leafmd = {
     scrollToLine,
     setSplitView(on) { jumpOnDoubleClick = on; },
