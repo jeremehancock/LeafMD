@@ -197,7 +197,7 @@ h3 { font-size: 1.1rem; font-weight: 700; }
   width: 40px; height: 40px; padding: 8px; margin-bottom: 12px;
   fill: var(--accent); background: var(--surface-2); border-radius: 10px;
 }
-.features p, .card p { margin: 8px 0 0; color: var(--muted); }
+.features p, .card p { margin: 8px 0 0; color: var(--muted); text-wrap: pretty; }
 
 /* Install */
 .install { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
