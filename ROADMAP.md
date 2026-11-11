@@ -57,14 +57,27 @@ These three are planned as one release, since they all start from the formatted 
 
 - [x] **Automated end-to-end tests:** a script that tries the installed app the way a person would (typing, shortcuts, saving, tabs, reopening) and checks the results, so every release is checked the same way and hand testing can focus on what's new
 
+## Small fixes
+
+Small things to tidy up, none of which change how LeafMD works.
+
+- [ ] **Credits:** list libspelling, the library behind spell checking, in About's "Built With" section alongside the other libraries
+- [ ] **Spell checking gaps:** look into three cases libspelling misses: the word the cursor is on isn't underlined, the very last word of a file isn't checked, and a misspelling in the first few words of some files can stay un-underlined
+- [ ] **Screenshot script:** move the script's virtual mouse away from GNOME's top-left hot corner before it starts, so it can't open the Activities overview by accident
+- [ ] **Files panel with a new document:** when a new, unsaved document is selected, the Files panel keeps showing the folder of the file that was selected before, until the new document is saved
+- [ ] **Greyed-out file after saving:** after saving a new document for the first time, its name in the Files panel is sometimes greyed out (as if LeafMD couldn't open it) until it's saved again
+- [ ] **GitHub's build machines:** GitHub's `ubuntu-latest` is moving to Ubuntu 26. Nothing has broken, but decide whether to pin the version LeafMD builds on
+
 ## Later
 
+- [ ] **Version 1.0:** its own milestone once 0.12.0 and 0.13.0 have settled, which also retires the "Early days" note on leafmd.app
 - [ ] Translations into other languages
 
 ## Ideas, not decided
 
 These might fit LeafMD, or might add more than they're worth. Each one needs a decision before it moves up.
 
+- Whether the Files panel should go back to a narrower folder. Today, with a file on the Desktop selected, the panel shows the Desktop. Saving another tab's document one level up (in the home folder) moves the panel to the home folder, which is expected. But switching back to the Desktop file leaves the panel on the home folder, because the panel only moves when the selected file isn't inside the folder it's showing. That's how it's meant to work now, but it may be surprising
 - Coloured syntax highlighting inside code blocks in the formatted view
 - Dropping an image onto the raw text inserts a markdown image link
 - A Snap package, so Ubuntu users can install LeafMD from Ubuntu's own App Center without setting up Flatpak. It would be a second package format to build and test for every release
