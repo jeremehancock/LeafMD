@@ -41,7 +41,7 @@ The script copies the Rust libraries into `./vendor` (Flatpak builds can't downl
 
 ## The checks
 
-Every push to any branch is checked and built as a Flatpak on GitHub (`.github/workflows/ci.yml`), apart from a pull request's merge commit coming back to `dev`, because `main` has just built that same commit. To run the same checks GitHub runs (clippy, the tests, and the app store and `.desktop` files), inside the GNOME SDK:
+Pushes are checked and built as a Flatpak on GitHub (`.github/workflows/ci.yml`) when the build could give a new answer. On `dev` (or any branch but `main`), a push is skipped if the files that go into the app and its checks are exactly the same as in a build that already passed on that branch: for example a push that only changes `docs/`, `openspec/`, `site/`, README.md or ROADMAP.md, or the push that brings `dev` up to `main` after a merge. On `main`, only a release is built, because a merge can't happen until `dev`'s build of the same app has passed. A skipped build counts as passing, and "Run workflow" on the Actions tab always builds. To run the same checks GitHub runs (clippy, the tests, and the app store and `.desktop` files), inside the GNOME SDK:
 
 ```
 ./build-aux/sdk-check.sh
@@ -90,7 +90,7 @@ openspec validate --specs --strict
 
 ## Branches and releases
 
-Work happens on the `dev` branch. `main` only changes through a pull request from `dev`, and pushes are checked and built as a Flatpak on GitHub ([The checks](#the-checks) has the one exception). A test `.flatpak` from each build is kept for a week under that run's Artifacts.
+Work happens on the `dev` branch. `main` only changes through a pull request from `dev`, and pushes are checked and built as a Flatpak on GitHub when that could tell us something new ([The checks](#the-checks) says when). A test `.flatpak` from each build is kept for a week under that run's Artifacts.
 
 The version number is in `Cargo.toml`, and the newest `<release>` in `data/*.metainfo.xml` has the same number and the release notes. While that entry is marked `type="development"`, it's the next version still collecting changes. When a merge into `main` carries a finished entry whose version hasn't been released yet, GitHub tags it `v<version>` and publishes a [release](https://github.com/jeremehancock/LeafMD/releases) with the `.flatpak` attached, and publishes leafmd.app. [PUBLISHING.md](PUBLISHING.md) has the details.
 
@@ -124,7 +124,7 @@ With Claude Code, `/ship` walks a change through all of this: the checks, trying
 | `build-aux/` | The Flatpak recipe, the script that builds and installs it, `sdk-check.sh` (the checks GitHub runs), `flathub-lint.sh` and its exceptions file (Flathub's checker), `release-info.py` (reads the version and release notes, and checks they match), `build-site.py` (builds leafmd.app), `flatpak-repo-preview.sh` (a private copy of leafmd.app on this computer), `take-screenshots.sh` and `screenshot-settings-portal.py` (take the screenshots on a hidden desktop), `test-desktop.sh` (that hidden desktop, shared with the end-to-end tests), `end-to-end-tests.sh` and the scenarios in `end-to-end/` (the end-to-end tests), `screenshot-mode.sh` (GNOME's default look for taking screenshots by hand) and `leafmd-signing-key.gpg` (the public half of LeafMD's signing key) |
 | `site/` | The storefront at leafmd.app: the page, its styles, its three small scripts (the Copy buttons, the viewer that shows screenshots full size, and the Ubuntu setup help in `install-help.js`), and the templates for the install files |
 | `data/screenshots/` | The screenshots used on leafmd.app, in app stores and in the README, the sample document they show, and how to take them again |
-| `.github/workflows/ci.yml` | GitHub's build: checks and builds each push, and when a new version reaches `main`, signs it, publishes a GitHub Release and publishes leafmd.app. Also republishes leafmd.app on request |
+| `.github/workflows/ci.yml` | GitHub's build: checks and builds pushes that change the app (skipping ones that only touch docs, specs or the site), and when a new version reaches `main`, signs it, publishes a GitHub Release and publishes leafmd.app. Also republishes leafmd.app on request |
 | `data/resources/` | Files built into the program: the view icons, formatting bar icons, replace icon, new document icon and the side panel's icons, and in `styles/` the raw text's colours (`leafmd.xml` and `leafmd-dark.xml`: GNOME's Adwaita editor colours with quieter line numbers and current line, found through `src/main.rs`). LeafMD always uses its own theme in `data/icon-theme/`, so icons look the same on every distro (see `src/main.rs`). LeafMD's own icons are drawn with filled shapes only, because GTK doesn't paint outlined lines in these icons |
 | `openspec/specs/` | How LeafMD behaves, written as rules with examples, one folder per area |
 | `openspec/changes/` | Features being planned or built, and finished ones under `archive/` |

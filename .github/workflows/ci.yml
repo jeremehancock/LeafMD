@@ -1,20 +1,35 @@
 name: Build
 
-# Every push to any branch is checked and built as a Flatpak, in the same
-# GNOME 51 environment the app is built in on the owner's laptop. The one
-# exception is below: a merge commit coming back to dev, which main has built.
+# Pushes are checked and built as a Flatpak, in the same GNOME 51 environment
+# the app is built in on the owner's laptop, but only when the build could
+# give a new answer. A full build takes five to ten minutes, so a quick first
+# job ("Decide what to build") works out whether this one needs it.
 #
-#   push to any branch -> checks (including Flathub's), then a test .flatpak
-#                         kept for 7 days (Actions tab -> the run -> Artifacts)
-#   push to dev that's -> nothing is built. After a merge, /ship moves dev up
-#   only a pull             to main's merge commit. That's the same commit
-#   request's merge         main's run has just built, so building it again
-#   commit from dev         could only repeat the answer. Look at main's run
-#                           for that commit's result and test .flatpak.
-#   push to main       -> the same as any branch, and if the version is a finished release
+#   push to dev (or    -> checks (including Flathub's), then a test .flatpak
+#   any branch but        kept for 7 days (Actions tab -> the run -> Artifacts),
+#   main)                 unless the files that go into the app and its checks
+#                         are exactly the same as in a build that already
+#                         passed on this branch. Then the build shows as
+#                         skipped, which GitHub counts as passing. So these
+#                         skip it:
+#                           - a push that only changes the docs, the specs,
+#                             the roadmap or leafmd.app's site/ folder
+#                           - the push that moves dev up to main's merge
+#                             commit after a pull request, which holds the
+#                             same app dev has just built
+#                         "The same" is judged by a fingerprint of every file
+#                         except those listed in IGNORED below.
+#   push to main       -> nothing is built, unless it's a release (below).
+#                         main only changes by merging a pull request from
+#                         dev, and GitHub won't allow that merge until dev's
+#                         build of the same app has passed.
+#   "Run workflow"     -> always builds, on any branch, for when a build is
+#   (not republish)       wanted anyway (a fresh test .flatpak, say)
+#
+#   push to main that's a release: the version is a finished release
 #                         (its <release> in the metainfo file isn't marked
-#                         type="development") and has no v<version> tag yet,
-#                         it's a release:
+#                         type="development") and has no v<version> tag yet.
+#                         It's always built, from scratch, and:
 #                           - the build is signed with LeafMD's key
 #                           - a v<version> tag and a GitHub Release, with the
 #                             .flatpak attached and the metainfo release notes
@@ -47,18 +62,101 @@ permissions:
   contents: read
 
 jobs:
+  plan:
+    name: Decide what to build
+    # A republish builds nothing (on a push there's no input, which counts as
+    # false)
+    if: ${{ !inputs.republish }}
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.decide.outputs.build }}
+      release: ${{ steps.release.outputs.release }}
+      fingerprint: ${{ steps.fingerprint.outputs.fingerprint }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Is this a release?
+        id: release
+        run: |
+          info=$(build-aux/release-info.py)
+          version=$(sed -n 's/^version=//p' <<< "$info")
+          stable=$(sed -n 's/^stable=//p' <<< "$info")
+          if [ "$GITHUB_REF" = refs/heads/main ] && [ "$stable" = true ] &&
+             [ -z "$(git ls-remote --tags origin "refs/tags/v$version")" ]; then
+            echo "Yes: v$version isn't released yet, so this build is signed and published."
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No: nothing is signed or published."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # A fingerprint of every file in this commit that goes into the app or
+      # its checks: each file's name and the ID git gives its contents, so
+      # changing, adding or removing any of them changes the fingerprint.
+      # IGNORED is what can't change the build's answer: the docs, the specs,
+      # the roadmap, Claude's instructions, and the site (only a release, which
+      # always builds, uses it). Anything not listed counts, including this
+      # file, so changing how the build works always rebuilds.
+      - name: Fingerprint the files the build uses
+        id: fingerprint
+        env:
+          IGNORED: '^(docs/|openspec/|site/|\.claude/|README\.md$|ROADMAP\.md$|CLAUDE\.md$)'
+        run: |
+          # ENVIRON, not awk -v, which would turn the pattern's \. into "any character"
+          fingerprint=$(git ls-tree -r HEAD | awk -F '\t' '$2 !~ ENVIRON["IGNORED"]' |
+            sha256sum | cut -c1-32)
+          echo "Fingerprint: $fingerprint"
+          echo "fingerprint=$fingerprint" >> "$GITHUB_OUTPUT"
+
+      # The build job leaves an empty marker in GitHub's cache, named after
+      # the fingerprint, each time it passes on a branch other than main. A
+      # branch only sees its own markers (and main's, which never has any), and
+      # GitHub deletes one after 7 days unused, which just means building again.
+      - name: Has this branch already passed a build of these files?
+        id: passed
+        if: github.ref != 'refs/heads/main' && github.event_name == 'push'
+        uses: actions/cache/restore@v6
+        with:
+          path: build-passed
+          key: build-passed-${{ steps.fingerprint.outputs.fingerprint }}
+          lookup-only: true
+
+      - name: Decide
+        id: decide
+        env:
+          RELEASE: ${{ steps.release.outputs.release }}
+          PASSED: ${{ steps.passed.outputs.cache-hit }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$RELEASE" = true ]; then
+            echo "Building: this is a release."
+            build=true
+          elif [ "$EVENT" = workflow_dispatch ]; then
+            echo "Building: asked for by hand."
+            build=true
+          elif [ "$GITHUB_REF" = refs/heads/main ]; then
+            echo "Not building: main only gets merges from dev, whose build of the same app passed before GitHub allowed the merge."
+            build=false
+          elif [ "$PASSED" = true ]; then
+            echo "Not building: a build of exactly these files already passed on this branch. Only files the build doesn't use changed."
+            build=false
+          else
+            echo "Building: files the build uses have changed since the last build that passed."
+            build=true
+          fi
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+
   build:
     name: Check · Build Flatpak
-    # A republish builds nothing (on a push there's no input, which counts as
-    # false). Neither does a pull request's merge commit arriving on dev, see
-    # the top of this file. GitHub writes that commit's message as "Merge pull
-    # request #8 from <owner>/dev". If new work is pushed along with it, the
-    # newest commit is that work instead, so the build still runs. GitHub counts
-    # a skipped job as passing, so this can't hold up a later pull request.
+    needs: plan
+    # Runs when the plan says so. If the plan job itself fails, this runs
+    # anyway rather than being skipped, because GitHub counts a skipped job as
+    # passing, and a broken plan mustn't let an unchecked pull request through.
+    # (Without the plan's answer it's treated as not a release, so nothing is
+    # signed or published.) Not after a republish, or if the run was cancelled.
     if: >-
-      ${{ !inputs.republish && !(github.ref == 'refs/heads/dev'
-      && startsWith(github.event.head_commit.message, 'Merge pull request #')
-      && contains(github.event.head_commit.message, format(' from {0}/dev', github.repository_owner))) }}
+      ${{ !cancelled() && !inputs.republish
+      && (needs.plan.result != 'success' || needs.plan.outputs.build == 'true') }}
     runs-on: ubuntu-latest
     # Flathub's own build image: Fedora with flatpak, flatpak-builder and the
     # GNOME 51 SDK already installed. "privileged" lets it run the sandbox.
@@ -82,15 +180,15 @@ jobs:
         id: info
         run: build-aux/release-info.py | tee -a "$GITHUB_OUTPUT"
 
+      # The plan job worked this out. Only its exact "true" counts, so if the
+      # plan failed, nothing is signed or published.
       - name: Is this a release?
         id: release
         env:
-          VERSION: ${{ steps.info.outputs.version }}
-          STABLE: ${{ steps.info.outputs.stable }}
+          PLAN_RELEASE: ${{ needs.plan.outputs.release }}
         run: |
-          if [ "$GITHUB_REF" = refs/heads/main ] && [ "$STABLE" = true ] &&
-             [ -z "$(git ls-remote --tags origin "refs/tags/v$VERSION")" ]; then
-            echo "Yes: v$VERSION isn't released yet, so this build is signed and published."
+          if [ "$PLAN_RELEASE" = true ]; then
+            echo "Yes: this build is signed and published."
             echo "release=true" >> "$GITHUB_OUTPUT"
           else
             echo "No: nothing is signed or published."
@@ -125,8 +223,8 @@ jobs:
       # If Cargo.lock changed, the newest cache for this Rust and SDK is the
       # starting point, so only the libraries that changed are recompiled. GitHub
       # saves a cache only when the whole job passes, and deletes it after 7
-      # days unused. A branch can read its own caches and main's, but main can't
-      # read dev's, so main's first non-release run after a change starts fresh.
+      # days unused. A branch can read its own caches and main's. (main only
+      # builds releases, which skip this cache, so in practice it's dev's.)
       - name: Restore compiled Rust libraries
         if: steps.release.outputs.release != 'true'
         uses: actions/cache@v6
@@ -221,6 +319,22 @@ jobs:
         if: steps.release.outputs.release == 'true'
         with:
           path: _site
+
+      # Last, so it only happens when everything above passed: leaves the
+      # marker the plan job looks for, so a later push with exactly these
+      # files (say, one that only changes the docs) doesn't build them again.
+      # Not on main, which never looks for one, and not when the plan failed
+      # and left no fingerprint.
+      - name: Note that these files passed
+        if: github.ref != 'refs/heads/main' && needs.plan.outputs.fingerprint != ''
+        run: touch build-passed
+
+      - name: Save that note
+        if: github.ref != 'refs/heads/main' && needs.plan.outputs.fingerprint != ''
+        uses: actions/cache/save@v6
+        with:
+          path: build-passed
+          key: build-passed-${{ needs.plan.outputs.fingerprint }}
 
   release:
     # A plain name: GitHub shows a skipped job's name without filling it in

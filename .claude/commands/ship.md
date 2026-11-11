@@ -51,13 +51,22 @@ those commands.
   the leafmd.app DNS); check `gh secret list` shows `LEAFMD_GPG_PRIVATE_KEY`
   and `gh api repos/jeremehancock/LeafMD/pages` works before opening a
   release PR.
-- Every push, to any branch, runs `build-aux/sdk-check.sh` on GitHub, builds
-  a test `.flatpak` (kept 7 days under the run's Artifacts), and runs
+- GitHub's build (`Check · Build Flatpak`) runs `build-aux/sdk-check.sh`,
+  builds a test `.flatpak` (kept 7 days under the run's Artifacts), and runs
   `build-aux/flathub-lint.sh` (Flathub's checker) on the recipe, the app store
-  description and the finished build. Locally, `/ship` runs it on the first
-  two only, since checking a finished build means a second full build. The
-  one exception is the resync after a merge: `main` has just built that same
-  merge commit, so the run on `dev` shows as skipped, and that's expected.
+  description and the finished build. Locally, `/ship` runs the checker on the
+  first two only, since checking a finished build means a second full build.
+  It only runs when it can give a new answer (a first, quick job, "Decide what
+  to build", says why in its log):
+  - On `dev`, it's skipped when the files that go into the app and its checks
+    match a build that already passed on `dev`. So a push that only touches
+    `docs/`, `openspec/`, `site/`, `.claude/`, README.md, ROADMAP.md or
+    CLAUDE.md is skipped, and so is the resync after a merge. A skipped build
+    counts as passing, so the pull request can still be merged.
+  - On `main`, it only runs for a release. Other merges show it as skipped,
+    because `dev`'s build of the same app had to pass before the merge.
+  - "Run workflow" without "Republish leafmd.app" always builds, if a fresh
+    test `.flatpak` is wanted.
 
 ## Step 1: Find out where things stand
 
@@ -234,7 +243,9 @@ gh run watch <id> --exit-status
 ```
 
 If it fails, read the failing step (`gh run view <id> --log-failed`), report
-it in plain words, and stop. Don't open a PR on a red build.
+it in plain words, and stop. Don't open a PR on a red build. If `Check · Build
+Flatpak` was skipped, that's a pass: an earlier build of the same app files
+passed on `dev`. Say so in the PR body rather than calling it a new build.
 
 ## Creating the PR
 
