@@ -66,7 +66,7 @@ Small things to tidy up, none of which change how LeafMD works.
 - [ ] **Screenshot script:** move the script's virtual mouse away from GNOME's top-left hot corner before it starts, so it can't open the Activities overview by accident
 - [x] **Files panel with a new document:** when a new, unsaved document is selected, the Files panel keeps showing the folder of the file that was selected before, until the new document is saved
 - [x] **Files panel follows the file:** the panel always shows the folder of the document you're looking at (it used to stay on a wider folder once it had moved up), with an up arrow to see the folder above. Open Folder… with a document open now opens the folder in a new window
-- [ ] **Greyed-out file after saving:** after saving a new document for the first time, its name in the Files panel is sometimes greyed out (as if LeafMD couldn't open it) until it's saved again
+- [x] **Greyed-out file after saving:** after saving a new document for the first time, its name in the Files panel is sometimes greyed out (as if LeafMD couldn't open it) until it's saved again
 - [ ] **GitHub's build machines:** GitHub's `ubuntu-latest` is moving to Ubuntu 26. Nothing has broken, but decide whether to pin the version LeafMD builds on
 
 ## Later
