@@ -56,6 +56,8 @@ LeafMD follows your system's light or dark style, or stays always light or alway
 - **Markdown cheatsheet** (Shift+F1, or the Cheatsheet button) shows the most common markdown next to what it looks like.
 - **Lists continue as you type:** press Enter in a list and the next bullet, number or unticked checkbox is added for you. Enter on an empty item ends the list, and Shift+Enter starts a plain line instead.
 - **Paste a link over text:** select some text and paste a web address to turn it into `[text](address)`.
+- **Coloured code:** code blocks that name their language (` ```python `, ` ```bash `, ` ```rust ` and about 40 more, including short names like `py` and `sh`) are coloured in the formatted view, in printouts and in exports, in light and dark. While you type a language after ` ``` `, a list of names appears to pick from. Blocks with no language, or one LeafMD doesn't know (such as TypeScript or TOML), stay one colour.
+- **Drop an image to link it:** drop an image from your file manager onto the raw text, and LeafMD inserts `![photo](images/photo.png)` where you drop it, with the path starting from the document's folder. The document needs to be saved first, and the image needs to be in your home folder.
 - **Spell checking:** misspelt words in the raw text get a red wavy underline as you type. Code and web addresses are skipped. Right-click an underlined word for suggestions, **Add to Dictionary** or **Ignore**. **Check Spelling** in the main menu turns it off or on everywhere, and **Languages** in the right-click menu switches language. It starts in your system's language (or US English), and offers the languages your system has dictionaries for.
 
 - In split view, **scrolling either side** scrolls the other to the same spot.
@@ -159,6 +161,17 @@ Found a problem, or have an idea? Open an [issue](https://github.com/jeremehanco
 
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md): running and building LeafMD, the checks, how changes are planned, and what each file does
 - [docs/PUBLISHING.md](docs/PUBLISHING.md): how releases and leafmd.app are published
+
+## Built With
+
+- [Rust](https://www.rust-lang.org): the language LeafMD is written in
+- [GTK](https://gtk.org) and [libadwaita](https://gnome.pages.gitlab.gnome.org/libadwaita/): the window, buttons and dialogs, and GNOME's look
+- [GtkSourceView](https://gitlab.gnome.org/GNOME/gtksourceview): the raw text editor
+- [WebKitGTK](https://webkitgtk.org): draws the formatted view
+- [libspelling](https://gitlab.gnome.org/GNOME/libspelling): checks spelling
+- [comrak](https://github.com/kivikakk/comrak): turns markdown into HTML
+- [ammonia](https://github.com/rust-ammonia/ammonia): removes anything unsafe from the HTML
+- [syntect](https://github.com/trishume/syntect): colours code blocks
 
 ## License
 

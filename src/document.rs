@@ -19,7 +19,9 @@ use crate::dialog::{Answer, Question};
 use crate::export;
 use crate::file_change::{self, Comparison, Version};
 use crate::format::{self, Inline, LineStyle};
+use crate::folder_tree;
 use crate::headings::{self, Heading};
+use crate::image_link;
 use crate::render;
 use crate::raw_view::RawView;
 use crate::spelling;
@@ -543,6 +545,7 @@ impl Document {
         self.paned.add_controller(wheel);
 
         self.setup_typing_signals();
+        crate::language_suggestions::add_to(&self.source_view);
     }
 
     /// The number of matches or the selected match changed. Only the selected
@@ -740,12 +743,13 @@ impl Document {
     }
 
     // =====================================================================
-    // Smarter typing: lists on Enter, pasting a link over text
+    // Smarter typing: lists on Enter, pasting a link over text, dropping images
     // =====================================================================
 
-    /// Lists continue when Enter is pressed and end on an empty item, and
-    /// pasting a web address over selected text makes a link. The rules for
-    /// what to type are in typing.rs; this wires them to the raw text.
+    /// Lists continue when Enter is pressed and end on an empty item,
+    /// pasting a web address over selected text makes a link, and dropping an
+    /// image inserts a link to it. The rules for what to type are in
+    /// typing.rs and image_link.rs; this wires them to the raw text.
     fn setup_typing_signals(self: &Rc<Self>) {
         // Enter in a list item. This watches key presses rather than text
         // being inserted, so it only reacts to someone pressing Enter: pasted
@@ -793,6 +797,102 @@ impl Document {
                 view.stop_signal_emission_by_name("paste-clipboard");
             }
         });
+
+        // Files dropped onto the raw text. Images get a link at the drop point;
+        // anything else opens, as it would dropped anywhere else on the window.
+        // The capture phase lets this see the drop before the editor's own
+        // drop handling (which is for dragged text) can take it.
+        let drop = gtk::DropTarget::new(gdk::FileList::static_type(), gdk::DragAction::COPY);
+        drop.set_propagation_phase(gtk::PropagationPhase::Capture);
+        let weak = Rc::downgrade(self);
+        drop.connect_drop(move |_, value, x, y| {
+            let (Some(doc), Ok(files)) = (weak.upgrade(), value.get::<gdk::FileList>()) else {
+                return false;
+            };
+            doc.drop_files(files.files(), x, y);
+            true
+        });
+        self.source_view.add_controller(drop);
+    }
+
+    /// Files dropped onto the raw text at (x, y). Images are linked, as one
+    /// undo step; if any of them can't be linked, none are and a message says
+    /// why, since linking only some of a drop would be more confusing. Other
+    /// files open in their own tabs.
+    fn drop_files(self: &Rc<Self>, files: Vec<gio::File>, x: f64, y: f64) {
+        let (images, others): (Vec<_>, Vec<_>) = files
+            .into_iter()
+            .partition(|file| file.path().is_some_and(|path| image_link::is_image(&path)));
+        if let Some(win) = self.window() {
+            for file in others {
+                win.open_file_here(file, None);
+            }
+        }
+        if images.is_empty() {
+            return;
+        }
+
+        let document = self.file.borrow().as_ref().and_then(|file| file.path());
+        let portal = folder_tree::portal_folder();
+        let links: Result<Vec<String>, image_link::CantLink> = images
+            .iter()
+            .filter_map(|image| image.path())
+            .map(|image| {
+                let visible = image.is_file();
+                image_link::link_for(document.as_deref(), &image, visible, &portal)
+            })
+            .collect();
+        let links = match links {
+            Ok(links) => links,
+            Err(why) => {
+                self.toast(why.message());
+                return;
+            }
+        };
+
+        let buffer = &self.buffer;
+        let mut at = self.drop_point(x, y);
+        buffer.begin_user_action();
+        buffer.insert(&mut at, &links.join("\n"));
+        buffer.end_user_action();
+        // After inserting, `at` points just past the last link
+        buffer.place_cursor(&at);
+        self.source_view.grab_focus();
+        self.source_view.scroll_mark_onscreen(&buffer.get_insert());
+    }
+
+    /// The spot in the text nearest to (x, y) in the raw text view.
+    ///
+    /// GTK only names a spot when the point is right over a character, so a
+    /// drop in the empty space after a short line, or below the last line,
+    /// would get no answer. So this finds the line first (the one at that
+    /// height, or the last line when below the text), then the character on
+    /// it: the end of the line when the point is past it, the start when
+    /// it's left of the text (over the line numbers). With word wrap, "line"
+    /// means the line as shown on screen, not the whole paragraph.
+    fn drop_point(&self, x: f64, y: f64) -> gtk::TextIter {
+        let view = &self.source_view;
+        // The drop point is in the view's own coordinates; the text may be
+        // scrolled, so turn it into a spot in the whole document first
+        let (x, y) = view.window_to_buffer_coords(gtk::TextWindowType::Widget, x as i32, y as i32);
+        if let Some(at) = view.iter_at_location(x, y) {
+            return at;
+        }
+        // The paragraph at that height, and where its text starts on the left
+        let (mut paragraph, _) = view.line_at_y(y);
+        let text_left = view.iter_location(&paragraph).x();
+        // The start of the wrapped piece of it at that height. None means the
+        // point is below the text, so the end of the last paragraph it is.
+        let Some(mut at) = view.iter_at_location(text_left, y) else {
+            if !paragraph.ends_line() {
+                paragraph.forward_to_line_end();
+            }
+            return paragraph;
+        };
+        if x > text_left {
+            view.forward_display_line_end(&mut at);
+        }
+        at
     }
 
     /// Enter in the raw text. In a list item it starts the next item, or on

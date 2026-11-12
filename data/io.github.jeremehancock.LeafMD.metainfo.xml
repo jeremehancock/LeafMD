@@ -30,7 +30,7 @@
       <li>A word count and reading time sit quietly in the corner, and count your selection too</li>
       <li>Edit the raw text with the formatted view updating as you type</li>
       <li>A formatting bar adds bold, links, lists, headings, tables and more for you</li>
-      <li>Lists continue themselves when you press Enter, and pasting a web address over text makes a link</li>
+      <li>Lists continue themselves when you press Enter, pasting a web address over text makes a link, and dropping an image inserts a link to it</li>
       <li>Misspelt words are underlined as you type, with suggestions a right-click away</li>
       <li>A built-in markdown cheatsheet shows the common syntax at a glance</li>
       <li>Find and replace, in the raw text or the formatted document</li>
@@ -38,6 +38,7 @@
       <li>A banner tells you when another app changes your file, and nothing is overwritten without asking</li>
       <li>In split view, both sides scroll together</li>
       <li>Supports tables, task lists, footnotes and other GitHub-style markdown</li>
+      <li>Code blocks that name their language are coloured, with language names suggested as you type them</li>
       <li>Open files, or a whole folder with leafmd ., from a terminal with an optional short leafmd command</li>
       <li>Choose the fonts for the raw text and the formatted view, or zoom in and out with Ctrl+plus and Ctrl+minus</li>
       <li>Looks at home on GNOME, following your light or dark style and your accent colour, or stays light or dark if you prefer</li>

@@ -1,6 +1,9 @@
 //! Turns markdown text into HTML that is safe to show in the formatted view.
 
-use comrak::{Options, markdown_to_html};
+use comrak::options::Plugins;
+use comrak::{Options, markdown_to_html_with_plugins};
+
+use crate::highlight::{self, Highlighter};
 
 /// The markdown features LeafMD understands (GitHub-style extras on top of
 /// plain markdown). The formatted view, the Headings page and the word count
@@ -23,7 +26,7 @@ pub fn markdown_options() -> Options<'static> {
 /// (lots of READMEs use it for things like centred images), and the cleaning
 /// step afterwards removes scripts, event handlers, iframes and so on.
 pub fn markdown_to_safe_html(markdown: &str) -> String {
-    clean(&markdown_to_html(markdown, &view_options(true)))
+    highlight::finish(&clean(&to_html(markdown, &view_options(true))))
 }
 
 /// Converts markdown to safe HTML for a printed page, a PDF or an exported
@@ -36,7 +39,7 @@ pub fn markdown_to_export_html<F>(markdown: &str, picture: F) -> String
 where
     F: Fn(&str) -> Option<String> + Send + Sync + 'static,
 {
-    let html = markdown_to_html(markdown, &view_options(false));
+    let html = to_html(markdown, &view_options(false));
     let mut cleaner = cleaner();
     cleaner.rm_generic_attributes(["data-sourcepos"]);
     cleaner.attribute_filter(move |element, attribute, value| {
@@ -45,7 +48,7 @@ where
         }
         Some(value.into())
     });
-    cleaner.clean(&html).to_string()
+    highlight::finish(&cleaner.clean(&html).to_string())
 }
 
 /// How markdown is turned into the formatted view's HTML. `source_lines`
@@ -62,6 +65,15 @@ fn view_options(source_lines: bool) -> Options<'static> {
     // which click-to-jump and synced scrolling use to match the two views up
     options.render.sourcepos = source_lines;
     options
+}
+
+/// Markdown to HTML, not yet cleaned. Code blocks that name their language
+/// are placeholders until `highlight::finish` swaps in their colours, after
+/// cleaning (see highlight.rs).
+fn to_html(markdown: &str, options: &Options) -> String {
+    let mut plugins = Plugins::default();
+    plugins.render.codefence_syntax_highlighter = Some(&Highlighter);
+    markdown_to_html_with_plugins(&highlight::begin(markdown), options, &plugins)
 }
 
 fn clean(html: &str) -> String {
@@ -156,4 +168,41 @@ mod tests {
         assert!(html.contains("<li class=\"task-list-item\""));
         assert_eq!(html.matches("task-list-item\"").count(), 1);
     }
+
+    #[test]
+    fn coloured_code_survives_cleaning() {
+        let html = markdown_to_safe_html("```python\nprint(\"hi\")  # say hi\n```\n");
+        assert!(html.contains("<span class=\"hl-"), "{html}");
+        assert!(html.contains("hl-comment"), "{html}");
+        assert!(html.contains("data-sourcepos=\"1:1-3:3\""), "{html}");
+    }
+
+    #[test]
+    fn script_in_a_coloured_block_stays_text() {
+        let html = markdown_to_safe_html("```html\n<script>alert(1)</script>\n```\n");
+        // Shown as text, maybe split into coloured pieces
+        assert!(!html.contains("<script"), "{html}");
+        assert!(html.contains("&lt;"), "{html}");
+        assert!(html.contains("script"), "{html}");
+    }
+
+    #[test]
+    fn exports_are_coloured_without_line_tags() {
+        let html = markdown_to_export_html("```rust\nfn main() {}\n```\n", |_| None);
+        assert!(html.contains("hl-keyword"), "{html}");
+        assert!(!html.contains("data-sourcepos"), "{html}");
+    }
+
+
+    #[test]
+    fn a_document_cant_fake_a_coloured_block() {
+        // The placeholder character, typed into a document, around a number
+        let sneaky = "<img alt=\"\u{FDD0}0\u{FDD0}\">\n\n```rust\nfn \"x onerror=alert(1)\"() {}\n```\n";
+        let html = markdown_to_safe_html(sneaky);
+        assert!(!html.contains('\u{FDD0}'), "{html}");
+        // The alt text keeps a harmless replacement character, not the code
+        assert!(html.contains("alt=\"\u{FFFD}0\u{FFFD}\""), "{html}");
+        assert!(html.contains("hl-keyword"), "{html}");
+    }
+
 }

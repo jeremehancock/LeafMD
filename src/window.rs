@@ -3053,6 +3053,8 @@ impl Window {
                     ("Jump to a word", "In Split view, double-click a word on the formatted side to select it in the raw text."),
                     ("Lists", "In a list, Enter starts the next item for you: another bullet, the next number, or an unticked checkbox. Press Enter on an empty item to end the list, or Shift+Enter for a new line without a marker."),
                     ("Pasting a link", "Select some text and paste a web address over it to turn the text into a link. Pasting anything else replaces the text as usual."),
+                    ("Coloured code", "Write a language after the three backticks that start a code block, like ```python, and the formatted view colours its keywords, text, comments and numbers. Short names work too, such as sh, py, js and rs. While you type a language, a list of names appears: press Enter to pick one, or keep typing or press Escape to ignore it. A block with no language, or one LeafMD doesn't know, stays one colour."),
+                    ("Dropping an image", "Drop an image from your file manager onto the raw text to insert a link to it where you drop it, like ![photo](images/photo.png). The path starts from the document's folder, so the link keeps working if you move the folders together. Save the document first, and keep the image in your home folder, so LeafMD knows where to link from. Ctrl+Z takes the link out again."),
                     ("Spelling", "Misspelt words in the raw text get a red wavy underline. Code and web addresses aren't checked. Right-click an underlined word for suggested spellings, or choose Add to Dictionary to stop it being underlined for good, or Ignore to stop it until LeafMD closes. Check Spelling in the main menu turns it off or on in every window. Languages in the right-click menu changes the language, from the ones your system has dictionaries for."),
                     ("Word count", "The bottom-right corner shows how many words the document has, and about how long it takes to read at 200 words a minute. It counts the words a reader sees: markdown marks and link addresses aren't counted, but code is. Select some text, in the raw text or the formatted view, to count just that, such as 35 of 1,240 words."),
                 ],
@@ -3383,7 +3385,7 @@ impl Window {
                 "",
                 &[
                     ("> Quoted text", "<span alpha='50%'>▎</span> <i>Quoted text</i>", ""),
-                    ("```\nCode block\n```", "<tt>Code block</tt>", ""),
+                    ("```python\nprint(\"Hello\")\n```", "<tt>print(\"Hello\")</tt>, coloured as Python", ""),
                     ("| A | B |\n| - | - |\n| 1 | 2 |", "A table with columns A and B", ""),
                     ("---", "A dividing line across the page", ""),
                 ],
@@ -3508,6 +3510,7 @@ impl Window {
             "comrak, turns markdown into HTML https://github.com/kivikakk/comrak".to_string(),
             "ammonia, removes anything unsafe from the HTML https://github.com/rust-ammonia/ammonia"
                 .to_string(),
+            "syntect, colours code blocks https://github.com/trishume/syntect".to_string(),
         ];
         let built_with: Vec<&str> = built_with.iter().map(String::as_str).collect();
         about.add_credit_section(Some("Built With"), &built_with);

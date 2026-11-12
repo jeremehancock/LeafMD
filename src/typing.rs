@@ -63,6 +63,40 @@ pub fn on_enter(line: &str, cursor: usize) -> Enter {
     Enter::Continue(format!("\n{}{marker}", parsed.indent))
 }
 
+/// The language names suggested after ``` at the start of a line in the raw
+/// text, the ones people usually write, in alphabetical order. Each is one
+/// highlight.rs colours (a test checks). Short names like `py` and `sh` work
+/// too, but aren't suggested, so typing `p` offers a short, clear list.
+pub const CODE_LANGUAGES: &[&str] = &[
+    "bash", "c", "cpp", "csharp", "css", "diff", "go", "haskell", "html", "java", "javascript",
+    "json", "latex", "lua", "makefile", "markdown", "perl", "php", "python", "r", "ruby", "rust",
+    "scala", "shell", "sql", "xml", "yaml",
+];
+
+/// What's been typed of a language name after an opening ```, if the text
+/// before the cursor on this line is up to three spaces, ```, then at least
+/// one letter. `text_before_line` is the document up to the start of the
+/// line: if it leaves a code block open, this line would close it instead.
+pub fn code_language_typed<'a>(line_before_cursor: &'a str, text_before_line: &str) -> Option<&'a str> {
+    let spaces = line_before_cursor.chars().take_while(|&c| c == ' ').count();
+    if spaces > 3 {
+        return None;
+    }
+    let typed = line_before_cursor[spaces..].strip_prefix("```")?;
+    let starts_with_letter = typed.chars().next().is_some_and(|c| c.is_ascii_alphabetic());
+    let all_name = typed.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '#' | '-'));
+    if !starts_with_letter || !all_name || in_code_block(text_before_line) {
+        return None;
+    }
+    Some(typed)
+}
+
+/// The suggested names that start with `typed`, ignoring case.
+pub fn code_languages_starting(typed: &str) -> Vec<&'static str> {
+    let typed = typed.to_lowercase();
+    CODE_LANGUAGES.iter().copied().filter(|name| name.starts_with(&typed)).collect()
+}
+
 /// Whether a line coming after `text_before` is inside a fenced code block,
 /// that is, after an opening ``` or ~~~ line that hasn't been closed yet.
 /// `text_before` is everything from the start of the document up to the
@@ -227,4 +261,30 @@ mod tests {
         assert!(!is_web_address("see https://example.com"));
         assert!(!is_web_address(""));
     }
+
+    #[test]
+    fn which_lines_want_language_suggestions() {
+        assert_eq!(code_language_typed("```py", ""), Some("py"));
+        assert_eq!(code_language_typed("   ```py", ""), Some("py"));
+        assert_eq!(code_language_typed("    ```py", ""), None); // four spaces: indented code
+        assert_eq!(code_language_typed("```", ""), None); // nothing typed yet
+        assert_eq!(code_language_typed("```1", ""), None);
+        assert_eq!(code_language_typed("~~~py", ""), None);
+        assert_eq!(code_language_typed("```py thing", ""), None);
+        assert_eq!(code_language_typed("```c++", ""), Some("c++"));
+        // This line would close the open python block
+        assert_eq!(code_language_typed("```p", "```python\nprint(\"hi\")\n"), None);
+        // After a closed block, a new one can start
+        assert_eq!(code_language_typed("```p", "```python\nprint(1)\n```\n\n"), Some("p"));
+    }
+
+    #[test]
+    fn suggestions_narrow_as_you_type() {
+        assert_eq!(code_languages_starting("py"), ["python"]);
+        assert_eq!(code_languages_starting("j"), ["java", "javascript", "json"]);
+        assert_eq!(code_languages_starting("js"), ["json"]);
+        assert_eq!(code_languages_starting("JS"), ["json"]);
+        assert!(code_languages_starting("zzz").is_empty());
+    }
+
 }
