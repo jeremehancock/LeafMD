@@ -1,6 +1,6 @@
 [package]
 name = "leafmd"
-version = "0.15.0"
+version = "0.16.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/jeremehancock/LeafMD"
@@ -21,6 +21,11 @@ webkit6 = "0.6"
 comrak = { version = "0.59", default-features = false }
 # Removes anything unsafe (scripts and so on) from the formatted HTML
 ammonia = "4"
+# Colours code blocks that name their language (```rust). Only its built-in
+# languages and HTML output are needed: the colours come from LeafMD's own
+# stylesheet, not syntect's themes, and its pattern matcher is the pure-Rust
+# one, so the Flatpak build needs nothing extra from the GNOME SDK.
+syntect = { version = "5", default-features = false, features = ["default-syntaxes", "html", "regex-onig"] }
 # Safely wraps the HTML in a JavaScript string when updating the preview
 serde_json = "1"
 # The one system call (setsid) that frees the terminal LeafMD was started from

@@ -573,16 +573,33 @@ mod tests {
     }
 
     #[test]
+    fn code_colours_in_exports() {
+        let markdown = "```python\nprint(\"hi\")  # say hi\n```\n";
+        // A web page: coloured, with the dark colours for dark readers, no scripts
+        let web = page(markdown, "x", &look(), Colours::FollowReader, None);
+        assert!(web.contains("<span class=\"hl-comment\">"), "{web}");
+        assert!(web.contains("--code-comment: #9a9996"), "dark colours missing");
+        assert!(web.contains("--code-comment: #6a696e"), "light colours missing");
+        assert!(!web.contains("<script"));
+        // Paper and PDFs: the same coloured code, with only the light colours
+        let paper = page(markdown, "x", &look(), Colours::Light, None);
+        assert!(paper.contains("<span class=\"hl-comment\">"));
+        assert!(paper.contains("--code-comment: #6a696e"));
+        assert!(!paper.contains("prefers-color-scheme: dark"));
+    }
+
+    #[test]
     fn pictures_are_packed_in() {
         let folder = std::env::temp_dir().join(format!("leafmd-export-test-{}", std::process::id()));
         std::fs::create_dir_all(folder.join("img")).unwrap();
         std::fs::write(folder.join("img/beds.png"), PNG).unwrap();
         std::fs::write(folder.join("my photo.png"), PNG).unwrap();
+        std::fs::write(folder.join("#1 why?.png"), PNG).unwrap();
         let markdown = "![](img/beds.png)\n\n![](my%20photo.png)\n\n![Plan](img/missing.png)\n\n\
-                        ![](https://example.org/logo.png)";
+                        ![](https://example.org/logo.png)\n\n![](%231%20why%3F.png)";
         let html = page(markdown, "x", &look(), Colours::FollowReader, Some(folder.clone()));
         std::fs::remove_dir_all(&folder).unwrap();
-        assert_eq!(html.matches("src=\"data:image/png;base64,").count(), 2);
+        assert_eq!(html.matches("src=\"data:image/png;base64,").count(), 3);
         assert!(html.contains("src=\"img/missing.png\""));
         assert!(html.contains("alt=\"Plan\""));
         assert!(html.contains("src=\"https://example.org/logo.png\""));

@@ -13,13 +13,16 @@ use std::sync::Once;
 use std::task::{Poll, Waker};
 
 use adw::prelude::*;
-use gtk::gdk;
+use gtk::{gdk, glib};
 
 /// How wide the question is when there's room. The window's own width limits it.
 const WIDTH: i32 = 560;
 
 /// In a window narrower than this, the buttons stack instead of sharing a row.
 const STACK_BELOW: i32 = 480;
+
+/// The gap kept between a floating question and each side of the window.
+const SIDE_GAP: i32 = 24;
 
 /// The space around the question's contents.
 const MARGIN: i32 = 24;
@@ -71,13 +74,13 @@ impl Question {
             .build();
 
         let heading = gtk::Label::builder()
-            .label(heading)
+            .label(keep_last_words_together(heading))
             .wrap(true)
             .justify(gtk::Justification::Center)
             .css_classes(["title-3"])
             .build();
         let body = gtk::Label::builder()
-            .label(body)
+            .label(keep_last_words_together(body))
             .wrap(true)
             .justify(gtk::Justification::Center)
             .build();
@@ -162,18 +165,30 @@ impl Question {
 
     /// Shows the question over `parent` and waits for the answer.
     pub async fn ask(&self, parent: Option<&impl IsA<gtk::Widget>>) -> String {
-        // Decided here, before the dialog is measured, because its height is
-        // worked out from its width and from how the buttons are laid out
+        // Laid out here, before the dialog is measured, because its height is
+        // worked out from its width and from how the buttons are laid out.
+        // Then again whenever the window changes size while it's open, or a
+        // narrower window would squeeze the text in behind the buttons.
+        let mut watching = Vec::new();
         if let Some(parent) = parent {
-            let width = parent.as_ref().width();
-            self.dialog.set_content_width(width.min(WIDTH));
-            if width < STACK_BELOW {
-                self.stack_buttons(width, parent.as_ref().height());
+            let parent = parent.as_ref().clone();
+            let layout = self.layout();
+            layout.fit(parent.width(), parent.height());
+            if let Some(window) = parent.root().and_downcast::<gtk::Window>() {
+                for property in ["default-width", "default-height", "maximized", "fullscreened"] {
+                    let (layout, parent) = (layout.clone(), parent.clone());
+                    let id = window.connect_notify_local(Some(property), move |_, _| {
+                        // After GTK has given the window its new size
+                        let (layout, parent) = (layout.clone(), parent.clone());
+                        glib::idle_add_local_once(move || layout.fit(parent.width(), parent.height()));
+                    });
+                    watching.push((window.clone(), id));
+                }
             }
         }
         self.dialog.present(parent);
         let waiting = self.waiting.clone();
-        poll_fn(move |context| {
+        let answer = poll_fn(move |context| {
             let mut waiting = waiting.borrow_mut();
             match waiting.answer.take() {
                 Some(answer) => Poll::Ready(answer),
@@ -183,18 +198,88 @@ impl Question {
                 }
             }
         })
-        .await
+        .await;
+        for (window, id) in watching {
+            window.disconnect(id);
+        }
+        answer
+    }
+
+    fn layout(&self) -> Layout {
+        Layout {
+            dialog: self.dialog.clone(),
+            text: self.text.clone(),
+            scroller: self.scroller.clone(),
+            row: self.row.clone(),
+            buttons: self.buttons.iter().map(|(_, button)| button.clone()).collect(),
+        }
     }
 }
 
-impl Question {
+/// The parts of a question that change with the window's size.
+#[derive(Clone)]
+struct Layout {
+    dialog: adw::Dialog,
+    text: gtk::Box,
+    scroller: gtk::ScrolledWindow,
+    row: gtk::Box,
+    /// In the order they sit in a row
+    buttons: Vec<gtk::Button>,
+}
+
+impl Layout {
+    /// Sizes the question for a window `width` by `height`, with the buttons
+    /// in a row if it fits, otherwise stacked.
+    fn fit(&self, width: i32, height: i32) {
+        // A floating question needs a gap on each side, or it spills past
+        // the window's edges and its heading is cut off. A narrow window
+        // shows it as a panel along the bottom, which may fill the width.
+        let room = if width < STACK_BELOW { width } else { width - 2 * SIDE_GAP };
+        // The buttons share a row only if it fits. They're all as wide as
+        // the widest ("Close without Saving"), so the row can need a little
+        // more than WIDTH, and more than a window that isn't narrow has.
+        let row_needs = self.row_width();
+        if width < STACK_BELOW || row_needs > room {
+            let content_width = room.min(WIDTH);
+            self.dialog.set_content_width(content_width);
+            self.stack_buttons(content_width, height);
+        } else {
+            self.dialog.set_content_width(room.min(WIDTH.max(row_needs)));
+            self.unstack_buttons();
+        }
+        // The dialog doesn't shrink back by itself once it has been taller
+        // (stacked buttons, more wrapped text), which left a gap above the
+        // buttons after widening the window again. So its height is set from
+        // what the contents need at the new width, but no taller than the window.
+        if let Some(contents) = self.dialog.child() {
+            let (_, natural, _, _) =
+                contents.measure(gtk::Orientation::Vertical, self.dialog.content_width());
+            self.dialog.set_content_height(natural.min(height - 2 * SIDE_GAP).max(1));
+        }
+    }
+
+    /// How wide the buttons are side by side: each as wide as the widest,
+    /// with the gaps between them and the margins either side. Worked out
+    /// from the buttons, since the row may be stacked at the moment.
+    fn row_width(&self) -> i32 {
+        let widest = self
+            .buttons
+            .iter()
+            .map(|button| button.measure(gtk::Orientation::Horizontal, -1).0)
+            .max()
+            .unwrap_or(0);
+        let count = self.buttons.len() as i32;
+        widest * count + self.row.spacing() * (count - 1).max(0) + MARGIN * 2
+    }
+
     /// Too narrow for a row: one above the other, with the usual answer on top.
-    /// `width` and `height` are the window's. The text gets the room it needs, or
-    /// what's left after the buttons in a short window, with the rest scrolling.
+    /// `width` is the question's and `height` the window's. The text gets the
+    /// room it needs, or what's left after the buttons in a short window, with
+    /// the rest scrolling.
     fn stack_buttons(&self, width: i32, height: i32) {
         self.row.set_orientation(gtk::Orientation::Vertical);
         let mut previous: Option<&gtk::Button> = None;
-        for (_, button) in self.buttons.iter().rev() {
+        for button in self.buttons.iter().rev() {
             self.row.reorder_child_after(button, previous);
             previous = Some(button);
         }
@@ -204,6 +289,30 @@ impl Question {
             .measure(gtk::Orientation::Vertical, width - MARGIN * 2);
         self.scroller.set_min_content_height(wanted.min(room).max(0));
     }
+
+    /// Back to a row, in the usual order, with the text at its natural height.
+    fn unstack_buttons(&self) {
+        self.row.set_orientation(gtk::Orientation::Horizontal);
+        let mut previous: Option<&gtk::Button> = None;
+        for button in &self.buttons {
+            self.row.reorder_child_after(button, previous);
+            previous = Some(button);
+        }
+        self.scroller.set_min_content_height(-1);
+    }
+}
+
+/// Joins the last two words of each line with a space that can't break, so
+/// wrapping never leaves one word alone on the last line, like "closing?"
+/// under "Save changes to document “notes.md” before".
+pub fn keep_last_words_together(text: &str) -> String {
+    text.split('\n')
+        .map(|line| match line.trim_end().rfind(' ') {
+            Some(space) => format!("{}\u{a0}{}", &line[..space], &line[space + 1..]),
+            None => line.to_string(),
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// Records the first answer given. Closing the dialog after a button was
@@ -247,4 +356,22 @@ fn load_style() {
             gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
         );
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn last_two_words_stay_together() {
+        assert_eq!(
+            keep_last_words_together("Save changes before closing?"),
+            "Save changes before\u{a0}closing?"
+        );
+        assert_eq!(
+            keep_last_words_together("Two lines.\nSave changes?"),
+            "Two\u{a0}lines.\nSave\u{a0}changes?"
+        );
+        assert_eq!(keep_last_words_together("Saved"), "Saved");
+    }
 }

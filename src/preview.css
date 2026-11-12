@@ -15,6 +15,14 @@
   --card: rgba(0, 0, 6, 0.035);
   --card-strong: rgba(0, 0, 6, 0.06);
   --check-off: rgba(0, 0, 6, 0.22);
+  /* Code colours (see highlight.rs), from GNOME's palette, each at least
+     4.5 to 1 against the code block's background */
+  --code-keyword: #1a5fb4;
+  --code-string: #1d7a46;
+  --code-comment: #6a696e;
+  --code-number: #b53f00;
+  --code-name: #813d9c;
+  --code-type: #0e6f80;
 }
 /* Dark style. Exported web pages reuse this block when the reader's
    desktop is dark (see export.rs, which finds it by this exact first line),
@@ -29,6 +37,12 @@
   --card: rgba(255, 255, 255, 0.05);
   --card-strong: rgba(255, 255, 255, 0.08);
   --check-off: rgba(255, 255, 255, 0.28);
+  --code-keyword: #62a0ea;
+  --code-string: #57e389;
+  --code-comment: #9a9996;
+  --code-number: #ffa348;
+  --code-name: #dc8add;
+  --code-type: #5bc8de;
 }
 html { background: var(--bg); color: var(--fg); }
 body {
@@ -68,6 +82,13 @@ pre {
   box-shadow: inset 0 0 0 1px var(--line); line-height: 1.55; margin: 1.2em 0;
 }
 pre code { background: none; padding: 0; }
+/* Coloured code: each piece's colour group, labelled by highlight.rs */
+.hl-keyword { color: var(--code-keyword); }
+.hl-string { color: var(--code-string); }
+.hl-comment { color: var(--code-comment); font-style: italic; }
+.hl-number { color: var(--code-number); }
+.hl-name { color: var(--code-name); }
+.hl-type { color: var(--code-type); }
 blockquote {
   margin: 1.2em 0; padding: 0.1em 0 0.1em 1.1em; color: var(--muted);
   border-left: 3px solid color-mix(in srgb, var(--accent) 55%, transparent);

@@ -39,11 +39,15 @@ Open and Save SHALL be words rather than icons, because icons for those actions 
 - **THEN** the Save button shows the word "Save", and the New button shows the same new document icon
 
 ### Requirement: Opening files
-LeafMD SHALL open a markdown or text file chosen with Open (Ctrl+O or the Open button), dropped anywhere on the window, double-clicked in the file manager, or given on the command line (`leafmd notes.md`). The Open dialog SHALL offer Markdown (.md, .markdown, .mdown, .mkd), Plain text and All files filters.
+LeafMD SHALL open a markdown or text file chosen with Open (Ctrl+O or the Open button), dropped anywhere on the window, double-clicked in the file manager, or given on the command line (`leafmd notes.md`). The one exception is an image dropped onto the raw text, which inserts an image link instead (see smart-typing). The Open dialog SHALL offer Markdown (.md, .markdown, .mdown, .mkd), Plain text and All files filters.
 
 #### Scenario: Dropping a file
 - **WHEN** the user drops a markdown file onto the window while another document is open
 - **THEN** that file opens in a new selected tab in the window, and nothing is asked about unsaved changes because the other document stays open
+
+#### Scenario: Dropping an image onto the raw text
+- **WHEN** the user drops `photo.png` onto the raw text of a saved document
+- **THEN** LeafMD doesn't try to open it, and inserts an image link instead
 
 #### Scenario: Not plain text
 - **WHEN** the user opens a file that isn't valid UTF-8 text
@@ -111,6 +115,14 @@ LeafMD SHALL show a dot (•) before the file name while there are unsaved chang
 #### Scenario: The buttons in a narrow window
 - **WHEN** the window is 360 pixels wide and LeafMD asks about unsaved changes
 - **THEN** the buttons stack, because they don't fit side by side, and all three are fully visible
+
+#### Scenario: A window just too narrow for the row
+- **WHEN** the window is 520 pixels wide and LeafMD asks about unsaved changes
+- **THEN** the question stays inside the window with a gap on each side, its heading is fully visible, and the buttons stack
+
+#### Scenario: No word left on its own
+- **WHEN** LeafMD asks "Save changes to document “leafmd-test2.md” before closing?" and the heading needs two lines
+- **THEN** the second line holds at least "before closing?", never just "closing?"
 
 #### Scenario: Opening doesn't ask
 - **WHEN** the user has unsaved changes in notes.md and opens todo.md from Recent files

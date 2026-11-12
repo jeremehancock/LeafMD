@@ -66,6 +66,10 @@ Help (F1) SHALL open a window explaining, in plain language, the three views, ed
 - **WHEN** the user opens Help and looks for spelling
 - **THEN** it explains that misspelt words in the raw text are underlined, that code and addresses aren't checked, that right-clicking a word offers suggestions, Add to Dictionary and Ignore, that Check Spelling in the main menu turns it off everywhere, and that Languages in the right-click menu changes the language
 
+#### Scenario: Reading about code blocks
+- **WHEN** the user opens Help and looks for code blocks
+- **THEN** it explains writing a language after the opening ``` (such as ```python) to colour the code, the common short names like `sh`, `py`, `js` and `rs`, the list of suggestions that appears while typing one, and that a block with no language or an unknown one stays one colour
+
 ### Requirement: Keyboard shortcuts window
 Keyboard Shortcuts (Ctrl+?) SHALL list every keyboard shortcut, grouped into Views, Files, Tabs, Formatting, Find and Help, with no search box, in the same style as the Help window.
 
@@ -104,8 +108,12 @@ The Markdown Cheatsheet (Shift+F1, the Cheatsheet button on the formatting bar, 
 - **WHEN** the user opens the cheatsheet
 - **THEN** `**Bold text**` is shown next to "Bold text" in bold
 
+#### Scenario: Looking up a code block
+- **WHEN** the user opens the cheatsheet and looks at Blocks
+- **THEN** the code block example starts with ```python, showing where a language goes
+
 ### Requirement: About window
-About LeafMD SHALL show the app's name, icon, version and description, the developer (Jereme Hancock) with a link, an AI disclosure saying the project was created with the help of AI, a "Built With" section listing Rust, GTK, libadwaita, GtkSourceView and WebKitGTK with the versions LeafMD is running with, libspelling with the version LeafMD was built with, plus comrak and ammonia, the GPL 3.0 license, a Website link to `https://leafmd.app/`, a GitHub link and a link for reporting issues.
+About LeafMD SHALL show the app's name, icon, version and description, the developer (Jereme Hancock) with a link, an AI disclosure (created with the help of AI), a "Built With" section (Rust, GTK, libadwaita, GtkSourceView and WebKitGTK at the versions running, libspelling at the version built with, plus comrak, ammonia and syntect), the GPL 3.0 license, a Website link to `https://leafmd.app/`, a GitHub link and a link for reporting issues.
 
 #### Scenario: Checking library versions
 - **WHEN** the user opens About and goes to the credits
@@ -114,6 +122,10 @@ About LeafMD SHALL show the app's name, icon, version and description, the devel
 #### Scenario: Visiting the website
 - **WHEN** the user opens About and clicks Website
 - **THEN** `https://leafmd.app/` opens in their web browser
+
+#### Scenario: Who colours the code
+- **WHEN** the user opens About and goes to the credits
+- **THEN** Built With lists syntect, saying it colours code blocks, with a link to its website
 
 ### Requirement: Terminal command in Help
 The "Files and Links" section of the Help window SHALL have a "From a terminal" row saying that `leafmd notes.md` opens a file and `leafmd .` opens the current folder in the side panel, after a one-time setup, with a Setup link that opens `https://leafmd.app/#terminal` in the browser. The setup commands themselves SHALL NOT be shown in the app, so that the website stays the only place they need updating.

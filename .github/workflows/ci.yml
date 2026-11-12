@@ -48,6 +48,13 @@ name: Build
 #
 # Changes reach main only through a pull request from dev, so a release
 # happens when the owner merges one. See .claude/commands/ship.md.
+#
+# Every job runs on ubuntu-latest, on purpose, rather than a fixed Ubuntu
+# version. The app itself is built inside Flathub's own Fedora image (the
+# build job's container), so the Ubuntu version never touches what goes into
+# LeafMD. The other jobs only use git, bash, Python's standard library and the
+# gh tool, which every Ubuntu GitHub offers has. A fixed version would have to
+# be moved by hand whenever GitHub retires it, for no gain.
 on:
   push:
     branches: ['**']

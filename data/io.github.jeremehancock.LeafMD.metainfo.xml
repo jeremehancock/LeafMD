@@ -30,7 +30,7 @@
       <li>A word count and reading time sit quietly in the corner, and count your selection too</li>
       <li>Edit the raw text with the formatted view updating as you type</li>
       <li>A formatting bar adds bold, links, lists, headings, tables and more for you</li>
-      <li>Lists continue themselves when you press Enter, and pasting a web address over text makes a link</li>
+      <li>Lists continue themselves when you press Enter, pasting a web address over text makes a link, and dropping an image inserts a link to it</li>
       <li>Misspelt words are underlined as you type, with suggestions a right-click away</li>
       <li>A built-in markdown cheatsheet shows the common syntax at a glance</li>
       <li>Find and replace, in the raw text or the formatted document</li>
@@ -38,6 +38,7 @@
       <li>A banner tells you when another app changes your file, and nothing is overwritten without asking</li>
       <li>In split view, both sides scroll together</li>
       <li>Supports tables, task lists, footnotes and other GitHub-style markdown</li>
+      <li>Code blocks that name their language are coloured, with language names suggested as you type them</li>
       <li>Open files, or a whole folder with leafmd ., from a terminal with an optional short leafmd command</li>
       <li>Choose the fonts for the raw text and the formatted view, or zoom in and out with Ctrl+plus and Ctrl+minus</li>
       <li>Looks at home on GNOME, following your light or dark style and your accent colour, or stays light or dark if you prefer</li>
@@ -102,6 +103,18 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.16.0" date="2026-11-12">
+      <description>
+        <p>Colourful code, and pictures with a drag.</p>
+        <ul>
+          <li>Code blocks that name their language, like ```python or ```bash, are now coloured in the formatted view, when printing and in exports, in light and dark</li>
+          <li>Type ``` and the first letter of a language to pick its name from a list</li>
+          <li>Drop an image from your file manager onto the raw text to insert a link to it, with the path worked out for you</li>
+          <li>The question about unsaved changes now fits any window size, even while you resize it, without words left alone on a line</li>
+          <li>Spaces at the end of a line no longer show a yellow bar in the raw text</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.15.0" date="2026-11-12">
       <description>
         <p>Choose whether LeafMD is light or dark.</p>

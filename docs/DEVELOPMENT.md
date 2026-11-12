@@ -107,6 +107,8 @@ With Claude Code, `/ship` walks a change through all of this: the checks, trying
 | `src/side_panel.rs` | The side panel itself: its header, its pages and the switcher along its bottom for choosing one |
 | `src/folder_tree.rs` | The Files page of the side panel: the folder tree, which files are greyed out, highlighting the open document, and which folders LeafMD can see, with tests |
 | `src/headings.rs` | Finding a document's headings, and the Headings page of the side panel that lists them, jumps to them and highlights the section you're reading, with tests |
+| `src/highlight.rs` | Colours code blocks that name their language (syntect), in six colour groups the stylesheet colours, keeping each block's line tags; added after cleaning, and kept so typing only recolours the block that changed, with tests |
+| `src/image_link.rs` | Turns an image dropped onto the raw text into a markdown image link (a path relative to the document, written so spaces and brackets don't break it), says why when it can't, and decides which files are images, with tests |
 | `src/word_count.rs` | Counting the words a reader would see, and the wording of the label in the document's corner ("1,240 words · 7 min read"), with tests |
 | `src/raw_view.rs` | The raw text editor: GtkSourceView's editor plus LeafMD's own wavy red underline under misspelt words, drawn a little below the letters because GTK's built-in one is too small to see well |
 | `src/spelling.rs` | Spell checking in the raw text: the one spell checker every document shares, picking its language (the one the user chose, else the system's, else US English), joining it to each document's text and right-click menu, and keeping Check Spelling the same in every window |
@@ -118,8 +120,9 @@ With Claude Code, `/ship` walks a change through all of this: the checks, trying
 | `src/file_change.rs` | Noticing when another app changes the open file: what counts as a change, what the banner says, and the banner's widgets, with tests |
 | `src/find.rs` | The find and replace bar's buttons and boxes |
 | `src/format.rs` | What each formatting button does to the text (bold, lists, headings, tables and so on), with tests |
-| `src/typing.rs` | Help while typing: what Enter does in a list, spotting code blocks, and spotting a pasted web address, with tests |
-| `src/render.rs` | Turns markdown into HTML (comrak), then removes anything unsafe (ammonia), for the formatted view and for printing and exporting. Also holds the markdown features LeafMD understands, shared with the headings and word count |
+| `src/language_suggestions.rs` | The list of language names that pops up after typing ``` and a letter in the raw text (GtkSourceView's suggestion pop-up) |
+| `src/typing.rs` | Help while typing: what Enter does in a list, spotting code blocks, spotting a pasted web address, and which code block languages to suggest, with tests |
+| `src/render.rs` | Turns markdown into HTML (comrak), then removes anything unsafe (ammonia) and puts the coloured code blocks in (highlight.rs), for the formatted view and for printing and exporting. Also holds the markdown features LeafMD understands, shared with the headings and word count |
 | `src/preview.html` | The empty page the formatted view is drawn into. Its styles are placed into it from `preview.css` |
 | `src/preview.css` | The formatted view's styles, light and dark, plus the rules for paper. Shared with printed pages, PDFs and exported web pages, so they all look the same |
 | `src/export.rs` | Print, Export as PDF and Export as HTML: the document as a standalone page with no scripts (pictures packed in for the web page), printed or turned into a PDF from a hidden copy of the formatted view, with tests |
@@ -149,6 +152,8 @@ Markdown files can contain raw HTML, including scripts. LeafMD protects against 
 1. Everything unsafe (scripts, event handlers, iframes) is stripped from the HTML before it's shown.
 2. Scripts inside the page are switched off in the web view as well.
 3. The formatted view can never leave LeafMD's own page. Clicking a link opens it in your browser instead, and links to headings in the same document just scroll.
+
+Coloured code blocks are the one thing added after cleaning, for speed (cleaning thousands of coloured labels was slow). That's safe because LeafMD writes that HTML itself in `src/highlight.rs`, from code it has escaped, and the only tags it writes are `<span class="hl-...">`. Until then each block is a placeholder made of U+FDD0, a character Unicode reserves for programs' own use, and any U+FDD0 in a document is replaced before rendering, so a document can't fake one. `src/render.rs` has a test for this.
 
 Printing and exporting use the same cleaned HTML. Exported web pages carry no scripts at all, not even LeafMD's own, and the hidden page used for printing has scripts switched off and can't go anywhere either.
 
