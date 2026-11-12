@@ -3,7 +3,10 @@
      GNOME's Adwaita-dark editor scheme except the line numbers and the
      current line, which are quieter so they don't compete with the text,
      and misspelt words: LeafMD draws its own wave under those
-     (src/raw_view.rs), so the spell checker's thin underline is off here. -->
+     (src/raw_view.rs), so the spell checker's thin underline is off here.
+     Spaces at the end of a line (two or more mean "line break" in markdown)
+     are left unmarked too: Adwaita paints them with a yellow "note"
+     background, which looked like a highlight. -->
 <style-scheme id="leafmd-dark" name="LeafMD Dark" version="1.0" parent-scheme="Adwaita-dark">
   <metadata>
     <property name="variant">dark</property>
@@ -13,4 +16,5 @@
   <style name="current-line-number" background="#1D1D20" foreground="#9A9996"/>
   <style name="line-numbers" background="#1D1D20" foreground="#4A4A50"/>
   <style name="def:misspelled-word" underline="none"/>
+  <style name="markdown:line-break"/>
 </style-scheme>

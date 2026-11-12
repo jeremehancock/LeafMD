@@ -112,6 +112,14 @@ LeafMD SHALL show a dot (•) before the file name while there are unsaved chang
 - **WHEN** the window is 360 pixels wide and LeafMD asks about unsaved changes
 - **THEN** the buttons stack, because they don't fit side by side, and all three are fully visible
 
+#### Scenario: A window just too narrow for the row
+- **WHEN** the window is 520 pixels wide and LeafMD asks about unsaved changes
+- **THEN** the question stays inside the window with a gap on each side, its heading is fully visible, and the buttons stack
+
+#### Scenario: No word left on its own
+- **WHEN** LeafMD asks "Save changes to document “leafmd-test2.md” before closing?" and the heading needs two lines
+- **THEN** the second line holds at least "before closing?", never just "closing?"
+
 #### Scenario: Opening doesn't ask
 - **WHEN** the user has unsaved changes in notes.md and opens todo.md from Recent files
 - **THEN** nothing is asked, todo.md opens in a new tab, and notes.md keeps its changes

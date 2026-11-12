@@ -2033,7 +2033,8 @@ impl Window {
     fn ask_about_unsaved_documents(self: &Rc<Self>, unsaved: Vec<Rc<Document>>) {
         let question = document::save_changes_question(
             &format!(
-                "There are {} documents with unsaved changes. Save changes before closing?",
+                // The question on a line of its own, so it isn't split in two
+                "There are {} documents with unsaved changes.\nSave changes before closing?",
                 unsaved.len()
             ),
             "Select the documents you want to save:",
@@ -2090,7 +2091,9 @@ impl Window {
             });
         }
         let warning = gtk::Label::builder()
-            .label("If you don't save, all your changes will be permanently lost.")
+            .label(crate::dialog::keep_last_words_together(
+                "If you don't save, all your changes will be permanently lost.",
+            ))
             .wrap(true)
             .justify(gtk::Justification::Center)
             .build();
