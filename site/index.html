@@ -26,6 +26,7 @@
 <script src="copy.js" defer></script>
 <script src="lightbox.js" defer></script>
 <script src="install-help.js" defer></script>
+<script src="nav.js" defer></script>
 </head>
 <body>
 
@@ -34,13 +35,17 @@
 <header class="topbar">
   <nav class="wrap topbar-inner" aria-label="Main">
     <a class="brand" href="#top">
-      <img src="icon.svg" alt="" width="32" height="32">
+      <img src="icon.svg" alt="" width="28" height="28">
       <span>LeafMD</span>
     </a>
     <ul class="nav-links">
-      <li><a href="#features">Features</a></li>
+      <li class="nav-optional"><a href="#features">Features</a></li>
       <li><a href="#install">Install</a></li>
-      <li><a href="https://github.com/jeremehancock/LeafMD" target="_blank" rel="noopener">GitHub</a></li>
+      <li class="nav-optional"><a href="#terminal">Terminal</a></li>
+      <!-- Not a part of this page but a link to another website, so it looks
+           like a small button with an arrow pointing out, set apart from the
+           section links (which nav.js highlights) -->
+      <li class="nav-external"><a href="https://github.com/jeremehancock/LeafMD" target="_blank" rel="noopener">GitHub<svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12"><path d="M5 2h9v9h-2V5.4l-8.3 8.3-1.4-1.4L10.6 4H5z"/></svg></a></li>
     </ul>
   </nav>
 </header>
@@ -49,22 +54,27 @@
 
   <section class="hero" id="top">
     <div class="wrap hero-inner">
-      <img class="hero-icon" src="icon.svg" alt="" width="128" height="128">
-      <h1>LeafMD</h1>
-      <p class="tagline">Read and edit markdown your way</p>
-      <p class="lede">A markdown editor for Linux that's simple on purpose. Every feature is easy to find and obvious to use, so you can focus on your writing instead of learning the app.</p>
+      <a class="release" href="https://github.com/jeremehancock/LeafMD/releases/tag/v{{version}}" target="_blank" rel="noopener">
+        <span class="release-dot" aria-hidden="true"></span>
+        Version {{version}}
+        <span class="release-more">What's new</span>
+      </a>
+      <div class="lockup">
+        <img class="hero-icon" src="icon.svg" alt="" width="72" height="72">
+        <h1>LeafMD</h1>
+      </div>
+      <p class="tagline">Read and edit markdown <span class="tagline-accent">your way</span></p>
+      <p class="lede">A markdown editor for Linux that's simple on purpose. Every feature is easy to find and obvious to use, so you can focus on your writing instead of learning the&nbsp;app.</p>
       <div class="actions">
-        <a class="button primary" href="LeafMD.flatpakref">
-          <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16"><path d="M7 1h2v7.6l2.3-2.3 1.4 1.4L8 12.4 3.3 7.7l1.4-1.4L7 8.6zM2 13h12v2H2z"/></svg>
+        <a class="button primary large" href="LeafMD.flatpakref">
+          <svg aria-hidden="true" viewBox="0 0 16 16" width="18" height="18"><path d="M7 1h2v7.6l2.3-2.3 1.4 1.4L8 12.4 3.3 7.7l1.4-1.4L7 8.6zM2 13h12v2H2z"/></svg>
           Install
         </a>
-        <a class="button" href="#install">Other ways to install</a>
+        <a class="button large" href="#install">Other ways to install</a>
       </div>
-      <p class="hint">Install downloads a small file. Open it, and your app store installs LeafMD.</p>
-      <!-- install-help.js changes this line for visitors whose browser says it's on Ubuntu -->
-      <p class="hint" id="ubuntu-hint">On Ubuntu? <a href="#ubuntu">Set up Flatpak first</a>.</p>
-      <p class="facts"><span>Free and open source <span aria-hidden="true">·</span></span> <span><a href="https://github.com/jeremehancock/LeafMD/releases/tag/v{{version}}" target="_blank" rel="noopener" title="What's new in {{version}}">Version {{version}}</a> <span aria-hidden="true">·</span></span> <span>For Linux, with Flatpak</span></p>
-      <p class="early"><strong>Early days.</strong> LeafMD is a young app in active development. It's ready for everyday writing, but you may run into the odd rough edge, and things can change from one version to the next. <a href="https://github.com/jeremehancock/LeafMD/issues" target="_blank" rel="noopener">Ideas and bug reports</a> are always welcome, and the <a href="https://github.com/jeremehancock/LeafMD/blob/main/ROADMAP.md" target="_blank" rel="noopener">roadmap</a> shows what's coming.</p>
+      <p class="hint">Install downloads a small file. Open it, and your app store installs LeafMD.
+        <!-- install-help.js changes this line for visitors whose browser says it's on Ubuntu -->
+        <span id="ubuntu-hint">On Ubuntu? <a href="#ubuntu">Set up Flatpak first</a>.</span></p>
     </div>
 
     <figure class="wrap showcase">
@@ -78,8 +88,11 @@
 
   <section class="section" aria-labelledby="views-title">
     <div class="wrap">
-      <h2 id="views-title">Three ways to look at a document</h2>
-      <p class="section-lede">Switch between them with one click, or a keyboard shortcut.</p>
+      <header class="section-head">
+        <p class="eyebrow">Views</p>
+        <h2 id="views-title">Three ways to look at a document</h2>
+        <p class="section-lede">Switch between them with one click, or a keyboard shortcut.</p>
+      </header>
       <div class="gallery">
         <figure>
           <a class="zoom" href="screenshots/formatted.png">
@@ -112,54 +125,101 @@
 
   <section class="section" id="features" aria-labelledby="features-title">
     <div class="wrap">
-      <h2 id="features-title">The essentials, done well</h2>
-      <p class="section-lede">Great out of the box. The few options stay out of the way, so you can focus on reading and writing.</p>
-      <ul class="features">
-        <li>
-          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 4h18v16H3zm2 2v12h6V6zm8 0v12h6V6z"/></svg>
-          <h3>Three views</h3>
-          <p>Formatted for reading, raw for writing, or both side by side as you type. Distraction Free hides the rest, and light or dark, the fonts and the text size are&nbsp;yours.</p>
-        </li>
+      <header class="section-head">
+        <p class="eyebrow">Features</p>
+        <h2 id="features-title">The essentials, done well</h2>
+        <p class="section-lede">Great out of the box. The few options stay out of the way, so you can focus on reading and writing.</p>
+      </header>
+
+      <!-- Two features shown in close-up: each picture is one of the real
+           screenshots, cropped by the page (style.css .peek) rather than a
+           separate image, so it always matches the release. Dark visitors see
+           a crop of the dark screenshot instead. -->
+      <div class="spotlight">
+        <div class="spotlight-text">
+          <h3>Formatting without the syntax</h3>
+          <p>Bold, links, lists, headings and tables are one click away on the formatting bar, so you don't need to remember how markdown writes them.</p>
+          <ul class="ticks">
+            <li><svg aria-hidden="true" viewBox="0 0 16 16"><path d="M6.2 11.6 2.6 8l1.4-1.4 2.2 2.2 5.8-5.8 1.4 1.4z"/></svg>Drop an image onto the text to link it</li>
+            <li><svg aria-hidden="true" viewBox="0 0 16 16"><path d="M6.2 11.6 2.6 8l1.4-1.4 2.2 2.2 5.8-5.8 1.4 1.4z"/></svg>A built-in cheatsheet covers the rest</li>
+            <li><svg aria-hidden="true" viewBox="0 0 16 16"><path d="M6.2 11.6 2.6 8l1.4-1.4 2.2 2.2 5.8-5.8 1.4 1.4z"/></svg>Misspelt words are underlined as you type</li>
+          </ul>
+        </div>
+        <div class="peek peek-bar" aria-hidden="true">
+          <picture>
+            <source srcset="screenshots/split-dark.png" media="(prefers-color-scheme: dark)">
+            <img src="screenshots/raw.png" width="1050" height="750" alt="" loading="lazy">
+          </picture>
+        </div>
+      </div>
+
+      <div class="spotlight flip">
+        <div class="spotlight-text">
+          <h3>Looks the way it does on GitHub</h3>
+          <p>Tables, checklists, footnotes and coloured code blocks show the way they do on GitHub.</p>
+          <ul class="ticks">
+            <li><svg aria-hidden="true" viewBox="0 0 16 16"><path d="M6.2 11.6 2.6 8l1.4-1.4 2.2 2.2 5.8-5.8 1.4 1.4z"/></svg>Print it, or export it as a PDF or web page</li>
+            <li><svg aria-hidden="true" viewBox="0 0 16 16"><path d="M6.2 11.6 2.6 8l1.4-1.4 2.2 2.2 5.8-5.8 1.4 1.4z"/></svg>Scripts never run, so opening a document is safe</li>
+            <li><svg aria-hidden="true" viewBox="0 0 16 16"><path d="M6.2 11.6 2.6 8l1.4-1.4 2.2 2.2 5.8-5.8 1.4 1.4z"/></svg>Light or dark, and the fonts and text size are yours</li>
+          </ul>
+        </div>
+        <div class="peek peek-page" aria-hidden="true">
+          <picture>
+            <source srcset="screenshots/split-dark.png" media="(prefers-color-scheme: dark)">
+            <img src="screenshots/formatted.png" width="1050" height="750" alt="" loading="lazy">
+          </picture>
+        </div>
+      </div>
+
+      <ul class="extras">
         <li>
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M2 5h9v3h2V5h9v15H2zM4 10v8h16v-8z"/></svg>
-          <h3>Tabs and folders</h3>
-          <p>Keep several documents open in one window. A side panel shows your folder and headings, so the next file or section is one click&nbsp;away.</p>
-        </li>
-        <li>
-          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 3h7a5 5 0 0 1 3.6 8.4A5 5 0 0 1 13 21H5zm3 3v4h4a2 2 0 0 0 0-4zm0 7v5h5a2.5 2.5 0 0 0 0-5z"/></svg>
-          <h3>A formatting bar</h3>
-          <p>Bold, links, lists, headings and tables, added with a click so you don't need to remember the syntax. Drop an image onto the text to link it. A built-in cheatsheet covers the rest, and misspelt words are underlined as you&nbsp;type.</p>
+          <div>
+            <h3>Tabs and folders</h3>
+            <p>Several documents in one window, with your folder and headings in a side panel.</p>
+          </div>
         </li>
         <li>
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M10 3a7 7 0 0 1 5.6 11.2l5.6 5.6-1.4 1.4-5.6-5.6A7 7 0 1 1 10 3zm0 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10z"/></svg>
-          <h3>Find and replace</h3>
-          <p>Search the raw or formatted text, with every match highlighted and counted. Step through them one by one, then replace one or all at&nbsp;once.</p>
+          <div>
+            <h3>Find and replace</h3>
+            <p>Every match highlighted and counted, in the raw or formatted text.</p>
+          </div>
         </li>
         <li>
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5z"/></svg>
-          <h3>Safe from other apps</h3>
-          <p>If another app changes a file you have open, a banner lets you reload it or keep your version. Nothing is overwritten without asking&nbsp;first.</p>
+          <div>
+            <h3>Safe from other apps</h3>
+            <p>If another app changes your file, you choose: reload it, or keep your version.</p>
+          </div>
         </li>
         <li>
-          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 4h18v16H3zm2 2v3h4V6zm6 0v3h8V6zM5 11v3h4v-3zm6 0v3h8v-3zM5 16v2h4v-2zm6 0v2h8v-2z"/></svg>
-          <h3>GitHub-style markdown</h3>
-          <p>Tables, checklists, footnotes and coloured code blocks show the way they do on GitHub, on screen, printed, or exported as a PDF or web page. Scripts never run, so opening one is&nbsp;safe.</p>
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 4h18v16H3zm2 2v12h14V6zm3 3h8v2H8zm0 4h6v2H8z"/></svg>
+          <div>
+            <h3>Distraction Free</h3>
+            <p>Hide everything but your words when it's time to concentrate.</p>
+          </div>
         </li>
       </ul>
     </div>
   </section>
 
-  <section class="section" id="install" aria-labelledby="install-title">
+  <section class="section band" id="install" aria-labelledby="install-title">
     <div class="wrap">
-      <h2 id="install-title">Install LeafMD</h2>
-      <p class="section-lede">Once it's installed, updates arrive through your app store, like any other app.</p>
+      <header class="section-head">
+        <p class="eyebrow">Install</p>
+        <h2 id="install-title">Install LeafMD</h2>
+        <p class="section-lede">Once it's installed, updates arrive through your app store, like any other app.</p>
+      </header>
       <div class="install">
         <article class="card">
+          <span class="card-number" aria-hidden="true">1</span>
           <h3>With your app store</h3>
           <p>Click Install, then open the small file it downloads. Your app store shows LeafMD, ready to install.</p>
           <a class="button primary" href="LeafMD.flatpakref">Install</a>
         </article>
         <article class="card">
+          <span class="card-number" aria-hidden="true">2</span>
           <h3>From a terminal</h3>
           <p>One command installs LeafMD and keeps it updated:</p>
           <div class="command">
@@ -168,6 +228,7 @@
           </div>
         </article>
         <article class="card">
+          <span class="card-number" aria-hidden="true">3</span>
           <h3>As a file</h3>
           <p>Every version is also a <code>.flatpak</code> file on GitHub. Open it with your app store, and it updates from here.</p>
           <a class="button" href="https://github.com/jeremehancock/LeafMD/releases/latest" target="_blank" rel="noopener">Download from GitHub</a>
@@ -207,44 +268,95 @@
         </ol>
         <p class="setup-more"><a href="https://flatpak.org/setup/Ubuntu" target="_blank" rel="noopener">More about Flatpak on Ubuntu</a></p>
       </details>
-      <ul class="notes">
-        <li><strong>Did the file open in a text editor?</strong> Flatpak isn't set up yet. On Ubuntu, see the steps above. For other systems, see <a href="https://flatpak.org/setup/" target="_blank" rel="noopener">flatpak.org/setup</a>.</li>
-        <li><strong>Which app stores work?</strong> Any that support Flatpak, like GNOME Software and KDE Discover.</li>
-        <li><strong>What you need</strong> A Linux computer with Flatpak set up, on a 64-bit Intel or AMD processor (x86_64). The GNOME parts LeafMD needs come from Flathub, which is added for you if it isn't already.</li>
-        <li><strong>Signed updates</strong> Everything LeafMD installs is signed, so updates can only come from its developer.</li>
-      </ul>
+      <div class="faq">
+        <details>
+          <summary><span>Did the file open in a text editor?</span><span class="faq-toggle" aria-hidden="true"><svg viewBox="0 0 16 16" width="14" height="14"><path d="M7 2h2v5h5v2H9v5H7V9H2V7h5z"/></svg></span></summary>
+          <p>Flatpak isn't set up yet. On Ubuntu, follow the steps above. Elsewhere, see <a href="https://flatpak.org/setup/" target="_blank" rel="noopener">flatpak.org/setup</a>.</p>
+        </details>
+        <details>
+          <summary><span>Which app stores work?</span><span class="faq-toggle" aria-hidden="true"><svg viewBox="0 0 16 16" width="14" height="14"><path d="M7 2h2v5h5v2H9v5H7V9H2V7h5z"/></svg></span></summary>
+          <p>Any that support Flatpak, like GNOME Software and KDE Discover.</p>
+        </details>
+        <details>
+          <summary><span>What do I need?</span><span class="faq-toggle" aria-hidden="true"><svg viewBox="0 0 16 16" width="14" height="14"><path d="M7 2h2v5h5v2H9v5H7V9H2V7h5z"/></svg></span></summary>
+          <p>Linux with Flatpak, on a 64-bit Intel or AMD processor (x86_64). Anything else LeafMD needs comes from Flathub, which is added for you.</p>
+        </details>
+        <details>
+          <summary><span>Where do updates come from?</span><span class="faq-toggle" aria-hidden="true"><svg viewBox="0 0 16 16" width="14" height="14"><path d="M7 2h2v5h5v2H9v5H7V9H2V7h5z"/></svg></span></summary>
+          <p>Everything LeafMD installs is signed, so updates can only come from its developer.</p>
+        </details>
+      </div>
     </div>
   </section>
 
   <section class="section" id="terminal" aria-labelledby="terminal-title">
     <div class="wrap">
-      <h2 id="terminal-title">Use LeafMD from a terminal</h2>
-      <p class="section-lede">Flatpak apps don't come with a short command, but one line adds it. After that, typing <code>leafmd notes.md</code> opens that file in LeafMD, and <code>leafmd .</code> opens the folder you're in.</p>
-      <div class="install">
-        <article class="card">
-          <h3>For everyone on this computer</h3>
-          <p>Asks for your admin password, and works straight away on most systems:</p>
+      <header class="section-head">
+        <p class="eyebrow">Terminal</p>
+        <h2 id="terminal-title">Use LeafMD from a terminal</h2>
+        <p class="section-lede">Flatpak apps don't come with a short command, but one line adds it. After that, <code>leafmd notes.md</code> opens that file, and <code>leafmd&nbsp;.</code> opens the folder you're&nbsp;in.</p>
+      </header>
+
+      <!-- A switch between the two commands, made with radio buttons and
+           style.css alone, so it works with scripts turned off. Each command
+           stays in the page; the switch only chooses which one shows. -->
+      <div class="switcher">
+        <input type="radio" name="terminal-for" id="for-everyone" checked>
+        <input type="radio" name="terminal-for" id="for-me">
+        <div class="switch" role="presentation">
+          <label for="for-everyone">For everyone</label>
+          <label for="for-me">Just for you</label>
+        </div>
+        <div class="switch-panel panel-everyone">
+          <p>For everyone on this computer. Needs your admin password:</p>
           <div class="command">
             <code id="terminal-system">sudo sh -c 'set -C; printf "%s\n" "#!/bin/sh" "while case \"\$1\" in -*) ;; *) false ;; esac; do o=\"\$o \$1\"; shift; done" "exec flatpak run <span class="nowrap">--file-forwarding</span> io.<wbr>github.<wbr>jeremehancock.<wbr>LeafMD \$o @@ \"\$@\" @@" &gt; /usr/<wbr>local/<wbr>bin/<wbr>leafmd &amp;&amp; chmod 755 /usr/<wbr>local/<wbr>bin/<wbr>leafmd'</code>
             <button type="button" class="copy" data-copy="terminal-system" hidden>Copy</button>
           </div>
-        </article>
-        <article class="card">
-          <h3>Just for you</h3>
-          <p>No admin password needed:</p>
+        </div>
+        <div class="switch-panel panel-me">
+          <p>Just for your account. No admin password needed:</p>
           <div class="command">
             <code id="terminal-home">sh -c 'set -C; mkdir -p ~/.local/bin; printf "%s\n" "#!/bin/sh" "while case \"\$1\" in -*) ;; *) false ;; esac; do o=\"\$o \$1\"; shift; done" "exec flatpak run <span class="nowrap">--file-forwarding</span> io.<wbr>github.<wbr>jeremehancock.<wbr>LeafMD \$o @@ \"\$@\" @@" &gt; ~/.local/<wbr>bin/<wbr>leafmd &amp;&amp; chmod 755 ~/.local/<wbr>bin/<wbr>leafmd'</code>
             <button type="button" class="copy" data-copy="terminal-home" hidden>Copy</button>
           </div>
-        </article>
+        </div>
       </div>
-      <ul class="notes">
-        <li><strong>Works with every version</strong> It works best with the latest, which gives your terminal back as soon as LeafMD opens. On older versions, files open the same way, but the terminal stays busy until LeafMD closes.</li>
-        <li><strong>Already have a <code>leafmd</code>?</strong> Neither line replaces it. You'll see an error, and nothing changes.</li>
-        <li><strong>Set this up before?</strong> If options like <code>leafmd --new-window</code> say "Failed to open" in folders outside your home folder, delete the old file and use the line again. Opening files works either way.</li>
-        <li><strong>Is <code>leafmd</code> not found?</strong> After using the "Just for you" line, log out and back in. If it still isn't found, add <code>~/.local/bin</code> to your <code>PATH</code>.</li>
-        <li><strong>To undo the setup</strong> Delete the file the line created: <code>/usr/local/bin/leafmd</code> (with <code>sudo rm</code>) or <code>~/.local/bin/leafmd</code>.</li>
-      </ul>
+
+      <div class="faq">
+        <details>
+          <summary><span>Which versions does it work with?</span><span class="faq-toggle" aria-hidden="true"><svg viewBox="0 0 16 16" width="14" height="14"><path d="M7 2h2v5h5v2H9v5H7V9H2V7h5z"/></svg></span></summary>
+          <p>All of them. With the latest, your terminal is free as soon as LeafMD opens. Older versions keep it busy until LeafMD closes.</p>
+        </details>
+        <details>
+          <summary><span>Already have a <code>leafmd</code>?</span><span class="faq-toggle" aria-hidden="true"><svg viewBox="0 0 16 16" width="14" height="14"><path d="M7 2h2v5h5v2H9v5H7V9H2V7h5z"/></svg></span></summary>
+          <p>Neither line replaces it. You'll just see an error.</p>
+        </details>
+        <details>
+          <summary><span>Set this up before?</span><span class="faq-toggle" aria-hidden="true"><svg viewBox="0 0 16 16" width="14" height="14"><path d="M7 2h2v5h5v2H9v5H7V9H2V7h5z"/></svg></span></summary>
+          <p>If <code>leafmd --new-window</code> says "Failed to open", delete the old file and run the line again.</p>
+        </details>
+        <details>
+          <summary><span>Is <code>leafmd</code> not found?</span><span class="faq-toggle" aria-hidden="true"><svg viewBox="0 0 16 16" width="14" height="14"><path d="M7 2h2v5h5v2H9v5H7V9H2V7h5z"/></svg></span></summary>
+          <p>If you used the "Just for you" line, log out and back in. If it's still missing, add <code>~/.local/bin</code> to your <code>PATH</code>.</p>
+        </details>
+        <details>
+          <summary><span>How do I undo it?</span><span class="faq-toggle" aria-hidden="true"><svg viewBox="0 0 16 16" width="14" height="14"><path d="M7 2h2v5h5v2H9v5H7V9H2V7h5z"/></svg></span></summary>
+          <p>Delete the file it made: <code>/usr/local/bin/leafmd</code> (with <code>sudo rm</code>) or <code>~/.local/bin/leafmd</code>.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <section class="section band closing" aria-labelledby="early-title">
+    <div class="wrap closing-inner">
+      <svg class="closing-icon" aria-hidden="true" viewBox="0 0 24 24" width="48" height="48"><path d="M12 22v-7.2C9.6 14.6 4 13.4 4 6V5h1c4.3 0 6.4 2 7.3 4.3C13.4 6.3 15.8 3 21 3h1v1c0 7.6-5.2 9.9-8 10.6V22z"/></svg>
+      <h2 id="early-title">Early days</h2>
+      <p class="section-lede">LeafMD is a young app in active development. It's ready for everyday writing, but you may run into the odd rough edge, and things can change from one version to the next.</p>
+      <div class="actions">
+        <a class="button" href="https://github.com/jeremehancock/LeafMD/issues" target="_blank" rel="noopener">Share an idea or bug</a>
+        <a class="button" href="https://github.com/jeremehancock/LeafMD/blob/main/ROADMAP.md" target="_blank" rel="noopener">See what's coming</a>
+      </div>
     </div>
   </section>
 
