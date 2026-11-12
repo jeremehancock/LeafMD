@@ -1,16 +1,16 @@
 # text-size Specification
 
 ## Purpose
-How big the text is and in which font: the Preferences window with the raw text and formatted view fonts, how they're remembered and reset, and zoom (its keys, the mouse wheel, the row in the main menu, which tabs and windows it covers, and that it isn't remembered).
+How big the text is and in which font: the Preferences window with the raw text and formatted view fonts (and the Style row, whose light and dark behaviour is in the views spec), how they're remembered and reset, and zoom (its keys, the mouse wheel, the row in the main menu, which tabs and windows it covers, and that it isn't remembered).
 
 ## Requirements
 
 ### Requirement: Preferences window
-LeafMD SHALL have a Preferences window, opened with Preferences in the main menu or Ctrl+, (comma). It SHALL hold two groups, Raw Text and Formatted View, each with one Font row whose button shows the font's name and size and opens GNOME's font picker. Preferences SHALL hold nothing else.
+LeafMD SHALL have a Preferences window, opened with Preferences in the main menu or Ctrl+, (comma). It SHALL hold three groups. First, Appearance, with one Style row offering Follow System, Light and Dark side by side, the current one selected. Then Raw Text and Formatted View, each with one Font row whose button shows the font's name and size and opens GNOME's font picker. Preferences SHALL hold nothing else.
 
 #### Scenario: Opening Preferences
 - **WHEN** notes.md is open and the user presses Ctrl+,
-- **THEN** the Preferences window opens over the document, with a Raw Text group and a Formatted View group, each showing one Font row
+- **THEN** the Preferences window opens over the document, with an Appearance group showing the Style row, then a Raw Text group and a Formatted View group, each showing one Font row
 
 #### Scenario: From the main menu with no document open
 - **WHEN** a window shows the "No Document Open" page and the user chooses Preferences in the main menu
