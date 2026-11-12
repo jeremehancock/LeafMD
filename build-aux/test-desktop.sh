@@ -148,6 +148,11 @@ EOF
         const seat = C.get_default_backend().get_default_seat();
         globalThis.pointer = seat.create_virtual_device(C.InputDeviceType.POINTER_DEVICE);
         globalThis.keyboard = seat.create_virtual_device(C.InputDeviceType.KEYBOARD_DEVICE); 0' > /dev/null
+
+    # A new pointer starts in the top left corner, GNOME's hot corner, where it
+    # can open the Activities overview by accident. Park it in the middle of the
+    # screen before anything else happens.
+    in_shell 'globalThis.pointer.notify_absolute_motion(0, 700, 500); 0' > /dev/null
 }
 
 # Runs a line of JavaScript inside the hidden GNOME Shell and prints the answer.
