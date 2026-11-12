@@ -39,11 +39,15 @@ Open and Save SHALL be words rather than icons, because icons for those actions 
 - **THEN** the Save button shows the word "Save", and the New button shows the same new document icon
 
 ### Requirement: Opening files
-LeafMD SHALL open a markdown or text file chosen with Open (Ctrl+O or the Open button), dropped anywhere on the window, double-clicked in the file manager, or given on the command line (`leafmd notes.md`). The Open dialog SHALL offer Markdown (.md, .markdown, .mdown, .mkd), Plain text and All files filters.
+LeafMD SHALL open a markdown or text file chosen with Open (Ctrl+O or the Open button), dropped anywhere on the window, double-clicked in the file manager, or given on the command line (`leafmd notes.md`). The one exception is an image dropped onto the raw text, which inserts an image link instead (see smart-typing). The Open dialog SHALL offer Markdown (.md, .markdown, .mdown, .mkd), Plain text and All files filters.
 
 #### Scenario: Dropping a file
 - **WHEN** the user drops a markdown file onto the window while another document is open
 - **THEN** that file opens in a new selected tab in the window, and nothing is asked about unsaved changes because the other document stays open
+
+#### Scenario: Dropping an image onto the raw text
+- **WHEN** the user drops `photo.png` onto the raw text of a saved document
+- **THEN** LeafMD doesn't try to open it, and inserts an image link instead
 
 #### Scenario: Not plain text
 - **WHEN** the user opens a file that isn't valid UTF-8 text
