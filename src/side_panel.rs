@@ -14,6 +14,8 @@ use std::cell::RefCell;
 pub struct SidePanel {
     /// The whole panel, which the window puts in its split view
     pub widget: adw::ToolbarView,
+    /// The panel's own small header bar, holding the title
+    header: adw::HeaderBar,
     /// The title at the top of the panel, set by the page that's showing
     title: adw::WindowTitle,
     /// The pages, one showing at a time
@@ -38,7 +40,7 @@ impl SidePanel {
         widget.set_content(Some(&stack));
         widget.add_bottom_bar(&switcher_bar);
 
-        Self { widget, title, stack, switcher_bar }
+        Self { widget, header, title, stack, switcher_bar }
     }
 
     /// Adds a page. `name` is how LeafMD refers to it, `title` and `icon` are
@@ -46,6 +48,12 @@ impl SidePanel {
     pub fn add_page(&self, name: &str, title: &str, icon: &str, child: &impl IsA<gtk::Widget>) {
         self.stack.add_titled_with_icon(child, Some(name), title, icon);
         self.switcher_bar.set_reveal(self.stack.pages().n_items() > 1);
+    }
+
+    /// Puts a button at the left of the panel's header bar, like the Files
+    /// page's up button.
+    pub fn pack_start(&self, widget: &impl IsA<gtk::Widget>) {
+        self.header.pack_start(widget);
     }
 
     /// Sets the title at the top of the panel, like the folder's name for Files.

@@ -76,47 +76,49 @@ pub fn can_show_unchosen(folder: &gio::File) -> bool {
     })
 }
 
-/// Which folder the tree shows, and whether it's the window's chosen folder.
+/// Which folder the tree shows, and whether it was shared whole (the window's
+/// chosen folder or a folder inside it, which LeafMD can always list).
 ///
-/// - The chosen folder (from Open Folder… or `leafmd .`) while the selected
-///   document is inside it, or there's no document with a file.
-/// - Otherwise the tree follows the document, so it never shows a folder that
-///   has nothing to do with the tab you're on. It stays on the folder it's
-///   already showing (`showing`, never the chosen one) while the document is
-///   somewhere inside it, so opening a file in a subfolder from the tree
-///   doesn't make the tree jump into the subfolder. Otherwise it moves to the
-///   document's own folder.
-/// - A document outside the chosen folder whose folder can't be listed (one
-///   shared by itself from outside home) leaves the tree on the chosen folder,
-///   rather than swapping it for a "can't see" message.
-/// - With no chosen folder, a tab without a file yet (Untitled, or still
-///   being read) keeps whatever the tree shows. With no tabs at all, nothing.
+/// - A document with a file: the folder that file is in, wherever it is, so
+///   the panel always shows where the file you're looking at lives. That
+///   includes a file inside the chosen folder: the chosen folder is where to
+///   start, not where to stay.
+/// - No file (no document, or a new Untitled one): the chosen folder (from
+///   Open Folder… or `leafmd .`), or nothing, and the panel says "No Folder
+///   Open".
 ///
-/// `can_show` says whether the tree could list a folder nobody chose.
-pub fn folder_to_show(
-    chosen: Option<&gio::File>,
-    document: Option<&gio::File>,
-    showing: Option<&gio::File>,
-    has_document: bool,
-    can_show: impl Fn(&gio::File) -> bool,
-) -> (Option<gio::File>, bool) {
-    // The folder that follows the document, if there's a document with a file
-    let following = document.map(|document| match showing {
-        Some(showing) if document.has_prefix(showing) => Some(showing.clone()),
-        _ => document.parent(),
-    });
-    match (chosen, document) {
-        (Some(chosen), Some(document)) if !document.has_prefix(chosen) => {
-            match following.flatten().filter(|folder| can_show(folder)) {
-                Some(folder) => (Some(folder), false),
-                None => (Some(chosen.clone()), true),
-            }
+/// A document shared with LeafMD by itself gets its own folder too, and the
+/// tree then says it was only given that one file, because `can_see` knows
+/// that folder can't be listed.
+pub fn folder_to_show(chosen: Option<&gio::File>, document: Option<&gio::File>) -> (Option<gio::File>, bool) {
+    match document {
+        Some(document) => {
+            let folder = document.parent();
+            let shared_whole = folder.as_ref().is_some_and(|folder| is_within(folder, chosen));
+            (folder, shared_whole)
         }
-        (Some(chosen), _) => (Some(chosen.clone()), true),
-        (None, Some(_)) => (following.flatten(), false),
-        (None, None) if has_document => (showing.cloned(), false),
-        (None, None) => (None, false),
+        None => (chosen.cloned(), chosen.is_some()),
     }
+}
+
+/// True when `folder` is the chosen folder or somewhere inside it.
+fn is_within(folder: &gio::File, chosen: Option<&gio::File>) -> bool {
+    chosen.is_some_and(|chosen| folder.equal(chosen) || folder.has_prefix(chosen))
+}
+
+/// The folder the up button goes to from `folder`, and whether it was shared
+/// whole, or None when there's nothing above it the tree could list: the top
+/// of the disk, above the home folder inside the Flatpak, or above a folder
+/// that was shared with LeafMD from outside home. `can_show` says whether the
+/// tree could list a folder nobody chose (`can_show_unchosen` in the app).
+pub fn folder_above(
+    folder: &gio::File,
+    chosen: Option<&gio::File>,
+    can_show: impl Fn(&gio::File) -> bool,
+) -> Option<(gio::File, bool)> {
+    let above = folder.parent()?;
+    let shared_whole = is_within(&above, chosen);
+    (shared_whole || can_show(&above)).then_some((above, shared_whole))
 }
 
 /// The file a row in a DirectoryList stands for. GTK puts it on every row.
@@ -186,7 +188,8 @@ pub struct FilesPage {
     message: adw::StatusPage,
     /// "Learn More" under the message, shown only when LeafMD can't see a folder
     learn_more: gtk::LinkButton,
-    /// The folder the tree shows, and whether the user chose it
+    /// The folder the tree shows, and whether it was shared whole (the
+    /// window's chosen folder or a folder inside it)
     root: RefCell<Option<(gio::File, bool)>>,
     /// The file to highlight: the selected tab's
     highlight: RefCell<Option<gio::File>>,
@@ -462,13 +465,14 @@ impl FilesPage {
         }
     }
 
-    /// The folder the tree shows, and whether the user chose it.
+    /// The folder the tree shows, and whether it was shared whole.
     pub fn root(&self) -> Option<(gio::File, bool)> {
         self.root.borrow().clone()
     }
 
-    /// Shows a folder, or a message when there's none. `chosen` says the user
-    /// chose it (as opposed to it being the selected document's folder).
+    /// Shows a folder, or a message when there's none. `chosen` says it was
+    /// shared whole: the window's chosen folder or a folder inside it, which
+    /// LeafMD can list wherever it is (see `folder_to_show`).
     pub fn set_root(self: &Rc<Self>, folder: Option<&gio::File>, chosen: bool) {
         let same = match (&*self.root.borrow(), folder) {
             (Some((now, was_chosen)), Some(folder)) => now.equal(folder) && *was_chosen == chosen,
@@ -753,68 +757,102 @@ mod tests {
     use gtk::gio;
     use gtk::prelude::*;
 
-    use super::{can_open, can_see, folder_to_show};
+    use super::{can_open, can_see, folder_above, folder_to_show};
 
     fn at(path: &str) -> gio::File {
         gio::File::for_path(path)
     }
 
-    /// The folder shown for a chosen folder, a document and what the tree shows
-    /// now, where only folders under /home can be listed without being chosen
-    fn shown(chosen: Option<&str>, document: Option<&str>, showing: Option<&str>) -> (Option<String>, bool) {
-        let (folder, is_chosen) = folder_to_show(
-            chosen.map(at).as_ref(),
-            document.map(at).as_ref(),
-            showing.map(at).as_ref(),
-            true,
-            |folder| folder.path().is_some_and(|path| path.starts_with("/home")),
-        );
-        (folder.and_then(|folder| folder.path()).map(|path| path.display().to_string()), is_chosen)
+    fn path_of(folder: Option<gio::File>) -> Option<String> {
+        folder.and_then(|folder| folder.path()).map(|path| path.display().to_string())
+    }
+
+    /// The folder shown for a chosen folder and the selected document's file,
+    /// and whether it was shared whole
+    fn shown(chosen: Option<&str>, document: Option<&str>) -> (Option<String>, bool) {
+        let (folder, shared_whole) = folder_to_show(chosen.map(at).as_ref(), document.map(at).as_ref());
+        (path_of(folder), shared_whole)
     }
 
     #[test]
-    fn the_chosen_folder_shows_while_the_document_is_in_it() {
+    fn the_tree_shows_the_documents_own_folder() {
+        assert_eq!(shown(None, Some("/home/me/work/plan.md")), (Some("/home/me/work".into()), false));
+        // A file in a subfolder shows the subfolder, not the folder above it
+        assert_eq!(shown(None, Some("/home/me/notes/docs/setup.md")), (Some("/home/me/notes/docs".into()), false));
+    }
+
+    #[test]
+    fn going_back_to_a_narrower_folder() {
+        // ~/Desktop/todo.md, then ~/plan.md in another tab, then todo.md again:
+        // nothing about the home folder having been shown carries over
+        assert_eq!(shown(None, Some("/home/me/Desktop/todo.md")), (Some("/home/me/Desktop".into()), false));
+        assert_eq!(shown(None, Some("/home/me/plan.md")), (Some("/home/me".into()), false));
+        assert_eq!(shown(None, Some("/home/me/Desktop/todo.md")), (Some("/home/me/Desktop".into()), false));
+    }
+
+    #[test]
+    fn a_file_inside_the_chosen_folder_shows_its_own_folder() {
         let notes = Some("/home/me/notes");
-        assert_eq!(shown(notes, Some("/home/me/notes/a.md"), None), (Some("/home/me/notes".into()), true));
-        // Files in subfolders don't move it
-        assert_eq!(shown(notes, Some("/home/me/notes/docs/setup.md"), None), (Some("/home/me/notes".into()), true));
-        // Nor does an Untitled document
-        assert_eq!(shown(notes, None, None), (Some("/home/me/notes".into()), true));
+        assert_eq!(shown(notes, Some("/home/me/notes/a.md")), (Some("/home/me/notes".into()), true));
+        // A subfolder of the chosen folder was shared along with it
+        assert_eq!(shown(notes, Some("/home/me/notes/docs/setup.md")), (Some("/home/me/notes/docs".into()), true));
+        // Outside the chosen folder
+        assert_eq!(shown(notes, Some("/home/me/work/plan.md")), (Some("/home/me/work".into()), false));
+        // A folder that only starts with the same letters isn't inside it
+        assert_eq!(shown(notes, Some("/home/me/notes2/a.md")), (Some("/home/me/notes2".into()), false));
     }
 
     #[test]
-    fn a_document_outside_the_chosen_folder_shows_its_own_folder() {
-        let notes = Some("/home/me/notes");
-        assert_eq!(shown(notes, Some("/home/me/work/plan.md"), None), (Some("/home/me/work".into()), false));
-        // Opening a file in a subfolder of that folder from the tree keeps it
+    fn a_document_shared_by_itself_shows_its_own_folder() {
+        // Not the chosen folder: the tree then says it was given one file
         assert_eq!(
-            shown(notes, Some("/home/me/work/old/2024.md"), Some("/home/me/work")),
-            (Some("/home/me/work".into()), false)
-        );
-        // Back to a document in the chosen folder
-        assert_eq!(
-            shown(notes, Some("/home/me/notes/a.md"), Some("/home/me/work")),
-            (Some("/home/me/notes".into()), true)
+            shown(Some("/home/me/notes"), Some("/run/user/1000/doc/abc/a.md")),
+            (Some("/run/user/1000/doc/abc".into()), false)
         );
     }
 
     #[test]
-    fn a_document_shared_by_itself_leaves_the_chosen_folder_showing() {
-        assert_eq!(
-            shown(Some("/home/me/notes"), Some("/run/user/1000/doc/abc/a.md"), None),
-            (Some("/home/me/notes".into()), true)
-        );
+    fn with_no_file_the_chosen_folder_or_nothing() {
+        assert_eq!(shown(Some("/home/me/notes"), None), (Some("/home/me/notes".into()), true));
+        assert_eq!(shown(None, None), (None, false));
+    }
+
+    /// Where the up button goes from a folder, in the Flatpak or not
+    fn above(folder: &str, chosen: Option<&str>, in_flatpak: bool) -> Option<(String, bool)> {
+        let chosen = chosen.map(at);
+        folder_above(&at(folder), chosen.as_ref(), |folder| {
+            folder.path().is_none_or(|path| can_see(&path, false, in_flatpak, Path::new(HOME), Path::new(PORTAL)))
+        })
+        .map(|(folder, shared_whole)| (path_of(Some(folder)).unwrap_or_default(), shared_whole))
     }
 
     #[test]
-    fn with_no_chosen_folder_the_tree_follows_the_document() {
-        assert_eq!(shown(None, Some("/home/me/work/plan.md"), None), (Some("/home/me/work".into()), false));
-        assert_eq!(
-            shown(None, Some("/home/me/notes/docs/setup.md"), Some("/home/me/notes")),
-            (Some("/home/me/notes".into()), false)
-        );
-        // A tab still being read keeps what's showing
-        assert_eq!(shown(None, None, Some("/home/me/notes")), (Some("/home/me/notes".into()), false));
+    fn going_up_inside_the_home_folder() {
+        let docs = format!("{HOME}/notes/docs");
+        assert_eq!(above(&docs, None, true), Some((format!("{HOME}/notes"), false)));
+        assert_eq!(above(&format!("{HOME}/notes"), None, true), Some((HOME.into(), false)));
+        // Into the chosen folder from inside it
+        let notes = format!("{HOME}/notes");
+        assert_eq!(above(&docs, Some(&notes), true), Some((notes.clone(), true)));
+        // Out of the chosen folder
+        assert_eq!(above(&notes, Some(&notes), true), Some((HOME.into(), false)));
+    }
+
+    #[test]
+    fn going_up_stops_where_the_flatpak_cant_see() {
+        // Above the home folder
+        assert_eq!(above(HOME, None, true), None);
+        // Above a folder shared from outside home, even when it was chosen
+        let shared = format!("{PORTAL}/abc/notes");
+        assert_eq!(above(&shared, Some(&shared), true), None);
+        // But inside it, it goes up as far as the shared folder
+        assert_eq!(above(&format!("{shared}/drafts"), Some(&shared), true), Some((shared.clone(), true)));
+    }
+
+    #[test]
+    fn going_up_outside_the_flatpak_stops_at_the_top() {
+        assert_eq!(above("/home", None, false), Some(("/".into(), false)));
+        assert_eq!(above("/", None, false), None);
     }
 
     #[test]
