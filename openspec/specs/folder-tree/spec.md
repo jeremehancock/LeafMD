@@ -32,6 +32,11 @@ Each window SHALL have its own chosen folder, set from the command line or with 
 - **WHEN** the window shows "No Document Open" with no chosen folder and the user presses F9
 - **THEN** the panel says "No Folder Open" with an Open Folder… button
 
+#### Scenario: A new document
+- **GIVEN** no folder has been chosen in the window, and the tree shows ~/notes because ideas.md is selected
+- **WHEN** the user presses Ctrl+T, then saves the new document as ~/work/plan.md
+- **THEN** the panel says "No Folder Open" while the new document is unsaved, then shows ~/work with plan.md highlighted
+
 #### Scenario: Open Folder opens the panel
 - **WHEN** the panel is closed and the user presses Ctrl+Shift+O and picks ~/notes
 - **THEN** the panel opens showing ~/notes, and is still open after restarting, like opening it with F9

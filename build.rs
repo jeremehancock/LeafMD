@@ -18,4 +18,18 @@ fn main() {
         .and_then(|text| text.split_whitespace().nth(1).map(str::to_string))
         .unwrap_or_default();
     println!("cargo:rustc-env=LEAFMD_RUST_VERSION={version}");
+
+    // The libspelling version, shown in the About window. libspelling has no
+    // way to ask for its version while running, so it's read here instead.
+    // The Flatpak builds its own copy just before LeafMD, so this is the one
+    // LeafMD runs with. Empty if pkg-config can't say.
+    let spelling = std::process::Command::new("pkg-config")
+        .args(["--modversion", "libspelling-1"])
+        .output()
+        .ok()
+        .filter(|out| out.status.success())
+        .and_then(|out| String::from_utf8(out.stdout).ok())
+        .map(|text| text.trim().to_string())
+        .unwrap_or_default();
+    println!("cargo:rustc-env=LEAFMD_LIBSPELLING_VERSION={spelling}");
 }

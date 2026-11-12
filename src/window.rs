@@ -158,6 +158,9 @@ pub struct Window {
     /// True while a tab's saved state is being put into the find bar, so that
     /// doesn't count as the user closing the bar
     loading_find: Cell<bool>,
+    /// True while a file that has been read is being put into a new tab, so
+    /// the Files page waits for the file instead of following the empty tab
+    adding_file_tab: Cell<bool>,
     /// True while LeafMD itself is closing a tab or the window, as opposed to
     /// a tab being dragged to another window
     closing_tab: Cell<bool>,
@@ -188,6 +191,15 @@ pub struct Window {
     /// back for it, so they go again when it closes
     menu_from_key: Cell<bool>,
     side_panel: SidePanel,
+    /// The button at the top of the side panel that shows the folder above the
+    /// one the Files page shows. Only there while the Files page is.
+    up_button: gtk::Button,
+    /// How many folders up the user has gone with the up button, and for which
+    /// file (its address, or None with no file). Tied to the file rather than
+    /// reset on every update of the Files page, because that also happens for
+    /// small things like the unsaved dot appearing. Switching tabs clears it,
+    /// and saving somewhere new changes the address, so it stops applying.
+    went_up: RefCell<Option<(Option<String>, u32)>>,
     /// The Files page of the side panel
     files: Rc<FilesPage>,
     /// The Headings page of the side panel
@@ -492,6 +504,12 @@ impl Window {
         side_panel.add_page("files", "Files", "leafmd-folder-symbolic", &files.widget);
         side_panel.add_page("headings", "Headings", "leafmd-headings-symbolic", &headings.widget);
         side_panel.set_visible_page(state::load_panel_page());
+        let up_button = gtk::Button::builder()
+            .icon_name("go-up-symbolic")
+            .tooltip_text("Show the folder above")
+            .sensitive(false)
+            .build();
+        side_panel.pack_start(&up_button);
         let panel_wanted = state::load_panel_open();
 
         // The strip for dragging the panel wider or narrower: see
@@ -633,6 +651,7 @@ impl Window {
             tab_view,
             shown_document: RefCell::new(Weak::new()),
             loading_find: Cell::new(false),
+            adding_file_tab: Cell::new(false),
             closing_tab: Cell::new(false),
             menu_page: glib::WeakRef::new(),
             last_view: Cell::new(saved.view),
@@ -640,6 +659,8 @@ impl Window {
             file_banner,
             split,
             side_panel,
+            up_button,
+            went_up: RefCell::new(None),
             files,
             headings,
             word_label,
@@ -1291,6 +1312,14 @@ impl Window {
         });
         self.window.add_controller(keys);
 
+        // The up button: one folder further up, for the file you're looking at
+        let weak = Rc::downgrade(self);
+        self.up_button.connect_clicked(move |_| {
+            if let Some(win) = weak.upgrade() {
+                win.go_up();
+            }
+        });
+
         // Another page chosen in the panel: remembered for new windows and
         // next time, and the title at the top follows it
         let weak = Rc::downgrade(self);
@@ -1494,8 +1523,17 @@ impl Window {
                 .modal(true)
                 .initial_folder(&start)
                 .build();
-            if let Ok(folder) = dialog.select_folder_future(Some(&win.window)).await {
+            let Ok(folder) = dialog.select_folder_future(Some(&win.window)).await else { return };
+            // An empty window takes the folder. One with a document open
+            // doesn't, so its panel never shows a folder unrelated to the
+            // document beside it: the folder goes where `leafmd .` would put
+            // it (a window that already has it, an empty one, or a new one).
+            if win.is_empty() {
                 win.choose_folder(folder);
+            } else if let Some(app) =
+                win.window.application().and_then(|app| app.downcast::<adw::Application>().ok())
+            {
+                open_folder(&app, &win.windows, folder);
             }
         });
     }
@@ -1505,7 +1543,11 @@ impl Window {
     /// selected tab's file. Nothing is read while the panel is hidden; it
     /// catches up when shown.
     fn update_files_page(self: &Rc<Self>) {
-        if !self.split.shows_sidebar() {
+        // A file going into a new tab: the tab is selected a moment before the
+        // file is put in it. Without this the tree would empty itself for that
+        // moment (an Untitled tab has no folder) and rebuild, closing the
+        // folders that were open in it.
+        if !self.split.shows_sidebar() || self.adding_file_tab.get() {
             return;
         }
         let current = self.current().filter(|_| {
@@ -1513,25 +1555,63 @@ impl Window {
         });
         let file = current.and_then(|doc| doc.file.borrow().clone());
         let chosen = self.folder.borrow().clone();
-        let showing = self.files.root().filter(|(_, was_chosen)| !was_chosen).map(|(folder, _)| folder);
-        // A new Untitled document has no folder, and nor does a tab for a few
-        // moments while its file is read. The tree stays where it is for those.
-        let has_document = self.tab_view.n_pages() > 0;
-        let (folder, is_chosen) = folder_tree::folder_to_show(
-            chosen.as_ref(),
-            file.as_ref(),
-            showing.as_ref(),
-            has_document,
-            folder_tree::can_show_unchosen,
-        );
-        self.files.set_root(folder.as_ref(), is_chosen);
+        let (mut folder, mut shared_whole) = folder_tree::folder_to_show(chosen.as_ref(), file.as_ref());
+        // As many folders up as the user went with the up button, for this file
+        let key = file.as_ref().map(|file| file.uri().to_string());
+        let levels = match &*self.went_up.borrow() {
+            Some((went_for, levels)) if *went_for == key => *levels,
+            _ => 0,
+        };
+        for _ in 0..levels {
+            let Some(shown) = folder.as_ref() else { break };
+            let Some((above, above_shared)) =
+                folder_tree::folder_above(shown, chosen.as_ref(), folder_tree::can_show_unchosen)
+            else {
+                break;
+            };
+            (folder, shared_whole) = (Some(above), above_shared);
+        }
+        self.files.set_root(folder.as_ref(), shared_whole);
         self.update_panel_title();
+        self.update_up_button();
         self.files.set_highlight(file);
+    }
+
+    /// The up button: shows one folder further up than the Files page does now.
+    fn go_up(self: &Rc<Self>) {
+        let file = self
+            .current()
+            .filter(|_| self.stack.visible_child_name().as_deref() == Some("document"))
+            .and_then(|doc| doc.file.borrow().clone());
+        let key = file.map(|file| file.uri().to_string());
+        let levels = match &*self.went_up.borrow() {
+            Some((went_for, levels)) if *went_for == key => *levels,
+            _ => 0,
+        };
+        *self.went_up.borrow_mut() = Some((key, levels + 1));
+        self.update_files_page();
+    }
+
+    /// Greys out the up button when there's nothing above the Files page's
+    /// folder that it could list, and names the folder above in its tooltip.
+    fn update_up_button(&self) {
+        let chosen = self.folder.borrow().clone();
+        let above = self.files.root().and_then(|(folder, _)| {
+            folder_tree::folder_above(&folder, chosen.as_ref(), folder_tree::can_show_unchosen)
+        });
+        // The very top of the disk is called "/"
+        let name = above.as_ref().and_then(|(above, _)| above.basename()).map(|name| name.display().to_string());
+        self.up_button.set_sensitive(above.is_some());
+        self.up_button.set_tooltip_text(Some(&match name {
+            Some(name) => format!("Show the folder above ({name})"),
+            None => "Show the folder above".to_string(),
+        }));
     }
 
     /// The title at the top of the side panel: the Files page's folder name,
     /// or "Headings".
     fn update_panel_title(&self) {
+        self.up_button.set_visible(self.side_panel.visible_page() != "headings");
         let title = if self.side_panel.visible_page() == "headings" {
             "Headings".to_string()
         } else {
@@ -1778,6 +1858,8 @@ impl Window {
 
     /// Another tab was selected: everything around the document follows it.
     fn selected_tab_changed(&self) {
+        // Going up with the up button lasts until another tab is selected
+        *self.went_up.borrow_mut() = None;
         let doc = self.current();
         // Keep what the find bar was showing with the tab it belonged to
         if let Some(previous) = self.shown_document.borrow().upgrade() {
@@ -2669,9 +2751,15 @@ impl Window {
                 self.show_view_of(&doc);
                 doc
             }
-            None => self.add_tab(self.last_view.get()),
+            None => {
+                self.adding_file_tab.set(true);
+                let doc = self.add_tab(self.last_view.get());
+                self.adding_file_tab.set(false);
+                doc
+            }
         };
         *doc.pending_heading.borrow_mut() = heading;
+        // Gives the tab its file, which also brings the Files page up to date
         doc.show_file(file.clone(), text);
         self.show_document();
         self.remember_recent(&file);
@@ -2983,7 +3071,7 @@ impl Window {
                     ("Making it wider", "Drag the line between the panel and the document to make the panel wider or narrower, to see more of long names. LeafMD remembers the width for new windows and next time. If the window gets too narrow, the panel shrinks first, so the document keeps its room."),
                     ("Files and Headings", "The panel has two pages. Switch between them with the buttons along its bottom. The panel opens on the page you used last."),
                     ("Files", "The panel shows a folder as a tree. Click a folder to open or close it, and click a file to open it in a tab. The open document's file is highlighted. The arrow keys move around the tree, Right and Left open and close folders, and Enter opens a file."),
-                    ("Which folder", "Until you choose a folder, the panel shows the folder of the document you're looking at, and moves when you switch to a document somewhere else. Open Folder… in the main menu (Ctrl+Shift+O), or leafmd . in a terminal, chooses a folder for the window. The panel shows it whenever you're looking at a document inside it, until you close the window."),
+                    ("Which folder", "The panel always shows the folder of the document you're looking at, and moves when you switch tabs. The up arrow at the top of the panel shows the folder above, until you switch tabs or open a file. To browse a folder before opening anything in it, use Open Folder… in the main menu (Ctrl+Shift+O), or leafmd . in a terminal. If the window already has a document open, the folder opens in a new window."),
                     ("Greyed-out files", "Images, PDFs and other files that aren't text are greyed out, because LeafMD can't open them. Hidden files, like .git, aren't listed."),
                     ("Folders LeafMD can't see", "When you open a document from outside your home folder, LeafMD is given that one file, not the folder it's in. Choose the folder with Open Folder… to show its other files."),
                     ("Headings", "Lists the document's headings, indented to match their level. Click one, or press Enter on it, to jump there. In Raw and Split view the cursor goes to the start of the heading, ready for typing. As you scroll, the heading of the section you're reading is highlighted."),
@@ -3408,6 +3496,12 @@ impl Window {
                 webkit6::functions::minor_version(),
                 webkit6::functions::micro_version()
             ),
+            match env!("LEAFMD_LIBSPELLING_VERSION") {
+                "" => "libspelling, checks spelling https://gitlab.gnome.org/GNOME/libspelling".to_string(),
+                version => format!(
+                    "libspelling {version}, checks spelling https://gitlab.gnome.org/GNOME/libspelling"
+                ),
+            },
             "comrak, turns markdown into HTML https://github.com/kivikakk/comrak".to_string(),
             "ammonia, removes anything unsafe from the HTML https://github.com/rust-ammonia/ammonia"
                 .to_string(),

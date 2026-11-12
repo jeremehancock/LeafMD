@@ -25,7 +25,7 @@
       <li>Switch between formatted, raw and split views with one click or Ctrl+1, 2 and 3</li>
       <li>A formatted-only view for pure, distraction-free reading, and a Distraction Free mode that hides everything but your document</li>
       <li>Tabs keep several documents in one window, and reopen when you start LeafMD again</li>
-      <li>An optional, resizable side panel shows the folder you're working in as a tree, for moving between documents</li>
+      <li>An optional, resizable side panel shows the folder of the document you're looking at as a tree, for moving between documents</li>
       <li>The side panel's Headings page lists the document's headings, so any section is one click away</li>
       <li>A word count and reading time sit quietly in the corner, and count your selection too</li>
       <li>Edit the raw text with the formatted view updating as you type</li>
