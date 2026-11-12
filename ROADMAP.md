@@ -62,8 +62,7 @@ These three are planned as one release, since they all start from the formatted 
 Small things to tidy up, none of which change how LeafMD works.
 
 - [x] **Credits:** list libspelling, the library behind spell checking, in About's "Built With" section alongside the other libraries
-- [ ] **Spell checking gaps:** look into three cases libspelling misses: the word the cursor is on isn't underlined, the very last word of a file isn't checked, and a misspelling in the first few words of some files can stay un-underlined
-- [ ] **Screenshot script:** move the script's virtual mouse away from GNOME's top-left hot corner before it starts, so it can't open the Activities overview by accident
+- [x] **Screenshot script:** move the script's virtual mouse away from GNOME's top-left hot corner before it starts, so it can't open the Activities overview by accident
 - [x] **Files panel with a new document:** when a new, unsaved document is selected, the Files panel keeps showing the folder of the file that was selected before, until the new document is saved
 - [x] **Files panel follows the file:** the panel always shows the folder of the document you're looking at (it used to stay on a wider folder once it had moved up), with an up arrow to see the folder above. Open Folder… with a document open now opens the folder in a new window
 - [x] **Greyed-out file after saving:** after saving a new document for the first time, its name in the Files panel is sometimes greyed out (as if LeafMD couldn't open it) until it's saved again
@@ -80,4 +79,3 @@ These might fit LeafMD, or might add more than they're worth. Each one needs a d
 
 - Coloured syntax highlighting inside code blocks in the formatted view
 - Dropping an image onto the raw text inserts a markdown image link
-- A Snap package, so Ubuntu users can install LeafMD from Ubuntu's own App Center without setting up Flatpak. It would be a second package format to build and test for every release
