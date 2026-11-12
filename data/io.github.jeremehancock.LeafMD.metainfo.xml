@@ -102,6 +102,18 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.14.0" date="2026-11-11">
+      <description>
+        <p>The Files panel now always shows where the document you're reading lives.</p>
+        <ul>
+          <li>The panel shows the folder of the document you're looking at, and follows it when you switch tabs, open a file or save somewhere new, including files in subfolders</li>
+          <li>An up arrow at the top of the panel shows the folder above, until you switch tabs</li>
+          <li>Open Folder… opens the folder in a new window when the current one already has a document open</li>
+          <li>A new, unsaved document no longer shows the folder of the document you were on before</li>
+          <li>About now credits libspelling, the library behind spell checking</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.13.0" date="2026-11-11">
       <description>
         <p>LeafMD now checks your spelling as you write.</p>
