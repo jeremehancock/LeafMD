@@ -40,7 +40,7 @@
       <li>Supports tables, task lists, footnotes and other GitHub-style markdown</li>
       <li>Open files, or a whole folder with leafmd ., from a terminal with an optional short leafmd command</li>
       <li>Choose the fonts for the raw text and the formatted view, or zoom in and out with Ctrl+plus and Ctrl+minus</li>
-      <li>Looks at home on GNOME, following your light or dark style and your accent colour</li>
+      <li>Looks at home on GNOME, following your light or dark style and your accent colour, or stays light or dark if you prefer</li>
     </ul>
   </description>
 
@@ -102,6 +102,15 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.15.0" date="2026-11-12">
+      <description>
+        <p>Choose whether LeafMD is light or dark.</p>
+        <ul>
+          <li>Preferences has a new Style choice: Follow System, Light or Dark. Light or Dark keeps LeafMD that way whatever your desktop uses, and Follow System matches your desktop as before</li>
+          <li>The choice changes every LeafMD window straight away, including the raw text and the formatted view, and LeafMD remembers it</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.14.1" date="2026-11-12">
       <description>
         <p>A fix for the Files panel.</p>

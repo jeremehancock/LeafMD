@@ -958,7 +958,7 @@ impl Window {
             }
         });
 
-        // Follow the system's light or dark style
+        // Follow the light or dark style (the system's, or the one chosen in Preferences)
         let weak = Rc::downgrade(self);
         adw::StyleManager::default().connect_dark_notify(move |_| {
             if let Some(win) = weak.upgrade() {
@@ -3009,7 +3009,7 @@ impl Window {
         self.update_line_numbers();
     }
 
-    /// Matches every document's colours to the system's light or dark style.
+    /// Matches every document's colours to the light or dark style in use.
     fn update_style(&self) {
         for doc in self.documents() {
             doc.update_style();
@@ -3038,7 +3038,7 @@ impl Window {
                     ("Raw", "The markdown text itself. Type here to make changes. In a wide window it sits in a comfortable column down the middle."),
                     ("Split", "Raw text on the left, formatted on the right. The formatted side updates as you type, and both sides scroll together."),
                     ("Line numbers", "The raw text has no line numbers unless you turn them on with Line Numbers in the main menu. The choice applies to every window, and LeafMD remembers it."),
-                    ("Light, dark and accent colours", "LeafMD follows your system's light or dark style. Links and ticked checkboxes in the formatted view use the accent colour you choose in GNOME Settings."),
+                    ("Light, dark and accent colours", "LeafMD follows your system's light or dark style. To keep it always light or always dark, choose Light or Dark next to Style in Preferences (main menu, or Ctrl+comma); Follow System goes back to matching the system. Links and ticked checkboxes in the formatted view use the accent colour you choose in GNOME Settings."),
                     ("Narrow windows", "When the window is narrow, the New, Save and Find buttons and the view buttons move to a bar along the bottom. They work the same way there, and move back when the window is wider."),
                 ],
             ),

@@ -30,6 +30,7 @@ Each feature is planned in detail with [OpenSpec](https://github.com/Fission-AI/
 - [x] **Distraction-free mode:** one switch (Ctrl+Shift+D, or the main menu) that hides the header bar, tabs, formatting bar, side panel and line numbers, leaving just your document. The bars slide back in when the pointer reaches the window's edge. Each window starts with it off. Full screen (F11) is separate, and the two can be used together
 - [x] **Font and text size:** choose the font and size for the raw text and for the formatted view, in a small Preferences window. LeafMD's description used to promise "no settings to tune", and now says it's great out of the box with its few options kept out of the way
 - [x] **Reload when the file changes:** if another app changes the open file, LeafMD shows the new version. If there are unsaved changes too, it asks which to keep instead of overwriting anything
+- [x] **Light and dark style:** choose Follow System, Light or Dark in Preferences, for people who want LeafMD dark on a light desktop or the other way round
 - [x] **Zoom:** Ctrl+plus, Ctrl+minus and Ctrl+0 make the text bigger, smaller or back to normal in both views, for a quick change without opening Preferences. Planned for the same release as Font and text size, since both change the same text size
 - [x] **Headings in the side panel:** a Headings page in the side panel listing the document's headings, indented to match their level. Clicking one jumps to that section. It's the panel's second page, so it also adds a way to switch between Files and Headings
 - [x] **Word count:** the number of words (and reading time) shown somewhere unobtrusive. Planned for the same release as Headings, since both keep track of what's in the document as you type
@@ -62,8 +63,7 @@ These three are planned as one release, since they all start from the formatted 
 Small things to tidy up, none of which change how LeafMD works.
 
 - [x] **Credits:** list libspelling, the library behind spell checking, in About's "Built With" section alongside the other libraries
-- [ ] **Spell checking gaps:** look into three cases libspelling misses: the word the cursor is on isn't underlined, the very last word of a file isn't checked, and a misspelling in the first few words of some files can stay un-underlined
-- [ ] **Screenshot script:** move the script's virtual mouse away from GNOME's top-left hot corner before it starts, so it can't open the Activities overview by accident
+- [x] **Screenshot script:** move the script's virtual mouse away from GNOME's top-left hot corner before it starts, so it can't open the Activities overview by accident
 - [x] **Files panel with a new document:** when a new, unsaved document is selected, the Files panel keeps showing the folder of the file that was selected before, until the new document is saved
 - [x] **Files panel follows the file:** the panel always shows the folder of the document you're looking at (it used to stay on a wider folder once it had moved up), with an up arrow to see the folder above. Open Folder… with a document open now opens the folder in a new window
 - [x] **Greyed-out file after saving:** after saving a new document for the first time, its name in the Files panel is sometimes greyed out (as if LeafMD couldn't open it) until it's saved again
@@ -80,4 +80,3 @@ These might fit LeafMD, or might add more than they're worth. Each one needs a d
 
 - Coloured syntax highlighting inside code blocks in the formatted view
 - Dropping an image onto the raw text inserts a markdown image link
-- A Snap package, so Ubuntu users can install LeafMD from Ubuntu's own App Center without setting up Flatpak. It would be a second package format to build and test for every release

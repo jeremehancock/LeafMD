@@ -1861,7 +1861,7 @@ impl Document {
         }
     }
 
-    /// Matches the editor colours and the formatted view to the system's light or dark style.
+    /// Matches the editor colours and the formatted view to the light or dark style in use.
     pub fn update_style(&self) {
         let dark = adw::StyleManager::default().is_dark();
         // LeafMD's own schemes (data/resources/styles) are GNOME's with quieter

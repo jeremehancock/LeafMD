@@ -21,6 +21,22 @@ LeafMD SHALL underline each misspelt word in the raw text (Raw and Split view) w
 - **WHEN** the same document is shown in Split view
 - **THEN** `mroe` is underlined on the raw side only, and the formatted side shows the sentence as normal
 
+### Requirement: Known gaps in underlining
+LeafMD SHALL NOT underline the word the text cursor is in or touching, so a word still being typed isn't marked; it SHALL be underlined once the cursor moves away. This includes the first word of a file, where the cursor starts. A misspelling that is the very last thing in a file, with no new line after it, MAY stay unchecked. Both come from the spell checking library and are kept as they are.
+
+#### Scenario: The word at the cursor
+- **WHEN** the user types `mroe` and the cursor is still right after it
+- **THEN** `mroe` has no underline, and gets one as soon as the user types a space or clicks elsewhere
+
+#### Scenario: A file that starts with a typo
+- **WHEN** the user opens a file whose first line is `Teh garden plan`
+- **THEN** `Teh` has no underline until the cursor leaves it, for example after pressing Down
+
+#### Scenario: A typo at the very end
+- **GIVEN** a file whose last characters are `needs mroe` with no new line after them
+- **WHEN** the user opens it
+- **THEN** `mroe` may have no underline, and gets one once a new line is typed after it
+
 ### Requirement: Code and addresses are not checked
 LeafMD SHALL NOT underline words inside inline code, fenced code blocks, code indented by 8 or more spaces (or two tabs), automatic links in angle brackets, or the addresses of links and images. The visible text of a link and an image's description SHALL still be checked. Text indented by 4 spaces SHALL be checked, because it may be a list item's continued paragraph.
 

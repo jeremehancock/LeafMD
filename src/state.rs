@@ -374,6 +374,36 @@ fn set_font_in(file: &glib::KeyFile, which: FontFor, font: Option<&str>) {
     }
 }
 
+/// The choices for Style in Preferences: follow the desktop's light or dark
+/// style, or always be light, or always dark. The first is the starting one.
+pub const STYLES: [&str; 3] = ["system", "light", "dark"];
+
+/// The style chosen in Preferences, or "system" if none was (or the saved
+/// value isn't one LeafMD knows).
+pub fn load_style() -> &'static str {
+    let file = glib::KeyFile::new();
+    if file
+        .load_from_file(state_path(), glib::KeyFileFlags::NONE)
+        .is_err()
+    {
+        return STYLES[0];
+    }
+    style_in(&file)
+}
+
+fn style_in(file: &glib::KeyFile) -> &'static str {
+    let saved = file.string(PREFERENCES_GROUP, "style").unwrap_or_default();
+    STYLES
+        .into_iter()
+        .find(|style| *style == saved.trim())
+        .unwrap_or(STYLES[0])
+}
+
+/// Remembers the style chosen in Preferences.
+pub fn save_style(style: &str) {
+    update_state_file(|file| file.set_string(PREFERENCES_GROUP, "style", style));
+}
+
 /// Some files that belong in tabs, and which one is selected.
 #[derive(Debug, PartialEq)]
 pub struct TabList {
@@ -460,7 +490,7 @@ fn update_state_file(change: impl FnOnce(&glib::KeyFile)) {
 #[cfg(test)]
 mod tests {
     use super::{
-        FontFor, TabList, font_in, line_numbers_in, spell_check_in, spell_check_language_in, panel_open_in, panel_page_in, panel_width_in, set_font_in,
+        FontFor, TabList, font_in, line_numbers_in, spell_check_in, spell_check_language_in, panel_open_in, panel_page_in, panel_width_in, set_font_in, style_in,
         tabs_to_reopen, tabs_to_save,
     };
     use gtk::glib;
@@ -540,6 +570,15 @@ mod tests {
         assert_eq!(font_in(&file, FontFor::Raw), None);
         // Forgetting a font that was never chosen is fine too
         set_font_in(&file, FontFor::Formatted, None);
+    }
+
+    #[test]
+    fn the_style_follows_the_system_unless_light_or_dark_was_chosen() {
+        assert_eq!(style_in(&key_file("[window]\nview=split\n")), "system");
+        assert_eq!(style_in(&key_file("[preferences]\nstyle=dark\n")), "dark");
+        assert_eq!(style_in(&key_file("[preferences]\nstyle=light\n")), "light");
+        assert_eq!(style_in(&key_file("[preferences]\nstyle=purple\n")), "system");
+        assert_eq!(style_in(&key_file("[preferences]\nstyle=\n")), "system");
     }
 
     fn list(names: &[&str]) -> Vec<String> {

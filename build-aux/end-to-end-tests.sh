@@ -40,8 +40,6 @@ evidence="$PWD/target/end-to-end"
 rm -rf "$evidence"
 desktop_start
 start_settings_portal light "$work/logs/settings-portal"
-# Out of the top left corner, where the pointer would open the Activities overview
-in_shell 'globalThis.pointer.notify_absolute_motion(0, 700, 500); 0' > /dev/null
 
 passed=0
 for name in "${chosen[@]}"; do
