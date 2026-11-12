@@ -103,6 +103,18 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.16.0" date="2026-11-12">
+      <description>
+        <p>Colourful code, and pictures with a drag.</p>
+        <ul>
+          <li>Code blocks that name their language, like ```python or ```bash, are now coloured in the formatted view, when printing and in exports, in light and dark</li>
+          <li>Type ``` and the first letter of a language to pick its name from a list</li>
+          <li>Drop an image from your file manager onto the raw text to insert a link to it, with the path worked out for you</li>
+          <li>The question about unsaved changes now fits any window size, even while you resize it, without words left alone on a line</li>
+          <li>Spaces at the end of a line no longer show a yellow bar in the raw text</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.15.0" date="2026-11-12">
       <description>
         <p>Choose whether LeafMD is light or dark.</p>
