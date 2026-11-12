@@ -39,6 +39,29 @@ pub fn can_open(content_type: Option<&str>) -> bool {
     }
 }
 
+/// What GIO's quick look calls an empty file, whatever its name
+const EMPTY_FILE: &str = "application/x-zerosize";
+
+/// A file's type for `can_open`, going by its name only. GIO's quick answer
+/// (`fast-content-type`) is usually that, but for an empty file it says
+/// "empty file" instead. LeafMD saves a new file by creating it empty and then
+/// writing to it, and the tree can spot it at that moment and not look again,
+/// which greyed out a freshly saved notes.md. So an empty file is judged by its
+/// name like any other: an empty notes.md is markdown, an empty photo.png an
+/// image.
+fn type_by_name(content_type: Option<&str>, name: &Path) -> Option<String> {
+    match content_type {
+        Some(EMPTY_FILE) => Some(gio::content_type_guess(Some(name), None).0.to_string()),
+        other => other.map(str::to_string),
+    }
+}
+
+/// Whether LeafMD can open the file a row in the tree stands for.
+fn can_open_file(info: &gio::FileInfo) -> bool {
+    let kind = type_by_name(info.attribute_string("standard::fast-content-type").as_deref(), &info.name());
+    can_open(kind.as_deref())
+}
+
 /// The folder the document portal shares files and folders through. A folder
 /// LeafMD was given from outside the home folder appears under here.
 pub fn portal_folder() -> PathBuf {
@@ -345,7 +368,7 @@ impl FilesPage {
             expander.set_list_row(Some(&row));
             label.set_label(&info.display_name());
             let folder = is_folder(&info);
-            let openable = folder || can_open(info.attribute_string("standard::fast-content-type").as_deref());
+            let openable = folder || can_open_file(&info);
             icon.set_icon_name(Some(if folder { "leafmd-folder-symbolic" } else { "leafmd-document-symbolic" }));
             // A file LeafMD can't open is greyed out, can't be highlighted or
             // opened, and says why when hovered. Anything else shows its whole
@@ -457,7 +480,7 @@ impl FilesPage {
             self.set_expanded(row, !row.is_expanded());
             return;
         }
-        if !can_open(info.attribute_string("standard::fast-content-type").as_deref()) {
+        if !can_open_file(&info) {
             return;
         }
         if let (Some(file), Some(open)) = (file_of(&info), self.on_open.borrow().as_ref()) {
@@ -757,7 +780,7 @@ mod tests {
     use gtk::gio;
     use gtk::prelude::*;
 
-    use super::{can_open, can_see, folder_above, folder_to_show};
+    use super::{EMPTY_FILE, can_open, can_see, folder_above, folder_to_show, type_by_name};
 
     fn at(path: &str) -> gio::File {
         gio::File::for_path(path)
@@ -874,6 +897,21 @@ mod tests {
         assert!(can_open(Some("application/octet-stream")));
         assert!(can_open(Some("")));
         assert!(can_open(None));
+    }
+
+    #[test]
+    fn empty_files_are_judged_by_their_names() {
+        // GIO calls any empty file "empty file", which isn't text. A new
+        // document is empty for a moment while it's saved.
+        let opens = |name: &str| can_open(type_by_name(Some(EMPTY_FILE), Path::new(name)).as_deref());
+        assert!(opens("plan.md"));
+        assert!(opens("notes.txt"));
+        assert!(opens("LICENSE"));
+        assert!(!opens("photo.png"));
+        assert!(!opens("report.pdf"));
+        // Other types are left as GIO gave them
+        assert_eq!(type_by_name(Some("image/png"), Path::new("a.md")).as_deref(), Some("image/png"));
+        assert_eq!(type_by_name(None, Path::new("a.md")), None);
     }
 
     #[test]
