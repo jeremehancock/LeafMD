@@ -4,7 +4,9 @@
 // outside the picture closes it.
 //
 // It uses the browser's own <dialog>, which already handles Esc and keeps
-// keyboard focus inside the viewer while it's open. On a phone, or without
+// keyboard focus inside the viewer while it's open. On a phone the
+// screenshots don't open at all: a phone screen is barely wider than the
+// small picture, so opening it wouldn't make it any easier to see. Without
 // scripts, each screenshot is a plain link that opens the picture by itself.
 const dialog = document.querySelector("dialog.lightbox");
 const links = [...document.querySelectorAll(".gallery a.zoom")];
@@ -27,8 +29,8 @@ if (dialog && typeof dialog.showModal === "function" && links.length) {
 
   links.forEach((link, index) => {
     link.addEventListener("click", (event) => {
-      if (!wide.matches) return;
       event.preventDefault();
+      if (!wide.matches) return;
       show(index);
       dialog.showModal();
     });
