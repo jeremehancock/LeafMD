@@ -1,7 +1,8 @@
-//! The Preferences window (Ctrl+,): the raw text's font and the formatted
-//! view's font, and nothing else. Choosing a font shows it everywhere at once
-//! and remembers it; Reset goes back to the starting font. The work itself is
-//! in text_size.rs.
+//! The Preferences window (Ctrl+,): the style (follow the desktop, light or
+//! dark), the raw text's font and the formatted view's font, and nothing else.
+//! Each choice shows everywhere at once and is remembered. The style is the
+//! app's "style" action (set up in main.rs); the fonts' work is in
+//! text_size.rs, and Reset puts a font back to the starting one.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -27,15 +28,62 @@ pub fn show(parent: &impl IsA<gtk::Widget>) {
     let dialog = adw::PreferencesDialog::builder()
         .title("Preferences")
         .search_enabled(false)
-        // Two short rows: no need for the full height on a big screen
-        .content_height(320)
+        // Three short rows: no need for the full height on a big screen
+        .content_height(460)
         .build();
     let page = adw::PreferencesPage::new();
+    page.add(&appearance_group());
     page.add(&font_group("Raw Text", FontFor::Raw));
     page.add(&font_group("Formatted View", FontFor::Formatted));
     dialog.add(&page);
     OPEN.with(|open| open.borrow().set(Some(&dialog)));
     dialog.present(Some(parent));
+}
+
+/// The Appearance group: a Style row with Follow System, Light and Dark side
+/// by side. Clicking one changes the app's "style" action, which does the rest.
+fn appearance_group() -> adw::PreferencesGroup {
+    let group = adw::PreferencesGroup::builder().title("Appearance").build();
+    let toggles = adw::ToggleGroup::builder().valign(gtk::Align::Center).build();
+    // The names match the action's values in state::STYLES
+    for (name, label) in [("system", "Follow System"), ("light", "Light"), ("dark", "Dark")] {
+        toggles.add(adw::Toggle::builder().name(name).label(label).build());
+    }
+    let app = gtk::gio::Application::default();
+    let current = app
+        .as_ref()
+        .and_then(|app| app.action_state("style"))
+        .and_then(|state| state.get::<String>())
+        .unwrap_or_else(|| state::load_style().to_string());
+    toggles.set_active_name(Some(&current));
+    toggles.connect_active_name_notify(|toggles| {
+        if let (Some(name), Some(app)) = (toggles.active_name(), gtk::gio::Application::default())
+            && app.action_state("style").and_then(|s| s.get::<String>()).as_deref() != Some(name.as_str())
+        {
+            app.change_action_state("style", &name.to_variant());
+        }
+    });
+    // And the other way: if the style changes some other way while Preferences
+    // is open, the buttons follow. The link is undone when the row goes away.
+    if let Some(app) = app {
+        let weak = toggles.downgrade();
+        let handler = app.connect_action_state_changed(Some("style"), move |_, _, state| {
+            if let (Some(toggles), Some(name)) = (weak.upgrade(), state.get::<String>()) {
+                toggles.set_active_name(Some(&name));
+            }
+        });
+        let handler = std::cell::RefCell::new(Some(handler));
+        toggles.connect_destroy(move |_| {
+            if let Some(handler) = handler.take() {
+                app.disconnect(handler);
+            }
+        });
+    }
+
+    let row = adw::ActionRow::builder().title("Style").build();
+    row.add_suffix(&toggles);
+    group.add(&row);
+    group
 }
 
 /// One group with a "Font" row: the font button, and Reset beside it while

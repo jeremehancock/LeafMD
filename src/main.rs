@@ -94,6 +94,18 @@ fn start_detached_copy(args: &[OsString]) -> std::io::Result<()> {
     copy.spawn().map(|_| ())
 }
 
+/// Tells libadwaita which style to use. "system" is libadwaita's own starting
+/// choice (follow the desktop, light if it has no preference), not its
+/// "default", which would mean "whatever the app's settings say".
+fn apply_style(style: &str) {
+    let scheme = match style {
+        "light" => adw::ColorScheme::ForceLight,
+        "dark" => adw::ColorScheme::ForceDark,
+        _ => adw::ColorScheme::PreferLight,
+    };
+    adw::StyleManager::default().set_color_scheme(scheme);
+}
+
 fn main() -> glib::ExitCode {
     // Give the terminal back before anything else starts. If the copy can't be
     // started, carry on here instead, so LeafMD still opens.
@@ -158,6 +170,9 @@ fn main() -> glib::ExitCode {
         sourceview5::StyleSchemeManager::default()
             .append_search_path("resource:///io/github/jeremehancock/LeafMD/styles/");
         set_shortcuts(app);
+        // Light, dark or the desktop's style, as chosen in Preferences. Set
+        // before the first window is built, so a dark choice doesn't start light.
+        apply_style(state::load_style());
     });
 
     let windows = Windows::default();
@@ -204,6 +219,26 @@ fn main() -> glib::ExitCode {
         }
     });
     app.add_action(&spell_check);
+
+    // Style in Preferences: "system", "light" or "dark", for every window at
+    // once and remembered between runs. Nothing else needs telling: the raw
+    // text, the formatted view and the header bar all follow libadwaita's
+    // light-or-dark answer, which apply_style changes.
+    let style = gio::SimpleAction::new_stateful(
+        "style",
+        Some(glib::VariantTy::STRING),
+        &state::load_style().to_variant(),
+    );
+    style.connect_change_state(|action, value| {
+        let Some(chosen) = value.and_then(|v| v.get::<String>()) else { return };
+        let Some(chosen) = state::STYLES.into_iter().find(|style| *style == chosen) else {
+            return;
+        };
+        action.set_state(&chosen.to_variant());
+        state::save_style(chosen);
+        apply_style(chosen);
+    });
+    app.add_action(&style);
 
     let w = windows.clone();
     app.connect_activate(move |app| {

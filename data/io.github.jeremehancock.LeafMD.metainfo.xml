@@ -40,7 +40,7 @@
       <li>Supports tables, task lists, footnotes and other GitHub-style markdown</li>
       <li>Open files, or a whole folder with leafmd ., from a terminal with an optional short leafmd command</li>
       <li>Choose the fonts for the raw text and the formatted view, or zoom in and out with Ctrl+plus and Ctrl+minus</li>
-      <li>Looks at home on GNOME, following your light or dark style and your accent colour</li>
+      <li>Looks at home on GNOME, following your light or dark style and your accent colour, or stays light or dark if you prefer</li>
     </ul>
   </description>
 

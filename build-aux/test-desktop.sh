@@ -548,12 +548,13 @@ activate_action() { # <action> [word]
 }
 
 # The same as action_state and activate_action, for actions that belong to
-# the whole app rather than one window, such as "spell-check"
+# the whole app rather than one window, such as "spell-check". The state is
+# true or false, or a word without its quotes (the "style" action's "dark").
 app_action_state() { # <action>
     timeout 5 env -i DBUS_SESSION_BUS_ADDRESS="unix:path=$work/run/bus" \
         gdbus call --session --dest "$app" --object-path /io/github/jeremehancock/LeafMD \
         --method org.gtk.Actions.Describe "$1" 2> /dev/null |
-        sed -n -e "s/.*\[<\(true\|false\)>\].*/\1/p"
+        sed -n -e "s/.*\[<\(true\|false\)>\].*/\1/p" -e "s/.*\[<'\([^']*\)'>\].*/\1/p"
 }
 
 activate_app_action() { # <action>
@@ -561,6 +562,16 @@ activate_app_action() { # <action>
         gdbus call --session --dest "$app" --object-path /io/github/jeremehancock/LeafMD \
         --method org.gtk.Actions.Activate "$1" '[]' '{}' > /dev/null 2>&1 ||
         fail "couldn't run LeafMD's $1 action"
+    sleep 0.5
+}
+
+# Runs an app action that takes a word, as choosing Dark next to Style in
+# Preferences runs "style" with "dark"
+set_app_action() { # <action> <word>
+    timeout 5 env -i DBUS_SESSION_BUS_ADDRESS="unix:path=$work/run/bus" \
+        gdbus call --session --dest "$app" --object-path /io/github/jeremehancock/LeafMD \
+        --method org.gtk.Actions.Activate "$1" "[<'$2'>]" '{}' > /dev/null 2>&1 ||
+        fail "couldn't set LeafMD's $1 action to $2"
     sleep 0.5
 }
 
