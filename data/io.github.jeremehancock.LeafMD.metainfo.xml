@@ -102,6 +102,15 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.14.1" date="2026-11-12">
+      <description>
+        <p>A fix for the Files panel.</p>
+        <ul>
+          <li>A new document saved into the folder the side panel is showing no longer appears greyed out until it's saved a second time</li>
+          <li>Empty markdown and text files show normally in the side panel and can be opened</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.14.0" date="2026-11-11">
       <description>
         <p>The Files panel now always shows where the document you're reading lives.</p>

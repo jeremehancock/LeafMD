@@ -87,6 +87,15 @@ Files that are clearly not text, judged only by their names (images, audio, vide
 - **WHEN** the user clicks a program called `build` with no extension
 - **THEN** a message says "This file isn't plain text, so LeafMD can't open it", as it does for any file that isn't text
 
+#### Scenario: Empty files
+- **WHEN** the tree shows an empty plan.md and an empty photo.png
+- **THEN** plan.md shows normally and opens when clicked, and photo.png is greyed out
+
+#### Scenario: Saving a new document into the folder showing
+- **GIVEN** the user ran `leafmd .` in ~/notes, and the tree shows ~/notes
+- **WHEN** they press Ctrl+T, type "Plan", and save it as ~/notes/plan.md
+- **THEN** plan.md appears in the tree, not greyed out, and opens when clicked
+
 ### Requirement: Opening files from the tree
 Clicking a file in the tree, or selecting it and pressing Enter, SHALL open it following the rules for opening files inside LeafMD: a new selected tab in that window, or the tab that already has it.
 
