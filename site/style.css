@@ -209,6 +209,11 @@ code { font-family: var(--mono); font-size: 0.9em; }
 @media (prefers-reduced-motion: no-preference) {
   .zoom:hover img { transform: translateY(-4px) scale(1.02); }
 }
+/* On a phone the screenshots don't open (see lightbox.js), so they shouldn't
+   look like something to tap, and a tap goes nowhere */
+@media (max-width: 699px) {
+  .zoom { pointer-events: none; cursor: default; }
+}
 
 /* The screenshot viewer: the picture as large as the window allows, up to
    its real size, on a dark see-through backdrop */
