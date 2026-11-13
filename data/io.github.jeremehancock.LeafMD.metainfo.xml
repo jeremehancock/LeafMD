@@ -103,6 +103,17 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.17.0" date="2026-11-12">
+      <description>
+        <p>Choose how much space sits beside your text.</p>
+        <ul>
+          <li>Preferences has a new Margins choice: None, Narrow, Normal or Wide. It sets how wide a line of text can get on a wide window, in every view, and the page margins of exported PDFs</li>
+          <li>Text is a little wider per line than before. Choose Wide for the old look, or None to fill the window</li>
+          <li>In Split view, both sides keep to the same width when you drag the divider</li>
+          <li>Preferences now shows both fonts together under Fonts</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.16.0" date="2026-11-12">
       <description>
         <p>Colourful code, and pictures with a drag.</p>
