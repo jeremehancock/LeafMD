@@ -46,7 +46,7 @@ LeafMD SHALL show images stored next to the file (relative paths like `images/ph
 - **THEN** the formatted view shows `~/notes/img/cat.png`
 
 ### Requirement: Readable page styles
-The formatted view SHALL show the document in a centred column set by Margins (about 140 characters for Narrow, 100 for Normal, 85 for Wide, the whole width for None), measured in its font at the current zoom and the same in Formatted view and Split's formatted half. It SHALL use GNOME's fonts (Adwaita Sans, with code in Adwaita Mono, the raw text's font) and light and dark colours from GNOME's palette matching the system style.
+The formatted view SHALL show the document in a centred column set by Margins (about 140 characters for Narrow, 100 for Normal, 85 for Wide, the whole width for None), as wide in pixels as the raw text's line, in Formatted view and both halves of Split. It SHALL use GNOME's fonts (Adwaita Sans, with code in Adwaita Mono, the raw text's font) and light and dark colours from GNOME's palette matching the system style.
 
 #### Scenario: Wide window
 - **WHEN** Margins is Normal and the window is very wide
@@ -63,6 +63,10 @@ The formatted view SHALL show the document in a centred column set by Margins (a
 #### Scenario: Dragging the Split divider
 - **WHEN** Margins is Normal, a 1920 pixel wide window is in Split view, and the user drags the divider far to the left so the formatted half is about 1500 pixels wide
 - **THEN** the formatted text stays in a centred column of about 100 characters within its half
+
+#### Scenario: Both halves of Split view match
+- **WHEN** a 2560 pixel wide window is in Split view, divided down the middle, and the user chooses each of None, Narrow, Normal and Wide next to Margins in turn
+- **THEN** each time, the formatted text's column is the same width as the raw text's, give or take where the words wrap, and whenever one half's text gets narrower so does the other's
 
 #### Scenario: Code matches the raw text
 - **WHEN** the document contains `` `PROG` `` and the user looks at Split view

@@ -281,7 +281,15 @@
     });
   });
 
+  // Tells LeafMD once the page has drawn a fresh picture of itself on screen.
+  // The first animation frame is the one being drawn now; by the second, that
+  // picture has been handed over to the window.
+  function whenPainted() {
+    requestAnimationFrame(() => requestAnimationFrame(() => post({ kind: "painted" })));
+  }
+
   window.leafmd = {
+    whenPainted,
     scrollToLine,
     setSplitView(on) { jumpOnDoubleClick = on; },
     find,

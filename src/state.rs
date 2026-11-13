@@ -405,9 +405,10 @@ pub fn save_style(style: &str) {
 }
 
 /// Margins in Preferences: how wide a line of text can get on screen, and
-/// how big the page margins are in a PDF. All the numbers live here, so the
-/// raw text, the formatted view and exports always agree. Wide is how LeafMD
-/// looked before this setting existed.
+/// how big the page margins are in a PDF. All the numbers live here. On
+/// screen, the raw text and the formatted view share one width worked out
+/// from raw_characters (see Document::apply_margins); exports use
+/// formatted_column. Wide is how LeafMD looked before this setting existed.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Margins {
     /// "None" in Preferences: the text fills the window. Named differently
@@ -458,10 +459,11 @@ impl Margins {
         }
     }
 
-    /// The CSS width of the formatted view's column: in em (the width of an
-    /// "M" in its font), or "none" when the text fills the window. Adwaita
-    /// Sans fits about 1.93 characters in an em, so these hold about as many
-    /// characters as the raw text's line.
+    /// The CSS width of an exported document's column: in em (the width of
+    /// an "M" in its font), or "none" for no limit. Exports are read in other
+    /// apps without the raw text's font, so they can't use the width LeafMD
+    /// shows on screen. Adwaita Sans fits about 1.93 characters in an em, so
+    /// these hold about as many characters as the raw text's line.
     pub fn formatted_column(self) -> &'static str {
         match self {
             Margins::FullWidth => "none",

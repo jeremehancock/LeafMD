@@ -8,6 +8,5 @@ Each feature is planned in detail with [OpenSpec](https://github.com/Fission-AI/
 
 ## Next
 
-- [x] Margins: None, Narrow, Normal or Wide in Preferences
 - [ ] **Version 1.0:** its own milestone, which also retires the "Early days" note on leafmd.app
 - [ ] Translations into other languages
