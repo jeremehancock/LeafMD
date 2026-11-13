@@ -6,11 +6,11 @@ How big the text is and in which font: the Preferences window with the raw text 
 ## Requirements
 
 ### Requirement: Preferences window
-LeafMD SHALL have a Preferences window, opened with Preferences in the main menu or Ctrl+, (comma). It SHALL hold three groups. First, Appearance, with one Style row offering Follow System, Light and Dark side by side, the current one selected. Then Raw Text and Formatted View, each with one Font row whose button shows the font's name and size and opens GNOME's font picker. Preferences SHALL hold nothing else.
+LeafMD SHALL have a Preferences window, opened with Preferences in the main menu or Ctrl+, (comma), holding only two groups. Appearance: a Style row (Follow System, Light, Dark) and a Margins row (None, Narrow, Normal, Wide), each with its choices side by side and the current one selected. Fonts: a Raw Text row and a Formatted View row, each with a button that shows the font's name and size and opens GNOME's font picker.
 
 #### Scenario: Opening Preferences
 - **WHEN** notes.md is open and the user presses Ctrl+,
-- **THEN** the Preferences window opens over the document, with an Appearance group showing the Style row, then a Raw Text group and a Formatted View group, each showing one Font row
+- **THEN** the Preferences window opens over the document, with an Appearance group showing the Style row and the Margins row, then a Fonts group showing the Raw Text row and the Formatted View row
 
 #### Scenario: From the main menu with no document open
 - **WHEN** a window shows the "No Document Open" page and the user chooses Preferences in the main menu
@@ -52,7 +52,7 @@ LeafMD SHALL remember both fonts after it is closed and started again.
 - **THEN** the raw text shows in Fira Code 12, and Preferences shows "Fira Code 12"
 
 ### Requirement: Resetting a font
-Each Font row SHALL have a Reset button, shown only while that font differs from its starting font. Reset SHALL put it back to the starting font, including following GNOME's monospace font again for the raw text.
+Each row in the Fonts group SHALL have a Reset button, shown only while that font differs from its starting font. Reset SHALL put it back to the starting font, including following GNOME's monospace font again for the raw text.
 
 #### Scenario: Resetting the raw text
 - **WHEN** the Raw Text font is "Fira Code 12" and the user clicks its Reset button
