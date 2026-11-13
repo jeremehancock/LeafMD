@@ -504,6 +504,54 @@ screen_picture() { # <file>
     sleep 1.5
 }
 
+# How wide the text is in a picture from screen_picture: the distance in
+# pixels from the leftmost to the rightmost dark pixel between rows <top> and
+# <bottom> (light style: dark text on a white page). Reads the PNG with
+# Python's own zlib, so it needs nothing installed.
+text_width_in_picture() { # <file> <top> <bottom>
+    python3 -I - "$1" "$2" "$3" << 'EOF'
+import struct, sys, zlib
+
+path, top, bottom = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
+data = open(path, "rb").read()
+pos, idat = 8, b""
+while pos < len(data):
+    length, kind = struct.unpack(">I4s", data[pos:pos + 8])
+    body = data[pos + 8:pos + 8 + length]
+    if kind == b"IHDR":
+        width, height, depth, colour = struct.unpack(">IIBB", body[:10])
+    elif kind == b"IDAT":
+        idat += body
+    pos += 12 + length
+size = {2: 3, 6: 4}[colour]  # RGB or RGBA, 8 bits each
+stride = width * size
+raw = zlib.decompress(idat)
+rows, previous = [], bytearray(stride)
+for y in range(height):
+    start = y * (stride + 1)
+    kind, line = raw[start], bytearray(raw[start + 1:start + 1 + stride])
+    for i in range(stride):  # undo PNG's per-row filters
+        left = line[i - size] if i >= size else 0
+        up = previous[i]
+        corner = previous[i - size] if i >= size else 0
+        if kind == 1:
+            line[i] = (line[i] + left) & 255
+        elif kind == 2:
+            line[i] = (line[i] + up) & 255
+        elif kind == 3:
+            line[i] = (line[i] + (left + up) // 2) & 255
+        elif kind == 4:
+            p = left + up - corner
+            pa, pb, pc = abs(p - left), abs(p - up), abs(p - corner)
+            line[i] = (line[i] + (left if pa <= pb and pa <= pc else up if pb <= pc else corner)) & 255
+    rows.append(line)
+    previous = line
+xs = [x for y in range(top, bottom) for x in range(width - 20)
+      if sum(rows[y][x * size:x * size + 3]) < 3 * 110]
+print(max(xs) - min(xs) if xs else 0)
+EOF
+}
+
 # Closes every LeafMD window and waits for LeafMD to leave the message bus, so
 # the next scenario starts a fresh copy with its own home. A window that won't
 # close (an unsaved changes question) is ended by its exact process ID, which

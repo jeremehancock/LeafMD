@@ -47,6 +47,10 @@ LeafMD SHALL let the user switch views with the rounded view switcher in the hea
 - **WHEN** no document is open
 - **THEN** the view switcher is greyed out
 
+#### Scenario: Switching without a jump
+- **WHEN** a document has been in Raw view for 30 seconds after being in Formatted view, and the user presses Ctrl+3
+- **THEN** the formatted half appears where it belongs, fading in once it has been drawn, and never shows the page at its old size or position first
+
 #### Scenario: Switching in a narrow window
 - **WHEN** the window is 400 pixels wide and the user clicks Raw on the switcher in the bottom bar
 - **THEN** Raw view is shown and the switcher's Raw button becomes the active one

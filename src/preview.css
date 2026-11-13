@@ -57,8 +57,8 @@ body {
 }
 ::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); }
 /* The column's width comes from Margins in Preferences: LeafMD sets
-   --leafmd-column (none for None, 72em Narrow, 52em Normal, 44em Wide).
-   52em is Normal, the starting choice. */
+   --leafmd-column to the raw text's line width in pixels (or none for None),
+   so both halves of Split view match. 52em is only a stand-in until then. */
 #content { max-width: var(--leafmd-column, 52em); margin: 0 auto; overflow-wrap: break-word; }
 #content > :first-child { margin-top: 0; }
 /* Headings like the titles in GNOME's own apps: heavy and a little tight,

@@ -101,6 +101,13 @@ const SCRIPT_WORLD: &str = "leafmd";
 /// How long to wait after the last keystroke before updating the formatted view.
 const RENDER_DELAY: Duration = Duration::from_millis(150);
 
+/// How long the formatted view takes to fade in after switching views.
+const FADE_IN_MS: u32 = 150;
+
+/// The longest the formatted view stays hidden after switching views while
+/// waiting for it to draw itself, in case it never says it has.
+const FADE_IN_TIMEOUT: Duration = Duration::from_millis(500);
+
 /// After LeafMD scrolls one side to match the other, scroll events from that
 /// side are ignored for this long, so the two sides don't keep nudging each other.
 const SYNC_QUIET: Duration = Duration::from_millis(250);
@@ -165,6 +172,15 @@ pub struct Document {
     /// True while LeafMD itself is loading the preview page, so that load is allowed through.
     preview_loading: Cell<bool>,
     render_scheduled: Cell<bool>,
+    /// True when the text has changed since the formatted view last showed it
+    /// (it isn't updated while hidden), so showing it again must update it
+    preview_outdated: Cell<bool>,
+    /// Fades the formatted view in after switching views (see apply_view)
+    fade_in: adw::TimedAnimation,
+    /// True while the formatted view is hidden, waiting to draw itself
+    /// before fading in. Each view switch gets a new one, shared with that
+    /// switch's timeout, so an older switch's timeout can't show it early.
+    fade_waiting: RefCell<Rc<Cell<bool>>>,
     /// True while an input method (for typing Chinese, Japanese and so on) is
     /// part-way through composing text in the raw text. Enter then belongs
     /// to the input method, so lists leave it alone.
@@ -302,6 +318,14 @@ impl Document {
             .shrink_end_child(false)
             .build();
 
+        let fade_in = adw::TimedAnimation::new(
+            &webview,
+            0.0,
+            1.0,
+            FADE_IN_MS,
+            adw::PropertyAnimationTarget::new(&webview, "opacity"),
+        );
+
         let doc = Rc::new(Self {
             window: RefCell::new(Weak::new()),
             paned,
@@ -320,6 +344,9 @@ impl Document {
             preview_ready: Cell::new(false),
             preview_loading: Cell::new(false),
             render_scheduled: Cell::new(false),
+            preview_outdated: Cell::new(true),
+            fade_in,
+            fade_waiting: RefCell::new(Rc::new(Cell::new(false))),
             composing: Cell::new(false),
             ignore_editor_scroll_until: Cell::new(Instant::now()),
             ignore_preview_scroll_until: Cell::new(Instant::now()),
@@ -415,6 +442,7 @@ impl Document {
         let weak = Rc::downgrade(self);
         self.buffer.connect_changed(move |_| {
             if let Some(doc) = weak.upgrade() {
+                doc.preview_outdated.set(true);
                 doc.schedule_render();
             }
         });
@@ -570,12 +598,23 @@ impl Document {
 
     /// Shows the raw text, the formatted view, or both.
     pub fn apply_view(&self, mode: ViewMode) {
-        self.view_mode.set(mode);
+        let previous = self.view_mode.replace(mode);
         let (show_source, show_preview) = match mode {
             ViewMode::Preview => (false, true),
             ViewMode::Source => (true, false),
             ViewMode::Split => (true, true),
         };
+        // The formatted view is about to appear, or to change size (between
+        // Formatted and Split). Until it has drawn itself at its new size,
+        // the window would show its last picture, from when it last showed,
+        // which may be the wrong size and out of date: the text appears in
+        // the wrong place for a moment, then jumps. That takes longer the
+        // longer it was hidden, as WebKit slows hidden pages down. So it's
+        // kept invisible (but still laid out) until it says it has drawn
+        // itself, then fades in.
+        if show_preview && mode != previous && self.preview_ready.get() {
+            self.hide_until_painted();
+        }
         self.source_scroll.set_visible(show_source);
         self.webview.set_visible(show_preview);
         // The raw text sits in a centred column as wide as Margins in
@@ -586,11 +625,46 @@ impl Document {
         if mode == ViewMode::Split {
             self.split_down_the_middle();
         }
-        if show_preview {
-            // The preview isn't updated while hidden, so catch it up now
+        if show_preview && self.preview_outdated.get() {
+            // The preview isn't updated while hidden, so catch it up now.
+            // Only when the text changed: putting the same page back in
+            // makes it lay everything out and load its pictures again.
             self.render_now();
         }
         self.tell_preview_view_mode();
+        if self.fade_waiting.borrow().get() {
+            // Scripts run in order, so this comes after any update above
+            self.run_js("window.leafmd && window.leafmd.whenPainted();");
+        }
+    }
+
+    /// Makes the formatted view invisible until it says it has drawn itself
+    /// (a "painted" message, see preview.js), or FADE_IN_TIMEOUT has passed.
+    fn hide_until_painted(&self) {
+        self.fade_in.reset();
+        let waiting = Rc::new(Cell::new(true));
+        self.fade_waiting.replace(waiting.clone()).set(false);
+        let fade_in = self.fade_in.clone();
+        glib::timeout_add_local_once(FADE_IN_TIMEOUT, move || {
+            // Still waiting: show it anyway rather than leave it blank. A
+            // "painted" message arriving after this is then ignored.
+            if waiting.replace(false) {
+                fade_in.play();
+            }
+        });
+    }
+
+    /// The formatted view has drawn itself: fades it in. Waits for the
+    /// window's next frame first, so that frame already has the new picture.
+    fn fade_in_once_drawn(&self) {
+        if !self.fade_waiting.borrow().replace(false) {
+            return;
+        }
+        let fade_in = self.fade_in.clone();
+        self.webview.add_tick_callback(move |_, _| {
+            fade_in.play();
+            glib::ControlFlow::Break
+        });
     }
 
     /// Uses the window's zoom: the formatted view's text gets bigger or
@@ -639,12 +713,18 @@ impl Document {
     /// measured again, and the formatted view is told its column's width
     /// (preview.css reads it as --leafmd-column). Changing that width
     /// re-flows the page in place, so it keeps its scroll position.
+    ///
+    /// Both sides get the same width of text, in pixels. Each side used to
+    /// measure its own column in its own font, and the two came out up to 80
+    /// pixels apart, so in Split view a half could be wide enough for one
+    /// side's column but not the other's: choosing Narrow then narrowed the
+    /// formatted text while the raw text didn't move.
     pub fn apply_margins(&self) {
         self.set_raw_column();
         if self.preview_ready.get() {
+            let width = self.text_width().map_or_else(|| "none".to_string(), |px| format!("{px}px"));
             self.run_js(&format!(
-                "document.documentElement.style.setProperty('--leafmd-column', '{}');",
-                state::current_margins().formatted_column()
+                "document.documentElement.style.setProperty('--leafmd-column', '{width}');"
             ));
         }
     }
@@ -663,16 +743,29 @@ impl Document {
     /// there's no limit and the text fills the window. The font is set on the measurement directly,
     /// because the editor's own font only changes once GTK next redraws it.
     fn column_width(&self) -> i32 {
-        let Some(characters) = state::current_margins().raw_characters() else {
+        let Some(text) = self.text_width() else {
             return UNCLAMPED;
         };
+        let margins = self.source_view.left_margin() + self.source_view.right_margin();
+        let numbers = if self.source_view.shows_line_numbers() { self.ten_characters() / 2 + 16 } else { 0 };
+        text + margins + numbers
+    }
+
+    /// How wide a line of text can get, in pixels: the number of characters
+    /// Margins in Preferences allows, in the Raw Text font at this document's
+    /// zoom. None with no limit. The raw text and the formatted view both
+    /// use it, so their text is the same width.
+    fn text_width(&self) -> Option<i32> {
+        let characters = state::current_margins().raw_characters()?;
+        Some(self.ten_characters() * characters / 10)
+    }
+
+    /// How wide ten characters are in the Raw Text font at this document's zoom.
+    fn ten_characters(&self) -> i32 {
         let layout = self.source_view.create_pango_layout(Some("0000000000"));
         let font = text_size::font_at(&text_size::current_font(FontFor::Raw), self.zoom.get());
         layout.set_font_description(Some(&font));
-        let ten_chars = layout.pixel_size().0.max(70);
-        let margins = self.source_view.left_margin() + self.source_view.right_margin();
-        let numbers = if self.source_view.shows_line_numbers() { ten_chars / 2 + 16 } else { 0 };
-        ten_chars * characters / 10 + margins + numbers
+        layout.pixel_size().0.max(70)
     }
 
     /// Turns spell checking on or off for this document's raw text.
@@ -1116,8 +1209,10 @@ impl Document {
     /// Only the page's contents change, so the scroll position is kept.
     pub fn render_now(&self) {
         if !self.preview_ready.get() || !self.webview.is_visible() {
+            self.preview_outdated.set(true);
             return;
         }
+        self.preview_outdated.set(false);
         let html = render::markdown_to_safe_html(&self.text());
         let html_as_js_string = serde_json::to_string(&html).unwrap_or_default();
         // The new content replaces any find highlights, so they're redrawn after
@@ -1188,6 +1283,8 @@ impl Document {
                 }
                 self.tell_window_selection_changed();
             }
+            // The formatted view has drawn itself after switching views
+            Some("painted") => self.fade_in_once_drawn(),
             // The result of searching the formatted view
             Some("find") if self.searching_preview() => {
                 if let Some(win) = self.window()

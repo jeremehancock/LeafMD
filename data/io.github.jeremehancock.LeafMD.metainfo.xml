@@ -103,6 +103,15 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.17.1" date="2026-11-13">
+      <description>
+        <p>Smoother switching between views, and margins that match.</p>
+        <ul>
+          <li>Switching between Formatted, Raw and Split view no longer shows the formatted text in the wrong place for a moment before it jumps into position. It now fades in once it's ready</li>
+          <li>The raw text and the formatted view now use the same width for each Margins choice, so in Split view both sides change together</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.17.0" date="2026-11-12">
       <description>
         <p>Choose how much space sits beside your text.</p>
