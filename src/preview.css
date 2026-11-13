@@ -56,7 +56,10 @@ body {
   font-style: var(--leafmd-style, normal);
 }
 ::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); }
-#content { max-width: 44em; margin: 0 auto; overflow-wrap: break-word; }
+/* The column's width comes from Margins in Preferences: LeafMD sets
+   --leafmd-column (none for None, 72em Narrow, 52em Normal, 44em Wide).
+   52em is Normal, the starting choice. */
+#content { max-width: var(--leafmd-column, 52em); margin: 0 auto; overflow-wrap: break-word; }
 #content > :first-child { margin-top: 0; }
 /* Headings like the titles in GNOME's own apps: heavy and a little tight,
    with room above each section instead of a rule under it */

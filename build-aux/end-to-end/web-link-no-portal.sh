@@ -4,7 +4,8 @@
 # can only fail. LeafMD must stay open and say it couldn't open the link,
 # rather than crash as it once did.
 web-link-no-portal() {
-    sample notes.md "[Example](https://example.com)"
+    # Long link text, so the click lands on it wherever the column starts
+    sample notes.md "[The example website, for trying links](https://example.com)"
     open_leafmd notes.md
     in_shell "$focused.move_resize_frame(true, 0, 40, 1000, 600); 0" > /dev/null
     sleep 1

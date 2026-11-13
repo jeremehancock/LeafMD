@@ -25,7 +25,7 @@ use crate::image_link;
 use crate::render;
 use crate::raw_view::RawView;
 use crate::spelling;
-use crate::state::{FontFor, ViewMode};
+use crate::state::{self, FontFor, ViewMode};
 use crate::text_size;
 use crate::typing;
 use crate::word_count;
@@ -256,7 +256,7 @@ impl Document {
         source_view.set_highlight_current_line(true);
 
         // Keeps the raw text to a comfortable width in the middle of a wide
-        // window when it's the only thing showing (see apply_view). The
+        // window, on its own or in the split (see apply_view). The
         // scroll bar stays at the window's edge. The "view" style gives the
         // space either side the same background as the text.
         let source_clamp = adw::ClampScrollable::builder()
@@ -578,11 +578,10 @@ impl Document {
         };
         self.source_scroll.set_visible(show_source);
         self.webview.set_visible(show_preview);
-        // On its own, the raw text sits in a centred column about as wide as
-        // the formatted view's. In the split each half is narrow enough already.
-        let width = if mode == ViewMode::Source { self.column_width() } else { UNCLAMPED };
-        self.source_clamp.set_maximum_size(width);
-        self.source_clamp.set_tightening_threshold(width);
+        // The raw text sits in a centred column as wide as Margins in
+        // Preferences allows, on its own and in the split alike (dragging the
+        // divider can make the raw half wide)
+        self.set_raw_column();
 
         if mode == ViewMode::Split {
             self.split_down_the_middle();
@@ -632,25 +631,48 @@ impl Document {
                 text_size::css_style(&font)
             ));
         }
-        if self.view_mode.get() == ViewMode::Source {
-            let width = self.column_width();
-            self.source_clamp.set_maximum_size(width);
-            self.source_clamp.set_tightening_threshold(width);
+        // The columns are measured in the fonts, so they change with them
+        self.apply_margins();
+    }
+
+    /// Shows the margins chosen in Preferences: the raw text's column is
+    /// measured again, and the formatted view is told its column's width
+    /// (preview.css reads it as --leafmd-column). Changing that width
+    /// re-flows the page in place, so it keeps its scroll position.
+    pub fn apply_margins(&self) {
+        self.set_raw_column();
+        if self.preview_ready.get() {
+            self.run_js(&format!(
+                "document.documentElement.style.setProperty('--leafmd-column', '{}');",
+                state::current_margins().formatted_column()
+            ));
         }
     }
 
-    /// How wide the raw text's column is in the raw-only view: room for about
-    /// 80 characters in the editor's font at this document's zoom, plus its
-    /// margins and line numbers. The font is set on the measurement directly,
+    /// Stops the raw text getting wider than its column. When there's less
+    /// room than that, the clamp lets the text fill what there is.
+    fn set_raw_column(&self) {
+        let width = self.column_width();
+        self.source_clamp.set_maximum_size(width);
+        self.source_clamp.set_tightening_threshold(width);
+    }
+
+    /// How wide the raw text's column is: room for the number of characters
+    /// Margins in Preferences allows (80, 100 or 140) in the editor's font at
+    /// this document's zoom, plus its side gaps and line numbers. With None,
+    /// there's no limit and the text fills the window. The font is set on the measurement directly,
     /// because the editor's own font only changes once GTK next redraws it.
     fn column_width(&self) -> i32 {
+        let Some(characters) = state::current_margins().raw_characters() else {
+            return UNCLAMPED;
+        };
         let layout = self.source_view.create_pango_layout(Some("0000000000"));
         let font = text_size::font_at(&text_size::current_font(FontFor::Raw), self.zoom.get());
         layout.set_font_description(Some(&font));
         let ten_chars = layout.pixel_size().0.max(70);
         let margins = self.source_view.left_margin() + self.source_view.right_margin();
         let numbers = if self.source_view.shows_line_numbers() { ten_chars / 2 + 16 } else { 0 };
-        ten_chars * 8 + margins + numbers
+        ten_chars * characters / 10 + margins + numbers
     }
 
     /// Turns spell checking on or off for this document's raw text.
@@ -658,13 +680,11 @@ impl Document {
         self.spelling.set_enabled(on);
     }
 
-    /// Shows or hides the raw text's line numbers. The raw-only column widens
-    /// to make room for them.
+    /// Shows or hides the raw text's line numbers. The column widens to make
+    /// room for them.
     pub fn show_line_numbers(&self, show: bool) {
         self.source_view.set_show_line_numbers(show);
-        if self.view_mode.get() == ViewMode::Source {
-            self.apply_view(ViewMode::Source);
-        }
+        self.set_raw_column();
     }
 
     /// Puts the divider between the raw text and the formatted view halfway
