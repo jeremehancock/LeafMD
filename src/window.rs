@@ -2980,6 +2980,13 @@ impl Window {
         }
     }
 
+    /// The margins changed in Preferences: every document here shows them.
+    pub fn update_margins(&self) {
+        for doc in self.documents() {
+            doc.apply_margins();
+        }
+    }
+
     pub fn update_line_numbers(&self) {
         let show = self.wants_line_numbers();
         for doc in self.documents() {
@@ -3097,6 +3104,7 @@ impl Window {
                 "Fonts and Zoom",
                 &[
                     ("Fonts", "Choose Preferences from the main menu, or press Ctrl+comma, to pick the font and size for the raw text and for the formatted view. Changes show straight away in every window, and LeafMD remembers them."),
+                    ("Margins", "Margins in Preferences sets how wide a line of text can get on a wide window: Wide fits about 80 characters, Normal about 100 and Narrow about 140, with the rest of the window left as space either side, and None lets the text fill the window. It covers the raw text and the formatted view in every view, including both halves of Split, and exported web pages. It also sets the page margins of exported PDFs (5, 10, 15 or 20 mm). Printing uses the margins from the Print dialog instead; for a printout with your margins, export a PDF and print that."),
                     ("Starting fonts", "The raw text starts in the monospace font set in GNOME Settings, and keeps following it until you choose another. The formatted view starts in Adwaita Sans. The Reset button beside a font you've changed puts it back."),
                     ("Zoom", "Ctrl+plus makes the text bigger and Ctrl+minus smaller, in both views, and Ctrl+0 goes back to normal. Holding Ctrl and turning the mouse wheel does the same. The row at the top of the main menu shows how far you've zoomed, and clicking the percentage goes back to 100%."),
                     ("Which tabs", "Zoom covers every tab in that window, including tabs you open or move there later. Other windows keep their own zoom. Each time LeafMD starts, zoom is back to 100%; for a lasting change, use Preferences."),
@@ -3123,9 +3131,9 @@ impl Window {
                 "Printing and Exporting",
                 &[
                     ("Print", "Press Ctrl+P, or choose Print… from the main menu, to print the formatted document. It prints formatted whichever view is showing, even Raw."),
-                    ("Export as PDF", "Choose Export as PDF… from the main menu to save the formatted document as a PDF, next to the file unless you choose another place. It looks the same as printing it would."),
+                    ("Export as PDF", "Choose Export as PDF… from the main menu to save the formatted document as a PDF, next to the file unless you choose another place. It looks the same as printing it would, apart from its page margins, which come from Margins in Preferences."),
                     ("Export as HTML", "Choose Export as HTML… to save the formatted document as one web page that opens in any browser. Pictures from your computer are packed inside it, so it still shows them after being emailed or moved, while online pictures stay links. The page is light or dark to match the reader's own setting."),
-                    ("How it looks", "Printed pages and PDFs are always dark text on white, and use the font and size from Preferences, whatever the zoom. What's printed or exported is the text as it is now, including changes you haven't saved."),
+                    ("How it looks", "Printed pages and PDFs are always dark text on white, and use the font and size from Preferences, whatever the zoom. PDFs also use the margins from Preferences. What's printed or exported is the text as it is now, including changes you haven't saved."),
                 ],
             ),
             (

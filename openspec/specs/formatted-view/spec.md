@@ -46,11 +46,23 @@ LeafMD SHALL show images stored next to the file (relative paths like `images/ph
 - **THEN** the formatted view shows `~/notes/img/cat.png`
 
 ### Requirement: Readable page styles
-The formatted view SHALL show the document in a centred column at most 44em wide (about 85 characters of text), in GNOME's own fonts (Adwaita Sans, with code in Adwaita Mono, the same font as the raw text), with light and dark colours from GNOME's palette matching the system style.
+The formatted view SHALL show the document in a centred column set by Margins (about 140 characters for Narrow, 100 for Normal, 85 for Wide, the whole width for None), measured in its font at the current zoom and the same in Formatted view and Split's formatted half. It SHALL use GNOME's fonts (Adwaita Sans, with code in Adwaita Mono, the raw text's font) and light and dark colours from GNOME's palette matching the system style.
 
 #### Scenario: Wide window
-- **WHEN** the window is very wide
+- **WHEN** Margins is Normal and the window is very wide
 - **THEN** the text stays in a centred column instead of stretching across the window
+
+#### Scenario: No margins
+- **WHEN** Margins is None and a 1920 pixel wide window shows a long paragraph in Formatted view
+- **THEN** the paragraph runs across the whole window, with only the page's usual padding at each side
+
+#### Scenario: Wide margins
+- **WHEN** Margins is Wide and a 1920 pixel wide window shows a long paragraph in Formatted view
+- **THEN** its lines hold about 85 characters, the same as before the Margins setting existed
+
+#### Scenario: Dragging the Split divider
+- **WHEN** Margins is Normal, a 1920 pixel wide window is in Split view, and the user drags the divider far to the left so the formatted half is about 1500 pixels wide
+- **THEN** the formatted text stays in a centred column of about 100 characters within its half
 
 #### Scenario: Code matches the raw text
 - **WHEN** the document contains `` `PROG` `` and the user looks at Split view

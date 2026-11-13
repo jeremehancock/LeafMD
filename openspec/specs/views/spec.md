@@ -167,23 +167,31 @@ The raw text SHALL leave clear room around the text (about 18 pixels at the side
 - **THEN** the "1" is a pale grey, there is a clear gap between it and the "#", and the line number of the line with the cursor is a little darker than the others
 
 ### Requirement: A readable column in Raw view
-When only the raw text is showing, LeafMD SHALL keep it in a centred column about 80 characters wide in a wider window, with the scroll bar at the window's edge. The column SHALL be measured in the current Raw Text font at the current zoom, so it widens when the text gets bigger. With line numbers on, the column SHALL widen to make room for them. In Split view the raw text SHALL fill its half.
+LeafMD SHALL keep the raw text in a centred column set by Margins (about 140 characters for Narrow, 100 for Normal, 80 for Wide, the whole width for None), measured in the Raw Text font at the current zoom and widened for line numbers, with the scroll bar at the edge. Split view's raw half SHALL use the same column. When the window or half is narrower than the column, the raw text SHALL fill it.
 
 #### Scenario: A wide window
-- **WHEN** a 1400 pixel wide window shows a document in Raw view
-- **THEN** the text sits in a centred column, the space either side has the same background as the text, and long paragraphs wrap at the column's edge
+- **WHEN** Margins is Normal and a 1400 pixel wide window shows a document in Raw view
+- **THEN** the text sits in a centred column, the space either side has the same background as the text, and long paragraphs wrap after about 100 characters
+
+#### Scenario: No margins
+- **WHEN** Margins is None and a 1920 pixel wide window shows a long paragraph in Raw view
+- **THEN** the paragraph runs across the whole window, with only the small gap at each side
 
 #### Scenario: A narrow window
 - **WHEN** the window is narrower than the column
 - **THEN** the raw text fills the window, as before
 
 #### Scenario: Split view
-- **WHEN** the same document is switched to Split view
-- **THEN** the raw text fills the left half
+- **WHEN** Margins is Normal and a 1400 pixel wide window shows the same document in Split view, divided down the middle
+- **THEN** the raw text fills the left half, because the half is narrower than the column
+
+#### Scenario: Dragging the Split divider
+- **WHEN** Margins is Wide, a 1920 pixel wide window is in Split view, and the user drags the divider far to the right so the raw half is about 1500 pixels wide
+- **THEN** the raw text stays in a centred column of about 80 characters within its half, with matching space either side, instead of stretching across it
 
 #### Scenario: Zooming in Raw view
 - **WHEN** a 1400 pixel wide window shows a document in Raw view and the user presses Ctrl+plus twice
-- **THEN** the column grows wider along with the text, so a line still holds about 80 characters before wrapping
+- **THEN** the column grows wider along with the text, so a line holds the same number of characters before wrapping
 
 ### Requirement: The style is remembered
 LeafMD SHALL remember the style chosen in Preferences and start in it next time. Until the user picks one, the style SHALL be Follow System.
@@ -196,3 +204,26 @@ LeafMD SHALL remember the style chosen in Preferences and start in it next time.
 #### Scenario: Dark after a restart
 - **WHEN** the user picks Dark, quits LeafMD with Ctrl+Q and opens notes.md again
 - **THEN** LeafMD opens in dark style and the Style row in Preferences shows Dark
+
+### Requirement: Choosing the margins
+LeafMD SHALL let the user choose the margins in Preferences: None, Narrow, Normal or Wide. Until the user picks one, the margins SHALL be Normal. A choice SHALL show straight away in every view of every open tab in every window, with no Apply button, and SHALL change how wide a line can get, not the text's size.
+
+#### Scenario: First use
+- **GIVEN** the user has never changed the margins
+- **WHEN** they open Preferences
+- **THEN** the Margins row shows Normal
+
+#### Scenario: Choosing Wide
+- **WHEN** two windows are open, one in Raw view and one in Formatted view, on a 1400 pixel wide screen, and the user clicks Wide next to Margins in Preferences
+- **THEN** the text in both windows narrows at once to about 80 to 85 characters per line, with wider space either side, and the text is the same size as before
+
+#### Scenario: Choosing Narrow
+- **WHEN** a 1920 pixel wide window shows a long paragraph in Formatted view and the user clicks Narrow next to Margins
+- **THEN** the paragraph's lines grow to about 140 characters and it takes fewer lines
+
+### Requirement: The margins are remembered
+LeafMD SHALL remember the margins chosen in Preferences and use them next time it starts.
+
+#### Scenario: Restarting
+- **WHEN** the user chooses Wide next to Margins, presses Ctrl+Q and starts LeafMD again
+- **THEN** the text is in the Wide column, and Preferences shows Wide

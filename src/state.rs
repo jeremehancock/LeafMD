@@ -404,6 +404,127 @@ pub fn save_style(style: &str) {
     update_state_file(|file| file.set_string(PREFERENCES_GROUP, "style", style));
 }
 
+/// Margins in Preferences: how wide a line of text can get on screen, and
+/// how big the page margins are in a PDF. All the numbers live here, so the
+/// raw text, the formatted view and exports always agree. Wide is how LeafMD
+/// looked before this setting existed.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Margins {
+    /// "None" in Preferences: the text fills the window. Named differently
+    /// here so it can't be mistaken for Rust's own None.
+    FullWidth,
+    Narrow,
+    Normal,
+    Wide,
+}
+
+impl Margins {
+    /// Every choice, in the order Preferences shows them.
+    pub const ALL: [Margins; 4] = [Margins::FullWidth, Margins::Narrow, Margins::Normal, Margins::Wide];
+
+    /// The word saved in the settings file and used as the "margins" action's state.
+    pub fn name(self) -> &'static str {
+        match self {
+            Margins::FullWidth => "none",
+            Margins::Narrow => "narrow",
+            Margins::Normal => "normal",
+            Margins::Wide => "wide",
+        }
+    }
+
+    /// The label on its button in Preferences.
+    pub fn label(self) -> &'static str {
+        match self {
+            Margins::FullWidth => "None",
+            Margins::Narrow => "Narrow",
+            Margins::Normal => "Normal",
+            Margins::Wide => "Wide",
+        }
+    }
+
+    /// The choice with this saved name, if it's one LeafMD knows.
+    pub fn from_name(name: &str) -> Option<Margins> {
+        Margins::ALL.into_iter().find(|margins| margins.name() == name.trim())
+    }
+
+    /// How many characters of raw text fit on a line before it wraps, or
+    /// None when the text fills the window.
+    pub fn raw_characters(self) -> Option<i32> {
+        match self {
+            Margins::FullWidth => None,
+            Margins::Narrow => Some(140),
+            Margins::Normal => Some(100),
+            Margins::Wide => Some(80),
+        }
+    }
+
+    /// The CSS width of the formatted view's column: in em (the width of an
+    /// "M" in its font), or "none" when the text fills the window. Adwaita
+    /// Sans fits about 1.93 characters in an em, so these hold about as many
+    /// characters as the raw text's line.
+    pub fn formatted_column(self) -> &'static str {
+        match self {
+            Margins::FullWidth => "none",
+            Margins::Narrow => "72em",
+            Margins::Normal => "52em",
+            Margins::Wide => "44em",
+        }
+    }
+
+    /// The margin on every side of a PDF's pages, in millimetres.
+    pub fn paper_mm(self) -> f64 {
+        match self {
+            Margins::FullWidth => 5.0,
+            Margins::Narrow => 10.0,
+            Margins::Normal => 15.0,
+            Margins::Wide => 20.0,
+        }
+    }
+}
+
+/// The margins chosen in Preferences, or Normal if none were (or the saved
+/// value isn't one LeafMD knows).
+pub fn load_margins() -> Margins {
+    let file = glib::KeyFile::new();
+    if file
+        .load_from_file(state_path(), glib::KeyFileFlags::NONE)
+        .is_err()
+    {
+        return Margins::Normal;
+    }
+    margins_in(&file)
+}
+
+fn margins_in(file: &glib::KeyFile) -> Margins {
+    file.string(PREFERENCES_GROUP, "margins")
+        .ok()
+        .and_then(|saved| Margins::from_name(&saved))
+        .unwrap_or(Margins::Normal)
+}
+
+/// Remembers the margins chosen in Preferences.
+pub fn save_margins(margins: Margins) {
+    update_state_file(|file| file.set_string(PREFERENCES_GROUP, "margins", margins.name()));
+    CURRENT_MARGINS.with(|current| current.set(Some(margins)));
+}
+
+thread_local! {
+    /// The margins in use, read from the settings file the first time they're
+    /// needed, so measuring a column doesn't read the file each time.
+    static CURRENT_MARGINS: std::cell::Cell<Option<Margins>> = const { std::cell::Cell::new(None) };
+}
+
+/// The margins in use now: the last ones chosen, or the saved ones.
+pub fn current_margins() -> Margins {
+    CURRENT_MARGINS.with(|current| {
+        current.get().unwrap_or_else(|| {
+            let margins = load_margins();
+            current.set(Some(margins));
+            margins
+        })
+    })
+}
+
 /// Some files that belong in tabs, and which one is selected.
 #[derive(Debug, PartialEq)]
 pub struct TabList {
@@ -490,7 +611,7 @@ fn update_state_file(change: impl FnOnce(&glib::KeyFile)) {
 #[cfg(test)]
 mod tests {
     use super::{
-        FontFor, TabList, font_in, line_numbers_in, spell_check_in, spell_check_language_in, panel_open_in, panel_page_in, panel_width_in, set_font_in, style_in,
+        FontFor, Margins, TabList, margins_in, font_in, line_numbers_in, spell_check_in, spell_check_language_in, panel_open_in, panel_page_in, panel_width_in, set_font_in, style_in,
         tabs_to_reopen, tabs_to_save,
     };
     use gtk::glib;
@@ -579,6 +700,30 @@ mod tests {
         assert_eq!(style_in(&key_file("[preferences]\nstyle=light\n")), "light");
         assert_eq!(style_in(&key_file("[preferences]\nstyle=purple\n")), "system");
         assert_eq!(style_in(&key_file("[preferences]\nstyle=\n")), "system");
+    }
+
+    #[test]
+    fn the_margins_are_normal_unless_another_was_chosen() {
+        assert_eq!(margins_in(&key_file("[window]\nview=split\n")), Margins::Normal);
+        assert_eq!(margins_in(&key_file("[preferences]\nmargins=wide\n")), Margins::Wide);
+        assert_eq!(margins_in(&key_file("[preferences]\nmargins=narrow\n")), Margins::Narrow);
+        assert_eq!(margins_in(&key_file("[preferences]\nmargins=none\n")), Margins::FullWidth);
+        assert_eq!(margins_in(&key_file("[preferences]\nmargins=huge\n")), Margins::Normal);
+        assert_eq!(margins_in(&key_file("[preferences]\nmargins=\n")), Margins::Normal);
+    }
+
+    #[test]
+    fn wide_margins_are_how_leafmd_looked_before() {
+        // 80 characters of raw text, a 44em formatted column, 20mm on paper
+        assert_eq!(Margins::Wide.raw_characters(), Some(80));
+        assert_eq!(Margins::Wide.formatted_column(), "44em");
+        // None has no column at all
+        assert_eq!(Margins::FullWidth.raw_characters(), None);
+        assert_eq!(Margins::FullWidth.formatted_column(), "none");
+        assert_eq!(Margins::Wide.paper_mm(), 20.0);
+        for margins in Margins::ALL {
+            assert_eq!(Margins::from_name(margins.name()), Some(margins));
+        }
     }
 
     fn list(names: &[&str]) -> Vec<String> {

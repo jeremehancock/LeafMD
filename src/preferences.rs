@@ -1,8 +1,9 @@
 //! The Preferences window (Ctrl+,): the style (follow the desktop, light or
-//! dark), the raw text's font and the formatted view's font, and nothing else.
-//! Each choice shows everywhere at once and is remembered. The style is the
-//! app's "style" action (set up in main.rs); the fonts' work is in
-//! text_size.rs, and Reset puts a font back to the starting one.
+//! dark), the margins (none, narrow, normal or wide), the raw text's font and the
+//! formatted view's font, and nothing else. Each choice shows everywhere at
+//! once and is remembered. The style and margins are the app's "style" and
+//! "margins" actions (set up in main.rs); the fonts' work is in text_size.rs,
+//! and Reset puts a font back to the starting one.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -10,7 +11,7 @@ use std::rc::Rc;
 use adw::prelude::*;
 use gtk::glib;
 
-use crate::state::{self, FontFor};
+use crate::state::{self, FontFor, Margins};
 use crate::text_size;
 
 thread_local! {
@@ -28,46 +29,61 @@ pub fn show(parent: &impl IsA<gtk::Widget>) {
     let dialog = adw::PreferencesDialog::builder()
         .title("Preferences")
         .search_enabled(false)
-        // Three short rows: no need for the full height on a big screen
-        .content_height(460)
+        // Two groups of two short rows: no need for the full height on a big screen
+        .content_height(420)
         .build();
     let page = adw::PreferencesPage::new();
     page.add(&appearance_group());
-    page.add(&font_group("Raw Text", FontFor::Raw));
-    page.add(&font_group("Formatted View", FontFor::Formatted));
+    page.add(&fonts_group());
     dialog.add(&page);
     OPEN.with(|open| open.borrow().set(Some(&dialog)));
     dialog.present(Some(parent));
 }
 
 /// The Appearance group: a Style row with Follow System, Light and Dark side
-/// by side. Clicking one changes the app's "style" action, which does the rest.
+/// by side, and a Margins row with None, Narrow, Normal and Wide.
 fn appearance_group() -> adw::PreferencesGroup {
     let group = adw::PreferencesGroup::builder().title("Appearance").build();
-    let toggles = adw::ToggleGroup::builder().valign(gtk::Align::Center).build();
     // The names match the action's values in state::STYLES
-    for (name, label) in [("system", "Follow System"), ("light", "Light"), ("dark", "Dark")] {
-        toggles.add(adw::Toggle::builder().name(name).label(label).build());
+    group.add(&choice_row(
+        "Style",
+        "style",
+        &[("system", "Follow System"), ("light", "Light"), ("dark", "Dark")],
+        state::load_style(),
+    ));
+    let margins: Vec<_> = Margins::ALL.iter().map(|m| (m.name(), m.label())).collect();
+    group.add(&choice_row("Margins", "margins", &margins, state::current_margins().name()));
+    group
+}
+
+/// A row of choices side by side, tied to one of the app's actions with a
+/// word as its state (such as "style"). Clicking a choice changes the action,
+/// which does the rest; `saved` is shown if the action can't be asked.
+fn choice_row(title: &str, action: &'static str, choices: &[(&str, &str)], saved: &str) -> adw::ActionRow {
+    let toggles = adw::ToggleGroup::builder().valign(gtk::Align::Center).build();
+    for (name, label) in choices {
+        toggles.add(adw::Toggle::builder().name(*name).label(*label).build());
     }
     let app = gtk::gio::Application::default();
     let current = app
         .as_ref()
-        .and_then(|app| app.action_state("style"))
+        .and_then(|app| app.action_state(action))
         .and_then(|state| state.get::<String>())
-        .unwrap_or_else(|| state::load_style().to_string());
+        .unwrap_or_else(|| saved.to_string());
     toggles.set_active_name(Some(&current));
-    toggles.connect_active_name_notify(|toggles| {
+    toggles.connect_active_name_notify(move |toggles| {
         if let (Some(name), Some(app)) = (toggles.active_name(), gtk::gio::Application::default())
-            && app.action_state("style").and_then(|s| s.get::<String>()).as_deref() != Some(name.as_str())
+            && app.action_state(action).and_then(|s| s.get::<String>()).as_deref() != Some(name.as_str())
         {
-            app.change_action_state("style", &name.to_variant());
+            app.change_action_state(action, &name.to_variant());
         }
     });
-    // And the other way: if the style changes some other way while Preferences
-    // is open, the buttons follow. The link is undone when the row goes away.
+    // And the other way: if the choice changes some other way while
+    // Preferences is open, the buttons follow. The link is undone when the
+    // row goes away.
     if let Some(app) = app {
         let weak = toggles.downgrade();
-        let handler = app.connect_action_state_changed(Some("style"), move |_, _, state| {
+        let handler = app.connect_action_state_changed(Some(action), move |_, _, state| {
             if let (Some(toggles), Some(name)) = (weak.upgrade(), state.get::<String>()) {
                 toggles.set_active_name(Some(&name));
             }
@@ -80,16 +96,22 @@ fn appearance_group() -> adw::PreferencesGroup {
         });
     }
 
-    let row = adw::ActionRow::builder().title("Style").build();
+    let row = adw::ActionRow::builder().title(title).build();
     row.add_suffix(&toggles);
-    group.add(&row);
+    row
+}
+
+/// The Fonts group: a Raw Text row and a Formatted View row.
+fn fonts_group() -> adw::PreferencesGroup {
+    let group = adw::PreferencesGroup::builder().title("Fonts").build();
+    group.add(&font_row("Raw Text", FontFor::Raw));
+    group.add(&font_row("Formatted View", FontFor::Formatted));
     group
 }
 
-/// One group with a "Font" row: the font button, and Reset beside it while
-/// the user's own font is in use.
-fn font_group(title: &str, which: FontFor) -> adw::PreferencesGroup {
-    let group = adw::PreferencesGroup::builder().title(title).build();
+/// One font's row: the font button, and Reset beside it while the user's own
+/// font is in use.
+fn font_row(title: &str, which: FontFor) -> adw::ActionRow {
 
     let button = gtk::FontDialogButton::builder()
         .dialog(&gtk::FontDialog::builder().title("Choose a Font").build())
@@ -110,11 +132,10 @@ fn font_group(title: &str, which: FontFor) -> adw::PreferencesGroup {
         .visible(state::load_font(which).is_some())
         .build();
 
-    let row = adw::ActionRow::builder().title("Font").build();
+    let row = adw::ActionRow::builder().title(title).build();
     row.add_suffix(&reset);
     row.add_suffix(&button);
     row.set_activatable_widget(Some(&button));
-    group.add(&row);
 
     // True while LeafMD itself puts a font into the button (after Reset, or to
     // drop a style the user picked), so that doesn't count as a choice
@@ -147,5 +168,5 @@ fn font_group(title: &str, which: FontFor) -> adw::PreferencesGroup {
         font_button.grab_focus();
     });
 
-    group
+    row
 }

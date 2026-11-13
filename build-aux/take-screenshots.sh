@@ -113,7 +113,7 @@ take() { # <picture name> <LeafMD's name for the view> <light or dark> <click x>
 # formatting bar changes height, or the raw text's margins, line spacing or
 # column width change, they need changing too.
 take formatted preview light 25 650
-take raw source light 149 153
+take raw source light 61 153
 take split split light 19 153
 take split-dark split dark 19 153
 

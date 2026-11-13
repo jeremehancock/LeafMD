@@ -243,6 +243,30 @@ fn main() -> glib::ExitCode {
     });
     app.add_action(&style);
 
+    // Margins in Preferences: "none", "narrow", "normal" or "wide", for every window
+    // at once and remembered between runs. Each document re-measures its raw
+    // text column and tells its formatted view the new width.
+    let margins = gio::SimpleAction::new_stateful(
+        "margins",
+        Some(glib::VariantTy::STRING),
+        &state::current_margins().name().to_variant(),
+    );
+    let w = windows.clone();
+    margins.connect_change_state(move |action, value| {
+        let Some(chosen) = value
+            .and_then(|v| v.get::<String>())
+            .and_then(|name| state::Margins::from_name(&name))
+        else {
+            return;
+        };
+        action.set_state(&chosen.name().to_variant());
+        state::save_margins(chosen);
+        for win in w.borrow().iter() {
+            win.update_margins();
+        }
+    });
+    app.add_action(&margins);
+
     let w = windows.clone();
     app.connect_activate(move |app| {
         // Started from the app grid with no file: pick up where you left off.

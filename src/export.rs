@@ -19,7 +19,7 @@ use webkit6::prelude::*;
 use crate::document::{Document, portal_answers};
 use crate::headings;
 use crate::render;
-use crate::state::FontFor;
+use crate::state::{self, FontFor};
 use crate::text_size;
 
 /// The formatted view's styles, shared by the formatted view and exports.
@@ -65,6 +65,9 @@ pub struct Look {
     /// Link colours: the accent made readable on light and on dark
     pub link_light: String,
     pub link_dark: String,
+    /// The column's CSS width ("52em", or "none" for no limit), from Margins
+    /// in Preferences
+    pub column: &'static str,
 }
 
 impl Look {
@@ -80,6 +83,7 @@ impl Look {
             accent: accent.to_rgba().to_string(),
             link_light: accent.to_standalone_rgba(false).to_string(),
             link_dark: accent.to_standalone_rgba(true).to_string(),
+            column: state::current_margins().formatted_column(),
         }
     }
 
@@ -91,11 +95,14 @@ impl Look {
             .as_deref()
             .map(|family| format!("{}, ", text_size::css_family(family)))
             .unwrap_or_default();
+        // The column's width is only for screens: on paper the page margins
+        // decide the line length (see preview.css's print block)
         let mut css = format!(
             ":root {{ --accent: {}; --link: {}; }}\n\
              body {{ font-family: {family}\"Adwaita Sans\", Cantarell, system-ui, sans-serif; \
-             font-size: {}px; font-weight: {}; font-style: {}; }}\n",
-            self.accent, self.link_light, self.pixels, self.weight, self.style
+             font-size: {}px; font-weight: {}; font-style: {}; }}\n\
+             @media screen {{ #content {{ max-width: {}; }} }}\n",
+            self.accent, self.link_light, self.pixels, self.weight, self.style, self.column
         );
         if colours == Colours::FollowReader {
             // Tells the browser the page has a dark style, so it draws its own
@@ -260,6 +267,9 @@ pub fn print(doc: &Rc<Document>) {
             return;
         }
         load_hidden_page(source, |source, view| {
+            // No page setup of LeafMD's own: choosing a paper in the Print
+            // dialog would replace its margins anyway, so printing uses the
+            // dialog's margins (Margins in Preferences covers PDFs only)
             let operation = webkit6::PrintOperation::new(&view);
             let doc = source.doc.clone();
             operation.connect_failed(move |_, err| {
@@ -305,21 +315,10 @@ pub async fn export_pdf(doc: &Rc<Document>) {
         settings.set_printer("Print to File");
         settings.set(gtk::PRINT_SETTINGS_OUTPUT_FILE_FORMAT, Some("pdf"));
         settings.set(gtk::PRINT_SETTINGS_OUTPUT_URI, Some(&temporary_uri));
-        let page_setup = gtk::PageSetup::new();
-        // The usual paper for the computer's language and region (A4 or Letter)
-        page_setup.set_paper_size(&gtk::PaperSize::new(None));
-        for set in [
-            gtk::PageSetup::set_top_margin,
-            gtk::PageSetup::set_bottom_margin,
-            gtk::PageSetup::set_left_margin,
-            gtk::PageSetup::set_right_margin,
-        ] {
-            set(&page_setup, 20.0, gtk::Unit::Mm);
-        }
         let operation = webkit6::PrintOperation::builder()
             .web_view(&view)
             .print_settings(&settings)
-            .page_setup(&page_setup)
+            .page_setup(&page_setup())
             .build();
         let failed = Rc::new(Cell::new(false));
         let doc = source.doc.clone();
@@ -438,6 +437,24 @@ fn html_filter() -> gtk::FileFilter {
     filter
 }
 
+/// The page for PDFs: the usual paper for the computer's language and region
+/// (A4 or Letter), with the margin from Margins in Preferences on all four
+/// sides.
+fn page_setup() -> gtk::PageSetup {
+    let page_setup = gtk::PageSetup::new();
+    page_setup.set_paper_size(&gtk::PaperSize::new(None));
+    let margin = state::current_margins().paper_mm();
+    for set in [
+        gtk::PageSetup::set_top_margin,
+        gtk::PageSetup::set_bottom_margin,
+        gtk::PageSetup::set_left_margin,
+        gtk::PageSetup::set_right_margin,
+    ] {
+        set(&page_setup, margin, gtk::Unit::Mm);
+    }
+    page_setup
+}
+
 /// Loads the document, light and at the Preferences size, into a WebView of
 /// its own that's never shown, then hands it over once it has finished
 /// loading, pictures included. Scripts are off, as in the formatted view, and
@@ -501,6 +518,7 @@ mod tests {
             accent: "rgb(53,132,228)".into(),
             link_light: "rgb(4,97,190)".into(),
             link_dark: "rgb(129,208,255)".into(),
+            column: "44em",
         }
     }
 
@@ -570,6 +588,21 @@ mod tests {
             "font-family: \"Adwaita Sans\", \"Adwaita Sans\", Cantarell, system-ui, sans-serif"
         ));
         assert!(html.contains("font-size: 16px"));
+    }
+
+    #[test]
+    fn the_column_follows_the_margins_on_screen_only() {
+        let wide = page("Hi", "Hi", &look(), Colours::FollowReader, None);
+        assert!(wide.contains("@media screen { #content { max-width: 44em; } }"));
+        let narrow = Look { column: "72em", ..look() };
+        let narrow = page("Hi", "Hi", &narrow, Colours::FollowReader, None);
+        assert!(narrow.contains("max-width: 72em;"));
+        let none = Look { column: "none", ..look() };
+        let none = page("Hi", "Hi", &none, Colours::FollowReader, None);
+        assert!(none.contains("@media screen { #content { max-width: none; } }"));
+        // On paper the page margins decide: preview.css's print block still
+        // takes the limit off, and nothing later puts one back for print
+        assert!(narrow.contains("@media print {\n  body { padding: 0; }\n  #content { max-width: none; }"));
     }
 
     #[test]
