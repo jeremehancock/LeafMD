@@ -11,7 +11,7 @@ laptop, commit it, set the version and release notes, archive its OpenSpec
 change, push `dev`, open a pull request into `main`, and tidy up after the
 owner merges it.
 
-This exists so the steps after `/opsx:apply` (or after a small fix) don't have
+This exists so the steps after `/openspec-apply-change` (or after a small fix) don't have
 to be remembered. Run `/ship` at any point: it works out where things stand and
 does the next right thing. Run it again later and it picks up where it left off.
 
@@ -90,7 +90,7 @@ gh release list --limit 1 --json tagName --jq '.[0].tagName'
 | State | Do this |
 | --- | --- |
 | On `main` | Stop. Don't commit here. If there's no `dev` branch, create it from `main` (`git switch -c dev`); otherwise `git switch dev`, carrying any uncommitted work across. Then start again. |
-| An active OpenSpec change has unticked tasks, other than the owner's hand-check | Stop. Tell the owner to run `/opsx:apply` first. `/ship` doesn't write features. |
+| An active OpenSpec change has unticked tasks, other than the owner's hand-check | Stop. Tell the owner to run `/openspec-apply-change` first. `/ship` doesn't write features. |
 | Uncommitted changes | The checks gate, then the docs gate (both below), then commit to `dev`. |
 | Committed on `dev`, the owner hasn't tried this build | The local test (below). Stop until the owner confirms it works. |
 | Owner confirmed, version and notes not yet decided for this work | The version step (below). |
@@ -155,7 +155,7 @@ difference.
 The end-to-end tests try the installed build the way a person would, on a
 hidden desktop. If any scenario fails, stop: report which one, what it said,
 and the picture in `target/end-to-end/<scenario>/screen.png` (look at it), and
-don't ask the owner to test. It goes back to `/opsx:apply` (or a fix). If the
+don't ask the owner to test. It goes back to `/openspec-apply-change` (or a fix). If the
 run warns that LeafMD's real saved data changed, ask the owner whether they
 were using LeafMD at the time; if not, stop, because something reached the
 real desktop.
@@ -169,7 +169,7 @@ one line that those were checked automatically. Never close their running
 LeafMD yourself; it may have unsaved work.
 
 Stop and wait. Only carry on once the owner says it works. If they find a
-problem, it goes back to `/opsx:apply` (or a fix), and through the gates again.
+problem, it goes back to `/openspec-apply-change` (or a fix), and through the gates again.
 When they confirm, tick the hand-check task in the change's `tasks.md`.
 
 ## The version step
