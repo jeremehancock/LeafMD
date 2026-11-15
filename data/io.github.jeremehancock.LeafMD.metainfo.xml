@@ -104,6 +104,15 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.18.0" date="2026-11-15">
+      <description>
+        <p>A way to support LeafMD's development.</p>
+        <ul>
+          <li>Support Development in the main menu opens a small window with a Buy me a coffee button, which opens the page in your browser. LeafMD never shows it unless you ask</li>
+          <li>About LeafMD has the same link, and Help says where to find it</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.17.1" date="2026-11-13">
       <description>
         <p>Smoother switching between views, and margins that match.</p>
