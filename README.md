@@ -162,6 +162,12 @@ Found a problem, or have an idea? Open an [issue](https://github.com/jeremehanco
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md): running and building LeafMD, the checks, how changes are planned, and what each file does
 - [docs/PUBLISHING.md](docs/PUBLISHING.md): how releases and leafmd.app are published
 
+## Support Development
+
+LeafMD is free and open source, and it stays that way. If it has been useful to you and you'd like to help keep it maintained, you can support development at [leafmd.app/#support](https://leafmd.app/#support), or from inside the app: **Support Development** in the main menu. Feedback and bug reports are just as welcome.
+
+[![Buy Me A Coffee](https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png)](https://www.buymeacoffee.com/jeremehancock)
+
 ## Built With
 
 - [Rust](https://www.rust-lang.org): the language LeafMD is written in
