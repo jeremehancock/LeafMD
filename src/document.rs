@@ -43,7 +43,7 @@ use crate::window::{Window, file_filters};
 /// and only hands it the link if it answers. (GTK's UriLauncher was tried
 /// instead of GIO, but its requests failed with "The application launch
 /// failed" inside Flatpak, while GIO's route works.)
-async fn open_in_usual_app(uri: &str, context: &gdk::AppLaunchContext) -> Result<(), String> {
+pub(crate) async fn open_in_usual_app(uri: &str, context: &gdk::AppLaunchContext) -> Result<(), String> {
     let in_flatpak = std::path::Path::new("/.flatpak-info").exists();
     if in_flatpak && !portal_answers("org.freedesktop.portal.OpenURI").await {
         eprintln!("LeafMD: could not open link: the desktop portal didn't answer");

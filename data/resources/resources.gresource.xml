@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Files built into the LeafMD program itself. GTK automatically looks for
      icons under /io/github/jeremehancock/LeafMD/icons.
-     The view icons, the formatting bar icons, the replace icon, the new document icon
-     and the side panel's icons live here.
+     The view icons, the formatting bar icons, the replace icon, the new document icon,
+     the side panel's icons and the support window's heart and coffee cup live here.
      Icons GTK asks for by name, like the window's buttons, are in data/icon-theme (see main.rs).
      styles/ holds the raw text's colours, found by GtkSourceView through main.rs. -->
 <gresources>
@@ -28,6 +28,8 @@
     <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-folder-symbolic.svg</file>
     <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-headings-symbolic.svg</file>
     <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-document-symbolic.svg</file>
+    <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-heart-symbolic.svg</file>
+    <file preprocess="xml-stripblanks">icons/scalable/actions/leafmd-coffee-symbolic.svg</file>
     <file preprocess="xml-stripblanks">styles/leafmd.xml</file>
     <file preprocess="xml-stripblanks">styles/leafmd-dark.xml</file>
   </gresource>

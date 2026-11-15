@@ -34,6 +34,13 @@ Rather than trying to do everything, LeafMD focuses on doing the essentials well
 
 LeafMD was created with the help of AI.";
 
+/// The developer's Buy Me a Coffee page, opened by Support Development (the
+/// main menu's window and the link in About)
+const SUPPORT_URL: &str = "https://www.buymeacoffee.com/jeremehancock";
+
+/// The ask in the support window. The same words are on leafmd.app.
+const SUPPORT_TEXT: &str = "LeafMD is free and always will be. If it has earned a spot on your desktop, you can throw a few dollars at ongoing development. Or, let's be honest, at the coffee that keeps it going.";
+
 /// Actions that only make sense while a document is open.
 const DOCUMENT_ACTIONS: [&str; 11] = [
     "close-document",
@@ -338,6 +345,7 @@ impl Window {
         app_section.append(Some("Help"), Some("win.help"));
         app_section.append(Some("Markdown Cheatsheet"), Some("win.cheatsheet"));
         app_section.append(Some("Keyboard Shortcuts"), Some("win.shortcuts"));
+        app_section.append(Some("Support Development"), Some("win.support"));
         app_section.append(Some("About LeafMD"), Some("win.about"));
         // The zoom row at the top: a placeholder item that the row's widgets
         // fill in, once the menu button has made its popover (below)
@@ -787,6 +795,7 @@ impl Window {
         });
         self.window.add_action(&format);
         add("shortcuts", |win| win.show_shortcuts());
+        add("support", |win| win.show_support());
         add("about", |win| win.show_about());
 
         // Find and replace
@@ -3040,7 +3049,7 @@ impl Window {
         const TERMINAL_ROW: &str = "From a terminal";
         const TERMINAL_SETUP_URL: &str = "https://leafmd.app/#terminal";
         let page = adw::PreferencesPage::new();
-        let sections: [(&str, &[(&str, &str)]); 10] = [
+        let sections: [(&str, &[(&str, &str)]); 11] = [
             (
                 "The Three Views",
                 &[
@@ -3146,6 +3155,12 @@ impl Window {
                     ("Changes from other apps", "If another app changes or deletes the open file, a banner appears across the top of the window, and nothing changes until you choose. Reload brings in the new version, and Ignore keeps what you have. If you save a file that changed without you noticing, LeafMD asks first."),
                     ("Links", "Web links open in your browser. Links to other markdown or text files open them in a new tab, and links to headings scroll to them."),
                     ("Images", "Images next to the file and images online are shown in the formatted view."),
+                ],
+            ),
+            (
+                "Support",
+                &[
+                    ("Support development", "LeafMD is free and always will be. If you'd like to help pay for its development, choose Support Development in the main menu for a link to buy the developer a coffee."),
                 ],
             ),
         ];
@@ -3469,6 +3484,7 @@ impl Window {
         // only be one. These two read "Website" and "GitHub", side by side.
         about.add_link("Website", "https://leafmd.app/");
         about.add_link("GitHub", env!("CARGO_PKG_REPOSITORY"));
+        about.add_link("Support Development", SUPPORT_URL);
         // Credits page, in order. A custom section instead of .developers(),
         // because that one's heading always says "Code by". "Name URL" makes
         // the name a link.
@@ -3523,6 +3539,93 @@ impl Window {
         let built_with: Vec<&str> = built_with.iter().map(String::as_str).collect();
         about.add_credit_section(Some("Built With"), &built_with);
         about.present(Some(&self.window));
+    }
+
+    /// Support Development in the main menu: a small window asking, kindly,
+    /// for a few dollars toward LeafMD's development, with one button that
+    /// opens the developer's Buy Me a Coffee page in the web browser. It only
+    /// ever appears when chosen; LeafMD never shows it by itself.
+    fn show_support(self: &Rc<Self>) {
+        let heart = gtk::Image::builder()
+            .icon_name("leafmd-heart-symbolic")
+            .pixel_size(28)
+            .halign(gtk::Align::Center)
+            .css_classes(["leafmd-support-heart"])
+            .build();
+        let heading = gtk::Label::builder()
+            .label("Support Development")
+            .css_classes(["title-2"])
+            .wrap(true)
+            .justify(gtk::Justification::Center)
+            .build();
+        let text = gtk::Label::builder()
+            .label(SUPPORT_TEXT)
+            .wrap(true)
+            .justify(gtk::Justification::Center)
+            .max_width_chars(36)
+            .build();
+
+        // The button's own content: the coffee cup beside its label
+        let button_content = gtk::Box::builder()
+            .spacing(8)
+            .halign(gtk::Align::Center)
+            .build();
+        button_content.append(&gtk::Image::from_icon_name("leafmd-coffee-symbolic"));
+        button_content.append(&gtk::Label::new(Some("Buy me a coffee")));
+        let button = gtk::Button::builder()
+            .child(&button_content)
+            .css_classes(["pill", "suggested-action"])
+            .halign(gtk::Align::Center)
+            .margin_top(8)
+            .build();
+
+        let body = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .spacing(12)
+            .margin_start(24)
+            .margin_end(24)
+            .margin_bottom(28)
+            .build();
+        body.append(&heart);
+        body.append(&heading);
+        body.append(&text);
+        body.append(&button);
+
+        // A header bar just for the close button (Esc closes it too). Its title
+        // is hidden, because the big heading below already says it; the
+        // dialog's title is still there for screen readers.
+        let content = adw::ToolbarView::new();
+        content.add_top_bar(&adw::HeaderBar::builder().show_title(false).build());
+        content.set_content(Some(&body));
+        let dialog = adw::Dialog::builder()
+            .title("Support Development")
+            .content_width(380)
+            .child(&content)
+            // The button is the one thing to do here, so Enter presses it
+            .focus_widget(&button)
+            .default_widget(&button)
+            .build();
+
+        // Opens the page the same way a link in a document opens (see
+        // open_in_usual_app), then closes the window. If the browser can't be
+        // reached, the window says so with the same message a link would.
+        let weak = Rc::downgrade(self);
+        let closing = dialog.downgrade();
+        button.connect_clicked(move |button| {
+            let context = WidgetExt::display(button).app_launch_context();
+            if let Some(dialog) = closing.upgrade() {
+                dialog.close();
+            }
+            let weak = weak.clone();
+            glib::spawn_future_local(async move {
+                if let Err(why) = document::open_in_usual_app(SUPPORT_URL, &context).await
+                    && let Some(win) = weak.upgrade()
+                {
+                    win.toast(&format!("Couldn't open the link: {why}"));
+                }
+            });
+        });
+        dialog.present(Some(&self.window));
     }
 
     fn save_state(&self) {
@@ -3670,6 +3773,15 @@ fn load_window_style() {
                 padding: 0;
                 margin: 0;
                 min-height: 0;
+            }
+            /* The heart at the top of the support window: the accent colour
+               on a soft round patch of the same colour, like the heart on
+               leafmd.app's support section. */
+            image.leafmd-support-heart {
+                padding: 18px;
+                border-radius: 9999px;
+                color: var(--accent-color);
+                background-color: color-mix(in srgb, var(--accent-bg-color) 15%, transparent);
             }",
         );
         gtk::style_context_add_provider_for_display(

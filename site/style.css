@@ -113,7 +113,8 @@ code { font-family: var(--mono); font-size: 0.9em; }
 }
 .nav-links .nav-external a:hover { background: var(--surface-2); }
 .nav-external svg { fill: currentColor; opacity: 0.7; }
-@media (max-width: 420px) { .nav-optional { display: none; } }
+@media (max-width: 519px) { .nav-optional { display: none; } }
+@media (max-width: 599px) { .nav-wide { display: none; } }
 
 /* Hero */
 .hero {
@@ -504,6 +505,25 @@ code { font-family: var(--mono); font-size: 0.9em; }
   fill: var(--accent); background: var(--tint); border-radius: 18px;
 }
 .closing .actions { margin-bottom: 0; }
+
+/* Support development: a card on the page's plain background, so it reads
+   as its own thing after the shaded "Early days" band above it. Laid out like
+   the same section on the developer's other sites: a heart, a heading, a few
+   words and one button. */
+.support {
+  max-width: 680px; margin: 0 auto; text-align: center;
+  display: flex; flex-direction: column; align-items: center;
+  padding: clamp(32px, 6vw, 52px) clamp(20px, 5vw, 48px);
+  background: radial-gradient(520px 260px at 50% 0%, var(--tint), transparent 70%), var(--surface);
+  border: 1px solid var(--border); border-radius: calc(var(--radius) + 4px);
+  box-shadow: var(--shadow);
+}
+.support h2 { margin: 0; }
+.support .section-lede { margin-bottom: 28px; }
+.support-icon {
+  width: 64px; height: 64px; padding: 16px; margin-bottom: 18px;
+  fill: var(--accent); background: var(--tint); border-radius: 50%;
+}
 
 /* Footer */
 .footer { border-top: 1px solid var(--border); padding: 40px 0 48px; font-size: 0.92rem; color: var(--muted); }
